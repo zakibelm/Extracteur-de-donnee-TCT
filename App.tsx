@@ -269,6 +269,11 @@ const App: React.FC = () => {
     const handlePrint = () => {
         if (!unifiedTable) return;
 
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const formattedDate = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+        const printTitle = `${formattedDate}_TCT`;
+
         const tableHeader = `
             <thead>
                 <tr>
@@ -289,12 +294,12 @@ const App: React.FC = () => {
         const printContent = `
             <html>
                 <head>
-                    <title>Données Extraites - Impression</title>
+                    <title>${printTitle}</title>
                     <style>
                         @media print {
                             @page {
                                 size: A4 landscape;
-                                margin: 1cm;
+                                margin: 0.7cm;
                             }
                             body {
                                 margin: 0;
@@ -305,18 +310,18 @@ const App: React.FC = () => {
                             margin: 1cm;
                         }
                         h1 { 
-                            font-size: 18pt; 
-                            margin-bottom: 1cm; 
+                            font-size: 14pt; 
+                            margin-bottom: 0.5cm; 
                         }
                         table { 
                             width: 100%; 
                             border-collapse: collapse; 
-                            font-size: 8pt;
+                            font-size: 7pt;
                             table-layout: auto;
                         }
                         th, td { 
                             border: 1px solid #ccc; 
-                            padding: 4px 6px; 
+                            padding: 2px 4px; 
                             text-align: left; 
                             word-wrap: break-word;
                         }

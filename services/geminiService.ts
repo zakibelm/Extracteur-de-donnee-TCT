@@ -58,26 +58,40 @@ export async function extractTextFromImage(ai: GoogleGenAI, imagePart: Part, ocr
       model: 'gemini-2.5-flash',
       contents: { parts: [imagePart, { text: prompt }] },
       // NOTE: Removing the config with responseSchema to avoid potential proxy/network issues ("xhr error").
-      // The prompt is engineered to request a JSON-only response, which is a robust fallback.
+      // The prompt is engineered to request a JSON-only response, but we add robust parsing as a fallback.
     });
     
     let jsonString = response.text;
     
-    // The model might still wrap the JSON in ```json ... ```, so we handle that.
+    // The model might still wrap the JSON in ```json ... ```, or include other text.
+    // We'll try to extract the JSON object robustly.
     const jsonMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
+    if (jsonMatch && jsonMatch[1]) {
       jsonString = jsonMatch[1];
-    }
-
-    const parsedJson = JSON.parse(jsonString);
-
-    if (parsedJson.table && parsedJson.table.headers && parsedJson.table.rows) {
-      // Valider que le retour est bien une TableData
-      const tableData: TableData = parsedJson.table;
-      return tableData;
     } else {
-      console.warn("La réponse de l'API n'a pas le format de tableau attendu, retour d'un tableau vide.", parsedJson);
-      return { headers: TARGET_HEADERS, rows: [] };
+        // If no markdown block, find the first '{' and last '}'
+        const firstBrace = jsonString.indexOf('{');
+        const lastBrace = jsonString.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+            jsonString = jsonString.substring(firstBrace, lastBrace + 1);
+        }
+    }
+    
+    try {
+        const parsedJson = JSON.parse(jsonString.trim());
+
+        if (parsedJson.table && parsedJson.table.headers && parsedJson.table.rows) {
+          const tableData: TableData = parsedJson.table;
+          return tableData;
+        } else {
+          console.warn("La réponse de l'API n'a pas le format de tableau attendu, retour d'un tableau vide.", parsedJson);
+          return { headers: TARGET_HEADERS, rows: [] };
+        }
+    } catch (parseError) {
+        console.error("Échec de l'analyse JSON. Réponse brute de l'API:", response.text);
+        const errorMessage = parseError instanceof Error ? parseError.message : 'Format invalide';
+        // This specific error message will be displayed in the UI for the user.
+        throw new Error(`L'IA a retourné un format de données non valide: ${errorMessage}.`);
     }
 
   } catch (error) {
@@ -85,18 +99,19 @@ export async function extractTextFromImage(ai: GoogleGenAI, imagePart: Part, ocr
     
     const errorAsAny = error as any;
     
-    // The SDK can throw an object with a nested 'error' property.
-    // Based on the user's log: {"error":{"code":500,"message":"..."}}
+    // Pass our custom parsing error through.
+    if (error instanceof Error && error.message.startsWith("L'IA a retourné un format de données non valide")) {
+        throw error;
+    }
+
     if (errorAsAny?.error?.message) {
         throw new Error(`API Gemini: ${errorAsAny.error.message}`);
     }
     
-    // It can also throw a standard Error object.
     if (error instanceof Error) {
         throw new Error(`Erreur inattendue: ${error.message}`);
     }
 
-    // Generic fallback for other unknown error formats.
     throw new Error("La requête à l'API Gemini a échoué.");
   }
 }
