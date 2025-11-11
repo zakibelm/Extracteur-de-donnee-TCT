@@ -20,6 +20,7 @@ export interface ExtractedData {
     imageSrc: string;
     content: ParsedContent | null;
     status: Status;
+    taskId?: string;
 }
 
 export interface SummaryData {

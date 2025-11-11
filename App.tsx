@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { FileUploader } from './components/FileUploader';
 import { ResultCard } from './components/ResultCard';
@@ -6,7 +6,7 @@ import { Button } from './components/Button';
 import { Modal } from './components/Modal';
 import { Icons } from './components/Icons';
 import { ExtractedData, Status, TableData, SummaryData } from './types';
-import { extractTextFromImage } from './services/geminiService';
+import { startExtractionTask, getTaskStatus } from './services/geminiService';
 
 // Set worker path for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.mjs`;
@@ -41,6 +41,7 @@ const App: React.FC = () => {
     
     const [unifiedTable, setUnifiedTable] = useState<TableData | null>(null);
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
+    const pollingIntervalRef = useRef<number | null>(null);
 
 
     const handleFileChange = (selectedFiles: File[]) => {
@@ -84,7 +85,6 @@ const App: React.FC = () => {
         setGlobalStatus(Status.Processing);
         setError(null);
 
-        // Flatten PDF pages into processable files
         const processableFiles: ProcessableFile[] = [];
         for (const file of files) {
             if (file.type === 'application/pdf') {
@@ -120,34 +120,29 @@ const App: React.FC = () => {
 
         let workers: Tesseract.Worker[] = [];
         try {
-            // --- OPTIMIZATION: Create a pool of Tesseract workers ---
-            const workerCount = navigator.hardwareConcurrency || 4; // Use available cores, fallback to 4
+            const workerCount = navigator.hardwareConcurrency || 4;
             workers = await Promise.all(
                 Array.from({ length: workerCount }, () => Tesseract.createWorker('fra'))
             );
 
             const promises = processableFiles.map(async ({ file }, index) => {
-                const worker = workers[index % workerCount]; // Distribute files among workers
+                const worker = workers[index % workerCount];
                 const fileId = `${file.name}-${index}`;
                 
                 try {
-                    // 1. OCR Step (now in parallel)
-                    setExtractedData(prev => prev.map(item => item.id === fileId ? { ...item, status: Status.OcrProcessing } : item));
+                    // 1. OCR Step (Client-side)
                     const ocrResult = await worker.recognize(file);
-                    const ocrText = ocrResult.data.text;
-
-                    // 2. AI Step (now in parallel, via backend proxy)
+                    
+                    // 2. Start Backend Asynchronous Task
                     setExtractedData(prev => prev.map(item => item.id === fileId ? { ...item, status: Status.AiProcessing } : item));
-                    const content = await extractTextFromImage(file, ocrText);
+                    const task = await startExtractionTask(file, ocrResult.data.text);
+                    
+                    // 3. Store Task ID for polling
+                    setExtractedData(prev => prev.map(item => item.id === fileId ? { ...item, taskId: task.task_id } : item));
 
-                    setExtractedData(prev =>
-                        prev.map(item =>
-                            item.id === fileId ? { ...item, content, status: Status.Success } : item
-                        )
-                    );
                 } catch (err) {
                     console.error(`Erreur lors du traitement du fichier ${file.name}:`, err);
-                    const errorMessage = err instanceof Error ? err.message : "Échec de l'extraction.";
+                    const errorMessage = err instanceof Error ? err.message : "Échec de l'envoi de la tâche.";
                     setExtractedData(prev =>
                         prev.map(item =>
                             item.id === fileId ? { ...item, content: { headers: [], rows: [[errorMessage]]}, status: Status.Error } : item
@@ -157,19 +152,78 @@ const App: React.FC = () => {
             });
 
             await Promise.all(promises);
-            setGlobalStatus(Status.Success);
+            // Polling will be handled by the useEffect hook.
+
         } catch (e) {
             console.error("Erreur générale lors de l'extraction:", e);
             setError("Une erreur est survenue lors de l'extraction. Veuillez vérifier la console pour plus de détails.");
             setGlobalStatus(Status.Error);
             setExtractedData(prev => prev.map(item => ({ ...item, status: Status.Error })));
         } finally {
-            // --- OPTIMIZATION: Terminate all workers in the pool ---
             if (workers.length > 0) {
                 await Promise.all(workers.map(w => w.terminate()));
             }
         }
     }, [files]);
+    
+    useEffect(() => {
+        // Clear any existing interval when the component re-renders or unmounts
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+        }
+
+        const tasksToPoll = extractedData.filter(
+            d => d.taskId && d.status === Status.AiProcessing
+        );
+
+        // If there are no active tasks, stop polling
+        if (tasksToPoll.length === 0) {
+            if (extractedData.length > 0 && extractedData.every(d => d.status === Status.Success || d.status === Status.Error)) {
+                 setGlobalStatus(Status.Success);
+            }
+            return;
+        }
+        
+        pollingIntervalRef.current = window.setInterval(async () => {
+            tasksToPoll.forEach(async (task) => {
+                if (!task.taskId) return;
+                try {
+                    const statusResult = await getTaskStatus(task.taskId);
+                    
+                    if (statusResult.status === 'terminé') {
+                        setExtractedData(prev => prev.map(item => 
+                            item.id === task.id 
+                                ? { ...item, content: statusResult.result ?? null, status: Status.Success, taskId: undefined } 
+                                : item
+                        ));
+                    } else if (statusResult.status === 'échec') {
+                        const errorMessage = statusResult.error || "Échec de la tâche.";
+                        setExtractedData(prev => prev.map(item => 
+                            item.id === task.id 
+                                ? { ...item, content: { headers: [], rows: [[errorMessage]] }, status: Status.Error, taskId: undefined } 
+                                : item
+                        ));
+                    }
+                } catch (err) {
+                    console.error(`Erreur de polling pour la tâche ${task.taskId}:`, err);
+                    const errorMessage = err instanceof Error ? err.message : "Erreur de communication.";
+                    setExtractedData(prev => prev.map(item => 
+                        item.id === task.id 
+                            ? { ...item, content: { headers: [], rows: [[errorMessage]] }, status: Status.Error, taskId: undefined } 
+                            : item
+                    ));
+                }
+            });
+        }, 2500); // Poll every 2.5 seconds
+
+        // Cleanup function for when the component unmounts or dependencies change
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+            }
+        };
+    }, [extractedData]);
+
 
     const handleGenerateResults = () => {
         const successfulExtractions = extractedData
@@ -183,8 +237,6 @@ const App: React.FC = () => {
         const masterHeaders = successfulExtractions[0].content!.headers;
         let allRows = successfulExtractions.flatMap(d => d.content!.rows);
 
-        // Deduplicate rows
-        // FIX: The argument to `JSON.parse` can be inferred as `unknown` in some TypeScript configurations, causing a type error. Casting `str` to `string` resolves this.
         const uniqueRows = Array.from(new Set(allRows.map(row => JSON.stringify(row))))
             .map(str => JSON.parse(str as string) as string[]);
             
@@ -194,7 +246,6 @@ const App: React.FC = () => {
         };
         setUnifiedTable(finalTable);
         
-        // Generate Summary
         const nomChauffeurIndex = masterHeaders.indexOf("Nom chauffeur");
         const numeroVehiculeIndex = masterHeaders.indexOf("Numéro véhicule");
         const adresseDepartIndex = masterHeaders.indexOf("Adresse départ");
@@ -253,7 +304,7 @@ const App: React.FC = () => {
 
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        const formattedDate = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+        const formattedDate = tomorrow.toISOString().split('T')[0];
         const printTitle = `${formattedDate}_TCT`;
 
         const tableHeader = `
