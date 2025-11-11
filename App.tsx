@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import * as pdfjsLib from 'pdfjs-dist';
 import { FileUploader } from './components/FileUploader';
 import { ResultCard } from './components/ResultCard';
@@ -49,20 +48,6 @@ const App: React.FC = () => {
         setExtractedData([]);
         setError(null);
         setGlobalStatus(Status.Idle);
-    };
-
-    const fileToGenerativePart = async (file: File) => {
-        const base64EncodedDataPromise = new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-            reader.readAsDataURL(file);
-        });
-        return {
-            inlineData: {
-                data: await base64EncodedDataPromise,
-                mimeType: file.type,
-            },
-        };
     };
 
     const processPdf = async (pdfFile: File): Promise<ProcessableFile[]> => {
@@ -135,8 +120,6 @@ const App: React.FC = () => {
 
         let workers: Tesseract.Worker[] = [];
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            
             // --- OPTIMIZATION: Create a pool of Tesseract workers ---
             const workerCount = navigator.hardwareConcurrency || 4; // Use available cores, fallback to 4
             workers = await Promise.all(
@@ -153,10 +136,9 @@ const App: React.FC = () => {
                     const ocrResult = await worker.recognize(file);
                     const ocrText = ocrResult.data.text;
 
-                    // 2. AI Step (already in parallel)
+                    // 2. AI Step (now in parallel, via backend proxy)
                     setExtractedData(prev => prev.map(item => item.id === fileId ? { ...item, status: Status.AiProcessing } : item));
-                    const imagePart = await fileToGenerativePart(file);
-                    const content = await extractTextFromImage(ai, imagePart, ocrText);
+                    const content = await extractTextFromImage(file, ocrText);
 
                     setExtractedData(prev =>
                         prev.map(item =>
@@ -177,8 +159,8 @@ const App: React.FC = () => {
             await Promise.all(promises);
             setGlobalStatus(Status.Success);
         } catch (e) {
-            console.error("Erreur lors de l'initialisation des services:", e);
-            setError("Impossible d'initialiser les services d'extraction. Vérifiez votre clé API et la console.");
+            console.error("Erreur générale lors de l'extraction:", e);
+            setError("Une erreur est survenue lors de l'extraction. Veuillez vérifier la console pour plus de détails.");
             setGlobalStatus(Status.Error);
             setExtractedData(prev => prev.map(item => ({ ...item, status: Status.Error })));
         } finally {
