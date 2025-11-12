@@ -399,9 +399,15 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-slate-900 text-slate-100 font-sans">
             <main className="container mx-auto p-4 md:p-8">
                 <header className="text-center mb-8 md:mb-12">
-                    <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
-                        Extracteur de Données Tabulaires
-                    </h1>
+                    <div className="flex justify-center items-center gap-4">
+                        <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg">
+                            <span className="text-3xl font-bold text-white">EDT</span>
+                        </div>
+                        <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+                            EDT
+                        </h1>
+                    </div>
+                    <p className="mt-2 text-lg text-slate-400">Extracteur de Données Tabulaires</p>
                     <p className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
                         Téléchargez images ou PDFs, extrayez, nettoyez et fusionnez les données en un tableau unique.
                     </p>
