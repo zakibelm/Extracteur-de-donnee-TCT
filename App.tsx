@@ -1,12 +1,9 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import { FileUploader } from './components/FileUploader';
-import { ResultCard } from './components/ResultCard';
-import { Button } from './components/Button';
-import { Modal } from './components/Modal';
-import { Icons } from './components/Icons';
-import { ExtractedData, Status, TableData, SummaryData } from './types';
-import { startExtractionTask, getTaskStatus } from './services/geminiService';
+import { Sidebar } from './components/Sidebar';
+import { MainContent } from './components/MainContent';
+import { ExtractedData, Status, TableData, SummaryData, ChatMessage } from './types';
+import { extractDataWithGeminiBatch, askGeminiAboutData } from './services/geminiService';
 
 // Set worker path for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.mjs`;
@@ -28,6 +25,7 @@ declare namespace Tesseract {
 }
 
 interface ProcessableFile {
+    id: string;
     file: File;
     originalFileName: string;
 }
@@ -37,18 +35,43 @@ const App: React.FC = () => {
     const [extractedData, setExtractedData] = useState<ExtractedData[]>([]);
     const [globalStatus, setGlobalStatus] = useState<Status>(Status.Idle);
     const [error, setError] = useState<string | null>(null);
-    const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
-    
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
     const [unifiedTable, setUnifiedTable] = useState<TableData | null>(null);
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
-    const pollingIntervalRef = useRef<number | null>(null);
 
+    const [activeView, setActiveView] = useState<'extract' | 'chat'>('extract');
+    const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+    const [isChatLoading, setIsChatLoading] = useState(false);
+
+    const workersRef = useRef<Tesseract.Worker[]>([]);
+
+    useEffect(() => {
+        // Initialize Tesseract workers on mount
+        const initializeWorkers = async () => {
+            const workerCount = navigator.hardwareConcurrency || 4;
+            const workers = await Promise.all(
+                Array.from({ length: workerCount }, () => Tesseract.createWorker('fra'))
+            );
+            workersRef.current = workers;
+        };
+        initializeWorkers();
+
+        // Cleanup workers on unmount
+        return () => {
+            workersRef.current.forEach(worker => worker.terminate());
+        };
+    }, []);
 
     const handleFileChange = (selectedFiles: File[]) => {
         setFiles(selectedFiles);
         setExtractedData([]);
         setError(null);
+        setUnifiedTable(null);
+        setSummaryData(null);
         setGlobalStatus(Status.Idle);
+        setActiveView('extract');
+        setChatHistory([]);
     };
 
     const processPdf = async (pdfFile: File): Promise<ProcessableFile[]> => {
@@ -68,8 +91,9 @@ const App: React.FC = () => {
                 await page.render({ canvasContext: context, viewport: viewport }).promise;
                 const blob: Blob | null = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
                 if (blob) {
-                    const pageFile = new File([blob], `${pdfFile.name}-page-${i}.jpg`, { type: 'image/jpeg' });
-                    pageFiles.push({ file: pageFile, originalFileName: pdfFile.name });
+                    const pageFileName = `${pdfFile.name}-page-${i}.jpg`;
+                    const pageFile = new File([blob], pageFileName, { type: 'image/jpeg' });
+                    pageFiles.push({ file: pageFile, originalFileName: pdfFile.name, id: `${pageFileName}-${Date.now()}` });
                 }
             }
         }
@@ -84,7 +108,12 @@ const App: React.FC = () => {
 
         setGlobalStatus(Status.Processing);
         setError(null);
+        setUnifiedTable(null);
+        setSummaryData(null);
+        setActiveView('extract');
+        setChatHistory([]);
 
+        // Step 1: Flatten all files (including PDF pages) into a single list
         const processableFiles: ProcessableFile[] = [];
         for (const file of files) {
             if (file.type === 'application/pdf') {
@@ -98,136 +127,61 @@ const App: React.FC = () => {
                     return;
                 }
             } else {
-                processableFiles.push({ file, originalFileName: file.name });
+                processableFiles.push({ file, originalFileName: file.name, id: `${file.name}-${Date.now()}` });
             }
         }
         
-        const initialData: ExtractedData[] = processableFiles.map(({ file, originalFileName }, index) => {
+        // Step 2: Set initial state for all processable files
+        const initialData: ExtractedData[] = processableFiles.map(({ id, file, originalFileName }) => {
             const pageNumber = file.name.match(/-page-(\d+)\.jpg$/);
             const displayName = originalFileName.endsWith('.pdf') && pageNumber 
                 ? `${originalFileName} (Page ${pageNumber[1]})` 
                 : originalFileName;
 
-            return {
-                id: `${file.name}-${index}`,
-                fileName: displayName,
-                imageSrc: URL.createObjectURL(file),
-                content: null,
-                status: Status.OcrProcessing,
-            };
+            return { id, fileName: displayName, imageSrc: URL.createObjectURL(file), content: null, status: Status.OcrProcessing };
         });
         setExtractedData(initialData);
 
-        let workers: Tesseract.Worker[] = [];
         try {
-            const workerCount = navigator.hardwareConcurrency || 4;
-            workers = await Promise.all(
-                Array.from({ length: workerCount }, () => Tesseract.createWorker('fra'))
-            );
-
-            const promises = processableFiles.map(async ({ file }, index) => {
-                const worker = workers[index % workerCount];
-                const fileId = `${file.name}-${index}`;
-                
-                try {
-                    // 1. OCR Step (Client-side)
-                    const ocrResult = await worker.recognize(file);
-                    
-                    // 2. Start Backend Asynchronous Task
-                    setExtractedData(prev => prev.map(item => item.id === fileId ? { ...item, status: Status.AiProcessing } : item));
-                    const task = await startExtractionTask(file, ocrResult.data.text);
-                    
-                    // 3. Store Task ID for polling
-                    setExtractedData(prev => prev.map(item => item.id === fileId ? { ...item, taskId: task.task_id } : item));
-
-                } catch (err) {
-                    console.error(`Erreur lors du traitement du fichier ${file.name}:`, err);
-                    const errorMessage = err instanceof Error ? err.message : "Échec de l'envoi de la tâche.";
-                    setExtractedData(prev =>
-                        prev.map(item =>
-                            item.id === fileId ? { ...item, content: { headers: [], rows: [[errorMessage]]}, status: Status.Error } : item
-                        )
-                    );
-                }
+            // Step 3: Run OCR in parallel for all files
+            const workers = workersRef.current;
+            if (workers.length === 0) {
+              throw new Error("Les workers OCR ne sont pas initialisés.");
+            }
+            const ocrPromises = processableFiles.map(({ id, file }, index) => {
+                const worker = workers[index % workers.length];
+                return worker.recognize(file).then(result => ({ id, ocrText: result.data.text }));
             });
+            const ocrResults = await Promise.all(ocrPromises);
 
-            await Promise.all(promises);
-            // Polling will be handled by the useEffect hook.
+            setExtractedData(prev => prev.map(item => ({ ...item, status: Status.AiProcessing })));
+
+            // Step 4: Send all OCR results in a single batch to Gemini
+            const batchExtractionResult = await extractDataWithGeminiBatch(ocrResults);
+            
+            // Step 5: Update state with all results at once
+            setExtractedData(prev => prev.map(item => {
+                const result = batchExtractionResult.find(r => r.id === item.id);
+                if (result) {
+                    const isErrorResult = result.content.headers.length === 1 && result.content.headers[0] === "Erreur";
+                    return { ...item, content: result.content, status: isErrorResult ? Status.Error : Status.Success };
+                }
+                return { ...item, content: { headers: ["Erreur"], rows: [["Aucun résultat retourné par l'IA."]] }, status: Status.Error };
+            }));
+
+            setGlobalStatus(Status.Success);
 
         } catch (e) {
             console.error("Erreur générale lors de l'extraction:", e);
             setError("Une erreur est survenue lors de l'extraction. Veuillez vérifier la console pour plus de détails.");
             setGlobalStatus(Status.Error);
             setExtractedData(prev => prev.map(item => ({ ...item, status: Status.Error })));
-        } finally {
-            if (workers.length > 0) {
-                await Promise.all(workers.map(w => w.terminate()));
-            }
         }
     }, [files]);
     
-    useEffect(() => {
-        // Clear any existing interval when the component re-renders or unmounts
-        if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-        }
-
-        const tasksToPoll = extractedData.filter(
-            d => d.taskId && d.status === Status.AiProcessing
-        );
-
-        // If there are no active tasks, stop polling
-        if (tasksToPoll.length === 0) {
-            if (extractedData.length > 0 && extractedData.every(d => d.status === Status.Success || d.status === Status.Error)) {
-                 setGlobalStatus(Status.Success);
-            }
-            return;
-        }
-        
-        pollingIntervalRef.current = window.setInterval(async () => {
-            tasksToPoll.forEach(async (task) => {
-                if (!task.taskId) return;
-                try {
-                    const statusResult = await getTaskStatus(task.taskId);
-                    
-                    if (statusResult.status === 'terminé') {
-                        setExtractedData(prev => prev.map(item => 
-                            item.id === task.id 
-                                ? { ...item, content: statusResult.result ?? null, status: Status.Success, taskId: undefined } 
-                                : item
-                        ));
-                    } else if (statusResult.status === 'échec') {
-                        const errorMessage = statusResult.error || "Échec de la tâche.";
-                        setExtractedData(prev => prev.map(item => 
-                            item.id === task.id 
-                                ? { ...item, content: { headers: [], rows: [[errorMessage]] }, status: Status.Error, taskId: undefined } 
-                                : item
-                        ));
-                    }
-                } catch (err) {
-                    console.error(`Erreur de polling pour la tâche ${task.taskId}:`, err);
-                    const errorMessage = err instanceof Error ? err.message : "Erreur de communication.";
-                    setExtractedData(prev => prev.map(item => 
-                        item.id === task.id 
-                            ? { ...item, content: { headers: [], rows: [[errorMessage]] }, status: Status.Error, taskId: undefined } 
-                            : item
-                    ));
-                }
-            });
-        }, 2500); // Poll every 2.5 seconds
-
-        // Cleanup function for when the component unmounts or dependencies change
-        return () => {
-            if (pollingIntervalRef.current) {
-                clearInterval(pollingIntervalRef.current);
-            }
-        };
-    }, [extractedData]);
-
-
     const handleGenerateResults = () => {
         const successfulExtractions = extractedData
-            .filter(d => d.status === Status.Success && d.content && d.content.rows.length > 0);
+            .filter(d => d.status === Status.Success && d.content && d.content.rows.length > 0 && d.content.headers[0] !== 'Erreur');
 
         if (successfulExtractions.length === 0) {
             setError("Aucune donnée valide à traiter.");
@@ -246,22 +200,41 @@ const App: React.FC = () => {
         };
         setUnifiedTable(finalTable);
         
-        const nomChauffeurIndex = masterHeaders.indexOf("Nom chauffeur");
-        const numeroVehiculeIndex = masterHeaders.indexOf("Numéro véhicule");
-        const adresseDepartIndex = masterHeaders.indexOf("Adresse départ");
-        const adresseArriveeIndex = masterHeaders.indexOf("Adresse arrivée");
+        const nomEmployeIndex = masterHeaders.indexOf("Nom de l'employé");
+        const vehiculeIndex = masterHeaders.indexOf("Véhicule");
+        const adresseDebutIndex = masterHeaders.indexOf("Adresse de début");
+        const adresseFinIndex = masterHeaders.indexOf("Adresse de fin");
 
         const summary: SummaryData = {
             totalRows: finalTable.rows.length,
-            uniqueChauffeurs: [...new Set(finalTable.rows.map(r => r[nomChauffeurIndex]).filter(Boolean))],
-            uniqueVehicules: [...new Set(finalTable.rows.map(r => r[numeroVehiculeIndex]).filter(Boolean))],
-            uniqueAdressesDepart: [...new Set(finalTable.rows.map(r => r[adresseDepartIndex]).filter(Boolean))],
-            uniqueAdressesArrivee: [...new Set(finalTable.rows.map(r => r[adresseArriveeIndex]).filter(Boolean))],
+            uniqueChauffeurs: [...new Set(finalTable.rows.map(r => r[nomEmployeIndex]).filter(Boolean))],
+            uniqueVehicules: [...new Set(finalTable.rows.map(r => r[vehiculeIndex]).filter(Boolean))],
+            uniqueAdressesDepart: [...new Set(finalTable.rows.map(r => r[adresseDebutIndex]).filter(Boolean))],
+            uniqueAdressesArrivee: [...new Set(finalTable.rows.map(r => r[adresseFinIndex]).filter(Boolean))],
         };
         setSummaryData(summary);
-
-        setIsResultsModalOpen(true);
     };
+    
+    const handleSendMessage = async (message: string) => {
+        if (!unifiedTable || isChatLoading) return;
+
+        const newUserMessage: ChatMessage = { role: 'user', text: message };
+        setChatHistory(prev => [...prev, newUserMessage]);
+        setIsChatLoading(true);
+
+        try {
+            const responseText = await askGeminiAboutData(unifiedTable, chatHistory, message);
+            const modelMessage: ChatMessage = { role: 'model', text: responseText };
+            setChatHistory(prev => [...prev, modelMessage]);
+        } catch (error) {
+            console.error("Erreur de l'API Chat:", error);
+            const errorMessage: ChatMessage = { role: 'model', text: "Désolé, une erreur s'est produite. Veuillez réessayer." };
+            setChatHistory(prev => [...prev, errorMessage]);
+        } finally {
+            setIsChatLoading(false);
+        }
+    };
+
 
     const downloadFile = (format: 'csv' | 'json') => {
         if (!unifiedTable) return;
@@ -391,139 +364,30 @@ const App: React.FC = () => {
         }
     };
 
-
-    const allProcessed = extractedData.length > 0 && extractedData.every(d => d.status === Status.Success || d.status === Status.Error);
-    const hasSuccessfulExtractions = extractedData.some(d => d.status === Status.Success && d.content && d.content.rows.length > 0);
-
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-100 font-sans">
-            <main className="container mx-auto p-4 md:p-8">
-                <header className="text-center mb-8 md:mb-12">
-                    <div className="flex justify-center items-center gap-4">
-                        <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg">
-                            <span className="text-3xl font-bold text-white">EDT</span>
-                        </div>
-                        <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
-                            EDT
-                        </h1>
-                    </div>
-                    <p className="mt-2 text-lg text-slate-400">Extracteur de Données Tabulaires</p>
-                    <p className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
-                        Téléchargez images ou PDFs, extrayez, nettoyez et fusionnez les données en un tableau unique.
-                    </p>
-                </header>
-
-                <div className="max-w-4xl mx-auto bg-slate-800 rounded-2xl shadow-2xl shadow-slate-950/50 p-6 md:p-8 border border-slate-700">
-                    <FileUploader onFileChange={handleFileChange} />
-
-                    {files.length > 0 && (
-                        <div className="mt-8 flex flex-col sm:flex-row gap-4">
-                            <Button
-                                onClick={handleExtractData}
-                                disabled={globalStatus === Status.Processing}
-                                className="w-full bg-emerald-600 hover:bg-emerald-700"
-                            >
-                                {globalStatus === Status.Processing ? (
-                                    <>
-                                        <Icons.Loader className="animate-spin mr-2" />
-                                        Traitement en cours...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Icons.Sparkles className="mr-2" />
-                                        Lancer l'Extraction
-                                    </>
-                                )}
-                            </Button>
-                            <Button
-                                onClick={handleGenerateResults}
-                                disabled={!allProcessed || !hasSuccessfulExtractions}
-                                className="w-full bg-sky-600 hover:bg-sky-700 disabled:bg-slate-600 disabled:cursor-not-allowed"
-                            >
-                                <Icons.Eye className="mr-2" />
-                                Générer les Résultats
-                            </Button>
-                        </div>
-                    )}
-
-                    {error && <p className="text-red-400 mt-4 text-center">{error}</p>}
-                </div>
-
-                {extractedData.length > 0 && (
-                    <div className="mt-12">
-                        <h2 className="text-2xl font-bold text-center mb-8 text-slate-300">Résultats de l'Extraction par Fichier</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {extractedData.map((data) => (
-                                <ResultCard key={data.id} data={data} />
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </main>
-            <footer className="text-center p-4 text-slate-500 text-sm">
-                <p>Propulsé par Zakibelm</p>
-            </footer>
-
-            <Modal isOpen={isResultsModalOpen} onClose={() => setIsResultsModalOpen(false)} title="Résultats Unifiés et Export">
-                <div className="flex flex-col h-[75vh]">
-                    <div className="flex-grow overflow-hidden flex flex-col">
-                      <h3 className="text-lg font-semibold text-slate-200 mb-2">Tableau Final Unifié</h3>
-                      <div className="overflow-auto border border-slate-700 rounded-md flex-grow">
-                          <table className="w-full text-left text-xs">
-                              <thead className="sticky top-0 bg-slate-800/80 backdrop-blur-sm">
-                                  <tr className="text-slate-300">
-                                      {unifiedTable?.headers.map((header, index) => (
-                                          <th key={index} className="p-2 font-semibold border-b border-slate-600">{header}</th>
-                                      ))}
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {unifiedTable?.rows.map((row, rowIndex) => (
-                                      <tr key={rowIndex} className="border-t border-slate-700 even:bg-slate-700/30 hover:bg-slate-700/50">
-                                          {row.map((cell, cellIndex) => (
-                                              <td key={cellIndex} className="p-2 text-slate-300">{cell}</td>
-                                          ))}
-                                      </tr>
-                                  ))}
-                              </tbody>
-                          </table>
-                      </div>
-                       <h3 className="text-lg font-semibold text-slate-200 mt-4 mb-2">Résumé</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div className="bg-slate-700/50 p-3 rounded-md">
-                                <div className="font-bold text-slate-400">Lignes Uniques</div>
-                                <div className="text-2xl font-bold text-emerald-400">{summaryData?.totalRows ?? 0}</div>
-                            </div>
-                            <div className="bg-slate-700/50 p-3 rounded-md">
-                                <div className="font-bold text-slate-400">Chauffeurs Uniques</div>
-                                <div className="text-2xl font-bold text-sky-400">{summaryData?.uniqueChauffeurs.length ?? 0}</div>
-                            </div>
-                            <div className="bg-slate-700/50 p-3 rounded-md">
-                                <div className="font-bold text-slate-400">Véhicules Uniques</div>
-                                <div className="text-2xl font-bold text-sky-400">{summaryData?.uniqueVehicules.length ?? 0}</div>
-                            </div>
-                             <div className="bg-slate-700/50 p-3 rounded-md">
-                                <div className="font-bold text-slate-400">Adresses Uniques</div>
-                                <div className="text-2xl font-bold text-sky-400">{ new Set([...summaryData?.uniqueAdressesDepart ?? [], ...summaryData?.uniqueAdressesArrivee ?? []]).size }</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="mt-6 flex flex-col sm:flex-row justify-end gap-4">
-                        <Button onClick={() => downloadFile('csv')} className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
-                            <Icons.FileCsv className="mr-2" /> Exporter en CSV
-                        </Button>
-                        <Button onClick={() => downloadFile('json')} className="bg-sky-600 hover:bg-sky-700 w-full sm:w-auto">
-                            <Icons.FileJson className="mr-2" /> Exporter en JSON
-                        </Button>
-                        <Button onClick={handlePrint} className="bg-slate-500 hover:bg-slate-600 w-full sm:w-auto">
-                            <Icons.Print className="mr-2" /> Imprimer / PDF
-                        </Button>
-                         <Button onClick={() => setIsResultsModalOpen(false)} className="bg-slate-600 hover:bg-slate-700 w-full sm:w-auto order-first sm:order-last">
-                            Fermer
-                        </Button>
-                    </div>
-                </div>
-            </Modal>
+        <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
+           <Sidebar
+                isSidebarOpen={isSidebarOpen}
+                setIsSidebarOpen={setIsSidebarOpen}
+                files={files}
+                onFileChange={handleFileChange}
+                onExtractData={handleExtractData}
+                globalStatus={globalStatus}
+           />
+           <MainContent
+                activeView={activeView}
+                setActiveView={setActiveView}
+                extractedData={extractedData}
+                unifiedTable={unifiedTable}
+                summaryData={summaryData}
+                onGenerateResults={handleGenerateResults}
+                onDownload={downloadFile}
+                onPrint={handlePrint}
+                error={error}
+                chatHistory={chatHistory}
+                isChatLoading={isChatLoading}
+                onSendMessage={handleSendMessage}
+           />
         </div>
     );
 };

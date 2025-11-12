@@ -20,7 +20,6 @@ export interface ExtractedData {
     imageSrc: string;
     content: ParsedContent | null;
     status: Status;
-    taskId?: string;
 }
 
 export interface SummaryData {
@@ -29,4 +28,9 @@ export interface SummaryData {
     uniqueVehicules: string[];
     uniqueAdressesDepart: string[];
     uniqueAdressesArrivee: string[];
+}
+
+export interface ChatMessage {
+    role: 'user' | 'model';
+    text: string;
 }
