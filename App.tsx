@@ -39,6 +39,7 @@ const App: React.FC = () => {
 
     const [unifiedTable, setUnifiedTable] = useState<TableData | null>(null);
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
+    const [validationErrors, setValidationErrors] = useState<Map<number, string[]>>(new Map());
 
     const [activeView, setActiveView] = useState<'extract' | 'chat'>('extract');
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -69,6 +70,7 @@ const App: React.FC = () => {
         setError(null);
         setUnifiedTable(null);
         setSummaryData(null);
+        setValidationErrors(new Map());
         setGlobalStatus(Status.Idle);
         setActiveView('extract');
         setChatHistory([]);
@@ -110,6 +112,7 @@ const App: React.FC = () => {
         setError(null);
         setUnifiedTable(null);
         setSummaryData(null);
+        setValidationErrors(new Map());
         setActiveView('extract');
         setChatHistory([]);
 
@@ -187,6 +190,8 @@ const App: React.FC = () => {
             setError("Aucune donnée valide à traiter.");
             return;
         }
+        
+        setValidationErrors(new Map());
 
         const masterHeaders = successfulExtractions[0].content!.headers;
         let allRows = successfulExtractions.flatMap(d => d.content!.rows);
@@ -213,6 +218,68 @@ const App: React.FC = () => {
             uniqueAdressesArrivee: [...new Set(finalTable.rows.map(r => r[adresseFinIndex]).filter(Boolean))],
         };
         setSummaryData(summary);
+    };
+
+    const handleValidateData = () => {
+        if (!unifiedTable) return;
+
+        const errorsMap = new Map<number, string[]>();
+        const { headers, rows } = unifiedTable;
+
+        const debutIndex = headers.indexOf("Début tournée");
+        const finIndex = headers.indexOf("Fin tournée");
+        const nomIndex = headers.indexOf("Nom de l'employé");
+        const vehiculeIndex = headers.indexOf("Véhicule");
+
+        rows.forEach((row, rowIndex) => {
+            const rowErrors: string[] = [];
+
+            // Rule 1: Missing critical info
+            if (nomIndex !== -1 && !row[nomIndex]?.trim()) {
+                rowErrors.push("Le nom de l'employé est manquant.");
+            }
+            if (vehiculeIndex !== -1 && !row[vehiculeIndex]?.trim()) {
+                rowErrors.push("Le véhicule est manquant.");
+            }
+
+            // Rule 2: Date/Time logic
+            if (debutIndex !== -1 && finIndex !== -1) {
+                const debutStr = row[debutIndex];
+                const finStr = row[finIndex];
+
+                if (debutStr?.trim() && finStr?.trim()) {
+                    // Simple time check (e.g., HH:MM)
+                    const timeRegex = /^\d{1,2}:\d{2}$/;
+                    if (!timeRegex.test(debutStr.trim()) || !timeRegex.test(finStr.trim())) {
+                        rowErrors.push("Format d'heure invalide (attendu HH:MM).");
+                    } else {
+                        try {
+                            const [debutH, debutM] = debutStr.split(':').map(Number);
+                            const [finH, finM] = finStr.split(':').map(Number);
+                            
+                            if (isNaN(debutH) || isNaN(debutM) || isNaN(finH) || isNaN(finM)) {
+                                 rowErrors.push("Heure invalide.");
+                            } else {
+                                const debutMinutes = debutH * 60 + debutM;
+                                const finMinutes = finH * 60 + finM;
+
+                                if (debutMinutes >= finMinutes) {
+                                    rowErrors.push("L'heure de début doit être antérieure à l'heure de fin.");
+                                }
+                            }
+                        } catch(e) {
+                             rowErrors.push("Impossible de parser les heures.");
+                        }
+                    }
+                }
+            }
+
+            if (rowErrors.length > 0) {
+                errorsMap.set(rowIndex, rowErrors);
+            }
+        });
+
+        setValidationErrors(errorsMap);
     };
     
     const handleSendMessage = async (message: string) => {
@@ -387,6 +454,8 @@ const App: React.FC = () => {
                 chatHistory={chatHistory}
                 isChatLoading={isChatLoading}
                 onSendMessage={handleSendMessage}
+                validationErrors={validationErrors}
+                onValidateData={handleValidateData}
            />
         </div>
     );
