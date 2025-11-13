@@ -11,9 +11,7 @@ interface MainContentProps {
     extractedData: ExtractedData[];
     unifiedTable: TableData | null;
     summaryData: SummaryData | null;
-    validationErrors: Map<number, string[]>;
     onGenerateResults: () => void;
-    onValidateData: () => void;
     onDownload: (format: 'csv' | 'json') => void;
     onPrint: () => void;
     error: string | null;
@@ -28,9 +26,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     extractedData,
     unifiedTable,
     summaryData,
-    validationErrors,
     onGenerateResults,
-    onValidateData,
     onDownload,
     onPrint,
     error,
@@ -72,9 +68,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-2xl font-bold text-slate-200">Résultats Unifiés</h2>
                                  <div className="flex gap-2">
-                                     <Button onClick={onValidateData} className="bg-yellow-600 hover:bg-yellow-700 text-sm py-2 px-3">
-                                        <Icons.ShieldCheck className="mr-2" /> Valider
-                                    </Button>
                                     <Button onClick={() => onDownload('csv')} className="bg-emerald-600 hover:bg-emerald-700 text-sm py-2 px-3">
                                         <Icons.FileCsv className="mr-2" /> CSV
                                     </Button>
@@ -107,14 +100,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                                         <div className="text-2xl font-bold text-sky-400">{ new Set([...summaryData?.uniqueAdressesDepart ?? [], ...summaryData?.uniqueAdressesArrivee ?? []]).size }</div>
                                     </div>
                                 </div>
-                                
-                                {validationErrors.size > 0 && (
-                                    <div className="my-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-md text-yellow-300 text-sm">
-                                        <h4 className="font-bold flex items-center"><Icons.ShieldCheck className="w-4 h-4 mr-2"/>Validation terminée</h4>
-                                        <p>{validationErrors.size} ligne{validationErrors.size > 1 ? 's' : ''} avec des problèmes potentiels ont été trouvée{validationErrors.size > 1 ? 's' : ''}. Survolez-les pour plus de détails.</p>
-                                    </div>
-                                )}
-
 
                                 <h3 className="text-lg font-semibold text-slate-200 mb-2">Tableau Final Unifié</h3>
                                 <div className="overflow-auto border border-slate-700 rounded-md max-h-96">
@@ -127,21 +112,13 @@ export const MainContent: React.FC<MainContentProps> = ({
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {unifiedTable?.rows.map((row, rowIndex) => {
-                                                const errors = validationErrors.get(rowIndex);
-                                                const rowClasses = errors
-                                                    ? "border-t border-slate-700 bg-yellow-800/30 hover:bg-yellow-700/40 cursor-help"
-                                                    : "border-t border-slate-700 even:bg-slate-700/30 hover:bg-slate-700/50";
-                                                const errorTitle = errors ? `Problèmes:\n- ${errors.join('\n- ')}` : undefined;
-
-                                                return (
-                                                    <tr key={rowIndex} className={rowClasses} title={errorTitle}>
-                                                        {row.map((cell, cellIndex) => (
-                                                            <td key={cellIndex} className="p-2 text-slate-300">{cell}</td>
-                                                        ))}
-                                                    </tr>
-                                                );
-                                            })}
+                                            {unifiedTable?.rows.map((row, rowIndex) => (
+                                                <tr key={rowIndex} className="border-t border-slate-700 even:bg-slate-700/30 hover:bg-slate-700/50">
+                                                    {row.map((cell, cellIndex) => (
+                                                        <td key={cellIndex} className="p-2 text-slate-300">{cell}</td>
+                                                    ))}
+                                                </tr>
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>

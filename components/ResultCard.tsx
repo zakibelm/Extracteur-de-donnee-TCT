@@ -11,13 +11,6 @@ export const ResultCard: React.FC<ResultCardProps> = ({ data }) => {
 
   const getStatusIndicator = () => {
     switch (status) {
-      case Status.OcrProcessing:
-        return (
-          <div className="flex items-center text-sky-400">
-            <Icons.ScanText className="w-4 h-4 mr-2 animate-pulse" />
-            <span>OCR...</span>
-          </div>
-        );
       case Status.AiProcessing:
          return (
           <div className="flex items-center text-sky-400">
@@ -52,11 +45,10 @@ export const ResultCard: React.FC<ResultCardProps> = ({ data }) => {
   };
 
   const renderContent = () => {
-    if (status === Status.OcrProcessing || status === Status.AiProcessing || status === Status.Processing) {
+    if (status === Status.AiProcessing || status === Status.Processing) {
       return (
         <div className="flex items-center justify-center h-full">
           <div className="text-slate-500">
-             {status === Status.OcrProcessing && "Scan des caractères..."}
              {status === Status.AiProcessing && "Analyse par l'IA..."}
              {status === Status.Processing && "Traitement en cours..."}
           </div>

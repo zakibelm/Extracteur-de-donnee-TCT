@@ -1,6 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ChatMessage } from '../types';
 import { Icons } from './Icons';
+
+// Add SpeechRecognition to window type for TypeScript
+declare global {
+    interface Window {
+        SpeechRecognition: any;
+        webkitSpeechRecognition: any;
+    }
+}
 
 interface ChatInterfaceProps {
     history: ChatMessage[];
@@ -10,6 +20,9 @@ interface ChatInterfaceProps {
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading, onSendMessage }) => {
     const [message, setMessage] = useState('');
+    const [isListening, setIsListening] = useState(false);
+    const [speechSupport, setSpeechSupport] = useState<{ supported: boolean; reason?: string }>({ supported: false });
+    const recognitionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -17,6 +30,59 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
     };
 
     useEffect(scrollToBottom, [history, isLoading]);
+
+    useEffect(() => {
+        const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!window.isSecureContext) {
+            setSpeechSupport({ supported: false, reason: "La commande vocale nécessite une connexion sécurisée (HTTPS)." });
+            console.warn("La reconnaissance vocale n'est disponible que sur les connexions sécurisées (HTTPS).");
+            return;
+        }
+
+        if (SpeechRecognitionAPI) {
+            setSpeechSupport({ supported: true });
+            const recognition = new SpeechRecognitionAPI();
+            recognition.continuous = false;
+            recognition.lang = 'fr-FR';
+            recognition.interimResults = false;
+
+            recognition.onresult = (event: any) => {
+                const transcript = event.results[0][0].transcript.trim();
+                setMessage(prevMessage => (prevMessage ? `${prevMessage} ${transcript}` : transcript).trim());
+            };
+            
+            recognition.onerror = (event: any) => {
+                console.error("Erreur de reconnaissance vocale:", event.error);
+                setIsListening(false);
+            };
+
+            recognition.onend = () => {
+                setIsListening(false);
+            };
+            
+            recognitionRef.current = recognition;
+        } else {
+            setSpeechSupport({ supported: false, reason: "La commande vocale n'est pas supportée par ce navigateur." });
+            console.warn("Votre navigateur ne supporte pas l'API Speech Recognition.");
+        }
+    }, []); // Run only once on mount
+
+    const handleToggleListening = () => {
+        if (isLoading || !recognitionRef.current) return;
+
+        if (isListening) {
+            recognitionRef.current.stop();
+        } else {
+            try {
+                recognitionRef.current.start();
+                setIsListening(true);
+            } catch (error) {
+                console.error("Impossible de démarrer la reconnaissance vocale:", error);
+                setIsListening(false);
+            }
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -44,11 +110,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
                                     <Icons.Sparkles className="w-5 h-5 text-white" />
                                 </div>
                             )}
-                            <div className={`p-4 rounded-lg max-w-lg ${chat.role === 'user'
-                                ? 'bg-emerald-600 text-white rounded-br-none'
-                                : 'bg-slate-700 text-slate-200 rounded-bl-none'
+                            <div className={`p-4 rounded-lg ${chat.role === 'user'
+                                ? 'bg-emerald-600 text-white rounded-br-none max-w-lg'
+                                : 'bg-slate-700 text-slate-200 rounded-bl-none max-w-2xl'
                                 }`}>
-                                <p className="text-sm whitespace-pre-wrap">{chat.text}</p>
+                                <div className="chat-content text-sm">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{chat.text}</ReactMarkdown>
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -80,6 +148,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
                         className="flex-1 bg-slate-700 text-slate-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50"
                         disabled={isLoading}
                     />
+                     <button
+                        type="button"
+                        onClick={handleToggleListening}
+                        title={speechSupport.supported ? "Commande vocale" : speechSupport.reason}
+                        disabled={isLoading || !speechSupport.supported}
+                        className={`p-2 rounded-full text-white transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed ${
+                            isListening 
+                            ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
+                            : 'bg-sky-600 hover:bg-sky-700'
+                        }`}
+                    >
+                        <Icons.Microphone className="w-5 h-5" />
+                    </button>
                     <button
                         type="submit"
                         disabled={!message.trim() || isLoading}

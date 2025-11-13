@@ -1,33 +1,19 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { ExtractedData, Status, TableData, SummaryData, ChatMessage } from './types';
-import { extractDataWithGeminiBatch, askGeminiAboutData } from './services/geminiService';
+import { extractDataFromImage, askGeminiAboutData } from './services/geminiService';
 
 // Set worker path for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.mjs`;
-
-// Add type declarations for Tesseract.js
-declare const Tesseract: {
-    createWorker: (lang?: string, oem?: number, options?: any) => Promise<Tesseract.Worker>;
-};
-declare namespace Tesseract {
-    interface Worker {
-        recognize: (image: File) => Promise<RecognizeResult>;
-        terminate: () => void;
-    }
-    interface RecognizeResult {
-        data: {
-            text: string;
-        };
-    }
-}
 
 interface ProcessableFile {
     id: string;
     file: File;
     originalFileName: string;
+    base64: string;
+    mimeType: string;
 }
 
 const App: React.FC = () => {
@@ -39,30 +25,10 @@ const App: React.FC = () => {
 
     const [unifiedTable, setUnifiedTable] = useState<TableData | null>(null);
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
-    const [validationErrors, setValidationErrors] = useState<Map<number, string[]>>(new Map());
 
     const [activeView, setActiveView] = useState<'extract' | 'chat'>('extract');
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const [isChatLoading, setIsChatLoading] = useState(false);
-
-    const workersRef = useRef<Tesseract.Worker[]>([]);
-
-    useEffect(() => {
-        // Initialize Tesseract workers on mount
-        const initializeWorkers = async () => {
-            const workerCount = navigator.hardwareConcurrency || 4;
-            const workers = await Promise.all(
-                Array.from({ length: workerCount }, () => Tesseract.createWorker('fra'))
-            );
-            workersRef.current = workers;
-        };
-        initializeWorkers();
-
-        // Cleanup workers on unmount
-        return () => {
-            workersRef.current.forEach(worker => worker.terminate());
-        };
-    }, []);
 
     const handleFileChange = (selectedFiles: File[]) => {
         setFiles(selectedFiles);
@@ -70,16 +36,23 @@ const App: React.FC = () => {
         setError(null);
         setUnifiedTable(null);
         setSummaryData(null);
-        setValidationErrors(new Map());
         setGlobalStatus(Status.Idle);
         setActiveView('extract');
         setChatHistory([]);
     };
 
-    const processPdf = async (pdfFile: File): Promise<ProcessableFile[]> => {
+    const fileToBase64 = (file: File): Promise<string> =>
+        new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+            reader.onerror = (error) => reject(error);
+        });
+
+    const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'>[]> => {
         const fileBuffer = await pdfFile.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(fileBuffer).promise;
-        const pageFiles: ProcessableFile[] = [];
+        const pageFiles: Omit<ProcessableFile, 'base64' | 'mimeType'>[] = [];
 
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
@@ -112,66 +85,49 @@ const App: React.FC = () => {
         setError(null);
         setUnifiedTable(null);
         setSummaryData(null);
-        setValidationErrors(new Map());
         setActiveView('extract');
         setChatHistory([]);
 
-        // Step 1: Flatten all files (including PDF pages) into a single list
-        const processableFiles: ProcessableFile[] = [];
-        for (const file of files) {
-            if (file.type === 'application/pdf') {
-                try {
-                    const pdfPages = await processPdf(file);
-                    processableFiles.push(...pdfPages);
-                } catch (pdfError) {
-                    console.error(`Erreur lors du traitement du PDF ${file.name}:`, pdfError);
-                    setError(`Impossible de traiter le fichier PDF: ${file.name}.`);
-                    setGlobalStatus(Status.Error);
-                    return;
-                }
-            } else {
-                processableFiles.push({ file, originalFileName: file.name, id: `${file.name}-${Date.now()}` });
-            }
-        }
-        
-        // Step 2: Set initial state for all processable files
-        const initialData: ExtractedData[] = processableFiles.map(({ id, file, originalFileName }) => {
-            const pageNumber = file.name.match(/-page-(\d+)\.jpg$/);
-            const displayName = originalFileName.endsWith('.pdf') && pageNumber 
-                ? `${originalFileName} (Page ${pageNumber[1]})` 
-                : originalFileName;
-
-            return { id, fileName: displayName, imageSrc: URL.createObjectURL(file), content: null, status: Status.OcrProcessing };
-        });
-        setExtractedData(initialData);
-
         try {
-            // Step 3: Run OCR in parallel for all files
-            const workers = workersRef.current;
-            if (workers.length === 0) {
-              throw new Error("Les workers OCR ne sont pas initialisés.");
-            }
-            const ocrPromises = processableFiles.map(({ id, file }, index) => {
-                const worker = workers[index % workers.length];
-                return worker.recognize(file).then(result => ({ id, ocrText: result.data.text }));
-            });
-            const ocrResults = await Promise.all(ocrPromises);
-
-            setExtractedData(prev => prev.map(item => ({ ...item, status: Status.AiProcessing })));
-
-            // Step 4: Send all OCR results in a single batch to Gemini
-            const batchExtractionResult = await extractDataWithGeminiBatch(ocrResults);
-            
-            // Step 5: Update state with all results at once
-            setExtractedData(prev => prev.map(item => {
-                const result = batchExtractionResult.find(r => r.id === item.id);
-                if (result) {
-                    const isErrorResult = result.content.headers.length === 1 && result.content.headers[0] === "Erreur";
-                    return { ...item, content: result.content, status: isErrorResult ? Status.Error : Status.Success };
+            // Step 1: Flatten all files (including PDF pages) and convert to base64
+            const processableFiles: ProcessableFile[] = [];
+            for (const file of files) {
+                if (file.type === 'application/pdf') {
+                    const pdfPages = await processPdf(file);
+                    for (const page of pdfPages) {
+                        const base64 = await fileToBase64(page.file);
+                        processableFiles.push({ ...page, base64, mimeType: page.file.type });
+                    }
+                } else {
+                    const base64 = await fileToBase64(file);
+                    processableFiles.push({ file, originalFileName: file.name, id: `${file.name}-${Date.now()}`, base64, mimeType: file.type });
                 }
-                return { ...item, content: { headers: ["Erreur"], rows: [["Aucun résultat retourné par l'IA."]] }, status: Status.Error };
-            }));
+            }
+            
+            // Step 2: Set initial state for all files to 'AiProcessing'
+            const initialData: ExtractedData[] = processableFiles.map(({ id, file, originalFileName }) => {
+                 const pageNumber = file.name.match(/-page-(\d+)\.jpg$/);
+                 const displayName = originalFileName.endsWith('.pdf') && pageNumber 
+                     ? `${originalFileName} (Page ${pageNumber[1]})` 
+                     : originalFileName;
 
+                return { id, fileName: displayName, imageSrc: URL.createObjectURL(file), content: null, status: Status.AiProcessing };
+            });
+            setExtractedData(initialData);
+
+            // Step 3: Run Gemini Vision API in parallel for all files
+            const extractionPromises = processableFiles.map(async (pfile) => {
+                const result = await extractDataFromImage(pfile.base64, pfile.mimeType);
+                const isErrorResult = result.headers.length === 1 && result.headers[0] === "Erreur";
+                
+                setExtractedData(prev => prev.map(item =>
+                    item.id === pfile.id
+                        ? { ...item, content: result, status: isErrorResult ? Status.Error : Status.Success }
+                        : item
+                ));
+            });
+            
+            await Promise.all(extractionPromises);
             setGlobalStatus(Status.Success);
 
         } catch (e) {
@@ -190,8 +146,6 @@ const App: React.FC = () => {
             setError("Aucune donnée valide à traiter.");
             return;
         }
-        
-        setValidationErrors(new Map());
 
         const masterHeaders = successfulExtractions[0].content!.headers;
         let allRows = successfulExtractions.flatMap(d => d.content!.rows);
@@ -218,68 +172,6 @@ const App: React.FC = () => {
             uniqueAdressesArrivee: [...new Set(finalTable.rows.map(r => r[adresseFinIndex]).filter(Boolean))],
         };
         setSummaryData(summary);
-    };
-
-    const handleValidateData = () => {
-        if (!unifiedTable) return;
-
-        const errorsMap = new Map<number, string[]>();
-        const { headers, rows } = unifiedTable;
-
-        const debutIndex = headers.indexOf("Début tournée");
-        const finIndex = headers.indexOf("Fin tournée");
-        const nomIndex = headers.indexOf("Nom de l'employé");
-        const vehiculeIndex = headers.indexOf("Véhicule");
-
-        rows.forEach((row, rowIndex) => {
-            const rowErrors: string[] = [];
-
-            // Rule 1: Missing critical info
-            if (nomIndex !== -1 && !row[nomIndex]?.trim()) {
-                rowErrors.push("Le nom de l'employé est manquant.");
-            }
-            if (vehiculeIndex !== -1 && !row[vehiculeIndex]?.trim()) {
-                rowErrors.push("Le véhicule est manquant.");
-            }
-
-            // Rule 2: Date/Time logic
-            if (debutIndex !== -1 && finIndex !== -1) {
-                const debutStr = row[debutIndex];
-                const finStr = row[finIndex];
-
-                if (debutStr?.trim() && finStr?.trim()) {
-                    // Simple time check (e.g., HH:MM)
-                    const timeRegex = /^\d{1,2}:\d{2}$/;
-                    if (!timeRegex.test(debutStr.trim()) || !timeRegex.test(finStr.trim())) {
-                        rowErrors.push("Format d'heure invalide (attendu HH:MM).");
-                    } else {
-                        try {
-                            const [debutH, debutM] = debutStr.split(':').map(Number);
-                            const [finH, finM] = finStr.split(':').map(Number);
-                            
-                            if (isNaN(debutH) || isNaN(debutM) || isNaN(finH) || isNaN(finM)) {
-                                 rowErrors.push("Heure invalide.");
-                            } else {
-                                const debutMinutes = debutH * 60 + debutM;
-                                const finMinutes = finH * 60 + finM;
-
-                                if (debutMinutes >= finMinutes) {
-                                    rowErrors.push("L'heure de début doit être antérieure à l'heure de fin.");
-                                }
-                            }
-                        } catch(e) {
-                             rowErrors.push("Impossible de parser les heures.");
-                        }
-                    }
-                }
-            }
-
-            if (rowErrors.length > 0) {
-                errorsMap.set(rowIndex, rowErrors);
-            }
-        });
-
-        setValidationErrors(errorsMap);
     };
     
     const handleSendMessage = async (message: string) => {
@@ -397,6 +289,7 @@ const App: React.FC = () => {
                             padding: 2px 4px; 
                             text-align: left; 
                             word-wrap: break-word;
+                            line-height: 1.1;
                         }
                         th { 
                             background-color: #f2f2f2 !important; 
@@ -454,8 +347,6 @@ const App: React.FC = () => {
                 chatHistory={chatHistory}
                 isChatLoading={isChatLoading}
                 onSendMessage={handleSendMessage}
-                validationErrors={validationErrors}
-                onValidateData={handleValidateData}
            />
         </div>
     );

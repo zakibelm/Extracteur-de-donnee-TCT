@@ -10,109 +10,95 @@ const TABLE_HEADERS = [
     "Approuvé", "Territoire début", "Adresse de début", "Adresse de fin"
 ];
 
-const singleTableSchema = {
+const responseSchema = {
     type: Type.OBJECT,
     properties: {
-        "Tournée": { type: Type.STRING }, "Nom": { type: Type.STRING },
-        "Début tournée": { type: Type.STRING }, "Fin tournée": { type: Type.STRING },
-        "Classe véhicule": { type: Type.STRING }, "Employé": { type: Type.STRING },
-        "Nom de l'employé": { type: Type.STRING }, "Véhicule": { type: Type.STRING },
-        "Classe véhicule affecté": { type: Type.STRING }, "Stationnement": { type: Type.STRING },
-        "Approuvé": { type: Type.STRING }, "Territoire début": { type: Type.STRING },
-        "Adresse de début": { type: Type.STRING }, "Adresse de fin": { type: Type.STRING },
+        entries: {
+            type: Type.ARRAY,
+            description: "Liste des affectations de tournées extraites de l'image.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    "Tournée": { type: Type.STRING }, "Nom": { type: Type.STRING },
+                    "Début tournée": { type: Type.STRING }, "Fin tournée": { type: Type.STRING },
+                    "Classe véhicule": { type: Type.STRING }, "Employé": { type: Type.STRING },
+                    "Nom de l'employé": { type: Type.STRING }, "Véhicule": { type: Type.STRING },
+                    "Classe véhicule affecté": { type: Type.STRING }, "Stationnement": { type: Type.STRING },
+                    "Approuvé": { type: Type.STRING }, "Territoire début": { type: Type.STRING },
+                    "Adresse de début": { type: Type.STRING }, "Adresse de fin": { type: Type.STRING },
+                },
+                required: TABLE_HEADERS
+            }
+        }
     },
-    required: TABLE_HEADERS,
+    required: ["entries"],
 };
-
-const batchResponseSchema = {
-    type: Type.ARRAY,
-    items: {
-        type: Type.OBJECT,
-        properties: {
-            id: { type: Type.STRING, description: "L'identifiant unique du fichier traité." },
-            entries: {
-                type: Type.ARRAY,
-                description: "Liste des affectations de tournées extraites de ce fichier.",
-                items: singleTableSchema,
-            },
-        },
-        required: ["id", "entries"],
-    },
-};
-
 
 /**
- * Extracts tabular data from a batch of OCR texts using the Gemini API.
- * @param ocrResults An array of objects, each containing a file id and its OCR text.
- * @returns A promise that resolves to an array of parsed content results.
+ * Extracts tabular data from a single image using the Gemini Vision API.
+ * @param base64Image The base64 encoded image string.
+ * @param mimeType The MIME type of the image.
+ * @returns A promise that resolves to the parsed table content.
  */
-export async function extractDataWithGeminiBatch(
-    ocrResults: { id: string, ocrText: string }[]
-): Promise<{ id: string, content: ParsedContent }[]> {
-    
-    const textChunks = ocrResults.map(result => `
---- DEBUT DOCUMENT (ID: ${result.id}) ---
-${result.ocrText}
---- FIN DOCUMENT (ID: ${result.id}) ---
-`).join('\n');
-
-    const prompt = `À partir du lot de textes suivants, extrais les données de chaque document. Chaque document est identifié par un ID.
-Pour chaque document, extrais toutes les lignes de données du tableau "Affectations des tournées" et retourne-les dans un objet JSON qui correspond à son ID.
-
-Textes à analyser:
-${textChunks}
+export async function extractDataFromImage(base64Image: string, mimeType: string): Promise<ParsedContent> {
+    const prompt = `À partir de l'image fournie, localise le tableau "Affectations des tournées".
+Extrais toutes les lignes de données de ce tableau.
 
 Instructions:
-- Le format de sortie doit être un tableau JSON.
-- Chaque élément du tableau doit être un objet contenant "id" et "entries".
-- L'"id" doit correspondre à l'ID du document que tu traites.
+- Analyse attentivement l'image pour identifier la structure du tableau, même si les lignes ou les colonnes sont mal alignées.
+- Le format de sortie doit être un objet JSON unique contenant une clé "entries".
 - "entries" doit être un tableau d'objets, où chaque objet représente une ligne du tableau.
-- Les colonnes sont : ${TABLE_HEADERS.join(', ')}.
-- Si une valeur est manquante, utilise une chaîne vide "".
-- Ne renvoie que du JSON valide qui correspond au schéma. Si un document ne contient aucune donnée de tableau, retourne un tableau "entries" vide pour cet ID.
+- Les colonnes à extraire sont : ${TABLE_HEADERS.join(', ')}.
+- Si une valeur est manquante ou illisible dans une cellule, utilise une chaîne vide "".
+- Fais preuve d'intelligence pour corriger les erreurs de reconnaissance de caractères évidentes (ex: "l" pour "1", "O" pour "0").
+- Ne renvoie que du JSON valide qui correspond au schéma demandé. Si le tableau n'est pas trouvé ou est vide, retourne un tableau "entries" vide.
 `;
 
     try {
+        const imagePart = {
+            inlineData: {
+                data: base64Image,
+                mimeType: mimeType,
+            },
+        };
+
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: prompt,
+            contents: { parts: [{ text: prompt }, imagePart] },
             config: {
                 responseMimeType: 'application/json',
-                responseSchema: batchResponseSchema,
+                responseSchema: responseSchema,
             },
         });
 
         const jsonText = response.text.trim();
-        const parsedJson: { id: string, entries: Record<string, string>[] }[] = JSON.parse(jsonText);
-        
-        const results = parsedJson.map(fileResult => {
-            const rows: string[][] = fileResult.entries.map((entry) => 
-                TABLE_HEADERS.map(header => entry[header] || '')
-            );
-            return {
-                id: fileResult.id,
-                content: { headers: TABLE_HEADERS, rows }
-            };
-        });
+        if (!jsonText) {
+            throw new Error("L'IA n'a retourné aucune donnée. Le contenu a peut-être été bloqué pour des raisons de sécurité.");
+        }
 
-        // Ensure all original IDs have a result, even if empty
-        return ocrResults.map(original => {
-            const found = results.find(r => r.id === original.id);
-            if (found) return found;
-            return { id: original.id, content: { headers: TABLE_HEADERS, rows: [] } };
-        });
+        const parsedJson: { entries: Record<string, string>[] } = JSON.parse(jsonText);
+        
+        if (!parsedJson || !Array.isArray(parsedJson.entries)) {
+            throw new Error("La réponse de l'IA est mal structurée (tableau 'entries' manquant).");
+        }
+        
+        const rows: string[][] = parsedJson.entries.map((entry) => 
+            TABLE_HEADERS.map(header => entry[header] || '')
+        );
+
+        return { headers: TABLE_HEADERS, rows };
 
     } catch (error) {
-        console.error("Erreur lors de l'appel batch à l'API Gemini:", error);
-        let errorMessage = "Une erreur est survenue lors de l'analyse par l'IA.";
+        console.error("Erreur lors de l'appel à l'API Gemini Vision:", error);
+        let errorMessage = "Une erreur inattendue est survenue lors de l'analyse par l'IA.";
         if (error instanceof Error) {
-            errorMessage = error.message;
+            if (error instanceof SyntaxError) {
+                 errorMessage = "L'IA a retourné une réponse invalide (JSON mal formé). Veuillez réessayer.";
+            } else {
+                errorMessage = error.message;
+            }
         }
-        // Return error message for all files in the batch
-        return ocrResults.map(r => ({
-            id: r.id,
-            content: { headers: ["Erreur"], rows: [[errorMessage]] }
-        }));
+        return { headers: ["Erreur"], rows: [[errorMessage]] };
     }
 }
 
@@ -137,6 +123,8 @@ export async function askGeminiAboutData(
     const historyForPrompt = history.map(msg => `${msg.role}: ${msg.text}`).join('\n');
 
     const prompt = `Tu es un assistant expert en analyse de données. On te fournit un ensemble de données sous forme de JSON et un historique de conversation. Réponds à la nouvelle question de l'utilisateur en te basant **uniquement** sur les données fournies. Sois concis et précis. Si la réponse ne se trouve pas dans les données, dis-le clairement.
+
+**Règle spéciale :** Si la question de l'utilisateur concerne une "Tournée" ou un "Véhicule" spécifique, tu DOIS formater ta réponse sous forme de tableau Markdown. Le tableau doit inclure toutes les colonnes de données pour la ou les lignes correspondantes. Utilise les en-têtes exacts des données fournies pour les colonnes du tableau.
 
 --- DEBUT DES DONNÉES ---
 ${dataAsJSON}

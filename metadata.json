@@ -1,5 +1,7 @@
 {
   "name": "EDT - Extracteur de Données Tabulaires",
   "description": "An application to extract, merge, clean, and structure tabular data from multiple images and PDFs using Gemini. Exports the final unified table to CSV and JSON formats.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

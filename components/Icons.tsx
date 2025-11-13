@@ -90,7 +90,7 @@ export const Icons = {
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cn("h-4 w-4", className)} {...props}>
       <path d="M14 2v4a2 2 0 0 0 2 2h4" />
       <path d="M4 22h16a2 2 0 0 0 2-2V7l-6-5H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2Z" />
-      <path d="M9 13.5a1.5 1.5 0 0 1 1.5-1.5h1a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-1a1.5 1.5 0 0 1-1.5-1.5v-3Z" />
+      <path d="M9 13.5a1.5 1.5 0 0 1 1.5-1.5h1a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5-1.5h-1a1.5 1.5 0 0 1-1.5-1.5v-3Z" />
       <path d="M15 12.5a1.5 1.5 0 0 1 1.5-1.5h1" />
       <path d="M15 18h1.5a1.5 1.5 0 0 0 0-3H15v3Z" />
     </svg>
@@ -123,10 +123,11 @@ export const Icons = {
       <path d="M22 2 11 13" />
     </svg>
   ),
-  ShieldCheck: ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
+  Microphone: ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cn("h-4 w-4", className)} {...props}>
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
-        <path d="m9 12 2 2 4-4"/>
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+      <line x1="12" y1="19" x2="12" y2="22"></line>
     </svg>
   ),
 };

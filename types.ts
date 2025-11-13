@@ -1,7 +1,6 @@
 export enum Status {
     Idle = 'idle',
     Processing = 'processing',
-    OcrProcessing = 'ocr_processing',
     AiProcessing = 'ai_processing',
     Success = 'success',
     Error = 'error',
