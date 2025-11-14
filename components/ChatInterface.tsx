@@ -22,6 +22,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
     const [message, setMessage] = useState('');
     const [isListening, setIsListening] = useState(false);
     const [speechSupport, setSpeechSupport] = useState<{ supported: boolean; reason?: string }>({ supported: false });
+    const [speechError, setSpeechError] = useState<string | null>(null);
     const recognitionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -31,6 +32,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
 
     useEffect(scrollToBottom, [history, isLoading]);
 
+    // Effect to check for API support on component mount
     useEffect(() => {
         const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -42,45 +44,69 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
 
         if (SpeechRecognitionAPI) {
             setSpeechSupport({ supported: true });
-            const recognition = new SpeechRecognitionAPI();
-            recognition.continuous = false;
-            recognition.lang = 'fr-FR';
-            recognition.interimResults = false;
-
-            recognition.onresult = (event: any) => {
-                const transcript = event.results[0][0].transcript.trim();
-                setMessage(prevMessage => (prevMessage ? `${prevMessage} ${transcript}` : transcript).trim());
-            };
-            
-            recognition.onerror = (event: any) => {
-                console.error("Erreur de reconnaissance vocale:", event.error);
-                setIsListening(false);
-            };
-
-            recognition.onend = () => {
-                setIsListening(false);
-            };
-            
-            recognitionRef.current = recognition;
         } else {
             setSpeechSupport({ supported: false, reason: "La commande vocale n'est pas supportée par ce navigateur." });
             console.warn("Votre navigateur ne supporte pas l'API Speech Recognition.");
         }
-    }, []); // Run only once on mount
+    }, []);
 
     const handleToggleListening = () => {
-        if (isLoading || !recognitionRef.current) return;
+        if (isLoading || !speechSupport.supported) return;
+        
+        setSpeechError(null);
 
-        if (isListening) {
+        // If currently listening, stop the recognition
+        if (isListening && recognitionRef.current) {
             recognitionRef.current.stop();
-        } else {
-            try {
-                recognitionRef.current.start();
-                setIsListening(true);
-            } catch (error) {
-                console.error("Impossible de démarrer la reconnaissance vocale:", error);
-                setIsListening(false);
+            return;
+        }
+
+        // Start a new recognition session
+        const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognitionAPI) return;
+
+        const recognition = new SpeechRecognitionAPI();
+        recognitionRef.current = recognition;
+        
+        recognition.lang = 'fr-FR';
+        recognition.interimResults = false;
+        recognition.continuous = false;
+
+        // Sync UI state with actual recognition events
+        recognition.onstart = () => {
+            setIsListening(true);
+        };
+        
+        recognition.onend = () => {
+            setIsListening(false);
+            recognitionRef.current = null; // Clean up the ref
+        };
+
+        recognition.onerror = (event: any) => {
+            console.error("Erreur de reconnaissance vocale:", event.error);
+            if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                setSpeechError("L'accès au microphone a été refusé. Veuillez l'autoriser dans les paramètres de votre navigateur.");
+                setSpeechSupport({ supported: false, reason: "Accès au microphone refusé." });
+            } else if (event.error === 'no-speech') {
+                setSpeechError("Aucun son n'a été détecté. Veuillez réessayer.");
+            } else {
+                setSpeechError(`Une erreur de reconnaissance vocale est survenue: ${event.error}`);
             }
+        };
+
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript.trim();
+            setMessage(prevMessage => (prevMessage ? `${prevMessage} ${transcript}` : transcript).trim());
+        };
+        
+        try {
+            recognition.start();
+        } catch (error) {
+             console.error("Impossible de démarrer la reconnaissance vocale:", error);
+             setSpeechError("Impossible de démarrer la reconnaissance vocale.");
+             // Ensure cleanup if start() fails immediately
+             setIsListening(false);
+             recognitionRef.current = null;
         }
     };
 
@@ -96,6 +122,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSubmit(e);
+        }
+    };
+
+    const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setMessage(e.target.value);
+        if (speechError) {
+            setSpeechError(null);
         }
     };
 
@@ -141,7 +174,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
                 <form onSubmit={handleSubmit} className="flex items-center gap-2">
                     <textarea
                         value={message}
-                        onChange={(e) => setMessage(e.target.value)}
+                        onChange={handleTextChange}
                         onKeyPress={handleKeyPress}
                         placeholder="Posez une question sur les données extraites..."
                         rows={1}
@@ -169,6 +202,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
                         <Icons.Send className="w-5 h-5" />
                     </button>
                 </form>
+                {speechError && (
+                    <p className="text-xs text-red-400 mt-2 text-center">{speechError}</p>
+                )}
             </div>
         </div>
     );
