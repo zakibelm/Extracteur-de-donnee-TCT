@@ -1,13 +1,11 @@
-
-import React, { useState, useCallback, useRef, useLayoutEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
-import { ExtractedData, Status, TableData, SummaryData } from './types';
+import { ExtractedData, Status, TableData } from './types';
 import { extractDataFromImage } from './services/geminiService';
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
-import { gsap } from 'gsap';
 pdfMake.vfs = pdfFonts.vfs;
 
 
@@ -30,29 +28,14 @@ const App: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     const [unifiedTable, setUnifiedTable] = useState<TableData | null>(null);
-    const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
 
-    const [activeView, setActiveView] = useState<'extract' | 'results'>('extract');
-    
-    const container = useRef<HTMLDivElement>(null);
-
-    useLayoutEffect(() => {
-        const ctx = gsap.context(() => {
-            gsap.from(container.current, {
-                opacity: 0,
-                duration: 0.8,
-                ease: 'power3.out'
-            });
-        });
-        return () => ctx.revert();
-    }, []);
+    const [activeView, setActiveView] = useState<'extract' | 'document'>('extract');
 
     const handleFileChange = (selectedFiles: File[]) => {
         setFiles(selectedFiles);
         setExtractedData([]);
         setError(null);
         setUnifiedTable(null);
-        setSummaryData(null);
         setGlobalStatus(Status.Idle);
         setActiveView('extract');
     };
@@ -100,7 +83,6 @@ const App: React.FC = () => {
         setGlobalStatus(Status.Processing);
         setError(null);
         setUnifiedTable(null);
-        setSummaryData(null);
         setActiveView('extract');
 
         try {
@@ -170,21 +152,7 @@ const App: React.FC = () => {
             rows: uniqueRows,
         };
         setUnifiedTable(finalTable);
-        
-        const nomEmployeIndex = masterHeaders.indexOf("Nom de l'employé");
-        const vehiculeIndex = masterHeaders.indexOf("Véhicule");
-        const adresseDebutIndex = masterHeaders.indexOf("Adresse de début");
-        const adresseFinIndex = masterHeaders.indexOf("Adresse de fin");
-
-        const summary: SummaryData = {
-            totalRows: finalTable.rows.length,
-            uniqueChauffeurs: [...new Set(finalTable.rows.map(r => r[nomEmployeIndex]).filter(Boolean))],
-            uniqueVehicules: [...new Set(finalTable.rows.map(r => r[vehiculeIndex]).filter(Boolean))],
-            uniqueAdressesDepart: [...new Set(finalTable.rows.map(r => r[adresseDebutIndex]).filter(Boolean))],
-            uniqueAdressesArrivee: [...new Set(finalTable.rows.map(r => r[adresseFinIndex]).filter(Boolean))],
-        };
-        setSummaryData(summary);
-        setActiveView('results');
+        setActiveView('document');
     };
     
     const handleDownloadPdf = (headers: string[], rows: string[][]) => {
@@ -321,7 +289,7 @@ const App: React.FC = () => {
     };
 
     return (
-        <div ref={container} className="flex h-screen bg-transparent text-[--color-foreground] font-sans">
+        <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
            <Sidebar
                 isSidebarOpen={isSidebarOpen}
                 setIsSidebarOpen={setIsSidebarOpen}
@@ -336,7 +304,6 @@ const App: React.FC = () => {
                 extractedData={extractedData}
                 onGenerateResults={handleGenerateResults}
                 error={error}
-                unifiedTableIsReady={!!unifiedTable}
                 unifiedTable={unifiedTable}
                 onPrint={handlePrint}
                 onDownloadPdf={handleDownloadPdf}

@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { ParsedContent, TableData } from '../types';
+import { ParsedContent } from '../types';
 
 // This is a hard requirement. The API key must be obtained from this environment variable.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -65,7 +64,7 @@ Instructions:
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: [{ parts: [{ text: prompt }, imagePart] }],
+            contents: { parts: [{ text: prompt }, imagePart] },
             config: {
                 responseMimeType: 'application/json',
                 responseSchema: responseSchema,

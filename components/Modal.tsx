@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef } from 'react';
 import { Icons } from './Icons';
 
@@ -43,15 +42,15 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
     >
       <div
         ref={modalRef}
-        className="relative w-full max-w-4xl max-h-[90vh] bg-[--color-popover] rounded-lg shadow-xl m-4 flex flex-col border border-[--color-border]"
+        className="relative w-full max-w-4xl max-h-[90vh] bg-slate-800 rounded-lg shadow-xl m-4 flex flex-col border border-slate-700"
         onClick={(e) => e.stopPropagation()}
         tabIndex={-1}
       >
-        <header className="flex items-center justify-between p-4 border-b border-[--color-border]">
-          <h2 id="modal-title" className="text-xl font-semibold text-[--color-popover-foreground]">{title}</h2>
+        <header className="flex items-center justify-between p-4 border-b border-slate-700">
+          <h2 id="modal-title" className="text-xl font-semibold text-slate-100">{title}</h2>
           <button
             onClick={onClose}
-            className="p-1 text-[--color-muted-foreground] rounded-full hover:bg-[--color-muted] hover:text-[--color-foreground] focus:outline-none focus:ring-2 focus:ring-[--color-ring]"
+            className="p-1 text-slate-400 rounded-full hover:bg-slate-700 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
             aria-label="Fermer"
           >
             <Icons.X className="w-6 h-6" />

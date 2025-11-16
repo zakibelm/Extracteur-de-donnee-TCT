@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -28,17 +26,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
     const [speechError, setSpeechError] = useState<string | null>(null);
     const recognitionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const [isExpanded, setIsExpanded] = useState(false);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    useEffect(() => {
-        if(isExpanded) {
-            scrollToBottom();
-        }
-    }, [history, isLoading, isExpanded]);
+    useEffect(scrollToBottom, [history, isLoading]);
 
     // Effect to check for API support on component mount
     useEffect(() => {
@@ -141,87 +134,64 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
     };
 
     return (
-        <div className="flex-shrink-0 bg-[--color-card] border-t-2 border-[--color-border] rounded-t-lg mt-4 shadow-2xl">
-            <header 
-                className="p-3 flex justify-between items-center cursor-pointer hover:bg-[--color-muted] transition-colors"
-                onClick={() => setIsExpanded(!isExpanded)}
-                aria-expanded={isExpanded}
-                aria-controls="chat-content"
-            >
-                <div className="flex items-center gap-3">
-                    <Icons.MessageCircle className="w-6 h-6 text-[--color-accent]" />
-                    <h3 className="font-bold text-[--color-card-foreground]">Discuter avec les Données</h3>
-                </div>
-                <button className="text-[--color-muted-foreground] hover:text-[--color-foreground]" aria-label={isExpanded ? "Réduire le chat" : "Agrandir le chat"}>
-                    {isExpanded ? <Icons.ChevronDown className="w-6 h-6" /> : <Icons.ChevronUp className="w-6 h-6" />}
-                </button>
-            </header>
-            
-            <div 
-                id="chat-content"
-                className={`transition-all duration-500 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[60vh]' : 'max-h-0'}`}
-            >
-                <div className="flex flex-col h-[55vh]">
-                    <div className="p-4 border-b border-[--color-border]">
-                        <label className="block text-sm font-medium text-[--color-card-foreground] mb-2">Choisir un rôle pour l'IA :</label>
-                        <div className="flex flex-wrap gap-2">
-                            {AGENT_ROLES.map(role => (
-                                <button
-                                    key={role.id}
-                                    onClick={() => setSelectedRole(role.id)}
-                                    title={role.description}
-                                    className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 border
-                                        ${selectedRole === role.id 
-                                            ? 'bg-[--color-secondary] border-[--color-secondary] text-[--color-secondary-foreground] shadow-md' 
-                                            : 'bg-[--color-muted] border-[--color-border] text-[--color-muted-foreground] hover:bg-[--color-accent] hover:border-[--color-accent]'
-                                        }`}
-                                >
-                                    {role.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-6 overflow-y-auto">
-                        <div className="space-y-6">
-                            {history.map((chat, index) => (
-                                <div key={index} className={`flex items-start gap-4 ${chat.role === 'user' ? 'justify-end' : ''}`}>
-                                    {chat.role === 'model' && (
-                                        <div className="w-8 h-8 rounded-full bg-[--color-accent] flex items-center justify-center flex-shrink-0">
-                                            <Icons.Sparkles className="w-5 h-5 text-white" />
-                                        </div>
-                                    )}
-                                    <div className={`p-4 rounded-lg ${chat.role === 'user'
-                                        ? 'bg-[--color-primary] text-[--color-primary-foreground] rounded-br-none max-w-lg'
-                                        : 'bg-[--color-muted] text-[--color-muted-foreground] rounded-bl-none max-w-2xl'
-                                        }`}>
-                                        <div className="chat-content text-sm">
-                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{chat.text}</ReactMarkdown>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                            {isLoading && (
-                                <div className="flex items-start gap-4">
-                                     <div className="w-8 h-8 rounded-full bg-[--color-accent] flex items-center justify-center flex-shrink-0">
-                                        <Icons.Sparkles className="w-5 h-5 text-white" />
-                                    </div>
-                                    <div className="p-4 rounded-lg bg-[--color-muted] text-[--color-muted-foreground] rounded-bl-none">
-                                        <div className="flex items-center space-x-2">
-                                            <span className="w-2 h-2 bg-[--color-muted-foreground] rounded-full animate-pulse delay-75"></span>
-                                            <span className="w-2 h-2 bg-[--color-muted-foreground] rounded-full animate-pulse delay-150"></span>
-                                            <span className="w-2 h-2 bg-[--color-muted-foreground] rounded-full animate-pulse delay-300"></span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            <div ref={messagesEndRef} />
-                        </div>
-                    </div>
+        <div className="flex flex-col h-full max-w-4xl mx-auto bg-slate-800/50 border border-slate-700 rounded-lg">
+            <div className="p-4 border-b border-slate-700">
+                <label className="block text-sm font-medium text-slate-300 mb-2">Choisir un rôle pour l'IA :</label>
+                <div className="flex flex-wrap gap-2">
+                    {AGENT_ROLES.map(role => (
+                        <button
+                            key={role.id}
+                            onClick={() => setSelectedRole(role.id)}
+                            title={role.description}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 border
+                                ${selectedRole === role.id 
+                                    ? 'bg-sky-500 border-sky-400 text-white shadow-md' 
+                                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:border-slate-500'
+                                }`}
+                        >
+                            {role.name}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            <div className={`p-4 border-t border-[--color-border] ${!isExpanded ? 'rounded-b-lg' : ''}`}>
+            <div className="flex-1 p-6 overflow-y-auto">
+                <div className="space-y-6">
+                    {history.map((chat, index) => (
+                        <div key={index} className={`flex items-start gap-4 ${chat.role === 'user' ? 'justify-end' : ''}`}>
+                            {chat.role === 'model' && (
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
+                                    <Icons.Sparkles className="w-5 h-5 text-white" />
+                                </div>
+                            )}
+                            <div className={`p-4 rounded-lg ${chat.role === 'user'
+                                ? 'bg-emerald-600 text-white rounded-br-none max-w-lg'
+                                : 'bg-slate-700 text-slate-200 rounded-bl-none max-w-2xl'
+                                }`}>
+                                <div className="chat-content text-sm">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{chat.text}</ReactMarkdown>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {isLoading && (
+                        <div className="flex items-start gap-4">
+                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
+                                <Icons.Sparkles className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="p-4 rounded-lg bg-slate-700 text-slate-200 rounded-bl-none">
+                                <div className="flex items-center space-x-2">
+                                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-75"></span>
+                                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-150"></span>
+                                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-300"></span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
+            </div>
+            <div className="p-4 border-t border-slate-700">
                 <form onSubmit={handleSubmit} className="flex items-center gap-2">
                     <textarea
                         value={message}
@@ -229,7 +199,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
                         onKeyPress={handleKeyPress}
                         placeholder="Posez une question sur les données extraites..."
                         rows={1}
-                        className="flex-1 bg-[--color-input] text-[--color-foreground] rounded-lg p-2 resize-none focus:outline-none focus:ring-2 focus:ring-[--color-ring] disabled:opacity-50"
+                        className="flex-1 bg-slate-700 text-slate-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50"
                         disabled={isLoading}
                     />
                      <button
@@ -239,8 +209,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
                         disabled={isLoading || !speechSupport.supported}
                         className={`p-2 rounded-full text-white transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed ${
                             isListening 
-                            ? 'bg-[--color-destructive] hover:brightness-90 animate-pulse' 
-                            : 'bg-[--color-secondary] hover:brightness-90'
+                            ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
+                            : 'bg-sky-600 hover:bg-sky-700'
                         }`}
                     >
                         <Icons.Microphone className="w-5 h-5" />
@@ -248,13 +218,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, isLoading
                     <button
                         type="submit"
                         disabled={!message.trim() || isLoading}
-                        className="p-2 bg-[--color-primary] rounded-full text-[--color-primary-foreground] hover:brightness-90 disabled:bg-[--color-muted] disabled:cursor-not-allowed transition-colors"
+                        className="p-2 bg-emerald-600 rounded-full text-white hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors"
                     >
                         <Icons.Send className="w-5 h-5" />
                     </button>
                 </form>
                 {speechError && (
-                    <p className="text-xs text-[--color-destructive] mt-2 text-center">{speechError}</p>
+                    <p className="text-xs text-red-400 mt-2 text-center">{speechError}</p>
                 )}
             </div>
         </div>
