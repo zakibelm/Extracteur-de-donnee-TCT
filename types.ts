@@ -28,32 +28,16 @@ export interface SummaryData {
     uniqueAdressesDepart: string[];
     uniqueAdressesArrivee: string[];
 }
-
-// FIX: Add ChatMessage interface and AGENT_ROLES constant for chat component.
+// FIX: Add ChatMessage interface to resolve import error in ChatInterface.tsx.
 export interface ChatMessage {
     role: 'user' | 'model';
     text: string;
 }
 
+// FIX: Add AGENT_ROLES constant to resolve import error in ChatInterface.tsx.
 export const AGENT_ROLES = [
-    {
-        id: 'auto',
-        name: 'Automatique',
-        description: "L'IA choisit le meilleur rôle pour répondre à la question."
-    },
-    {
-        id: 'analyst',
-        name: 'Analyste',
-        description: "Adopte une perspective analytique pour trouver des tendances et des informations."
-    },
-    {
-        id: 'summarizer',
-        name: 'Synthétiseur',
-        description: "Fournit des résumés concis et clairs des données."
-    },
-    {
-        id: 'planner',
-        name: 'Planificateur',
-        description: "Aide à organiser les tâches ou à planifier la logistique en fonction des données."
-    }
+    { id: 'auto', name: 'Auto', description: "L'IA choisit le meilleur rôle pour la tâche." },
+    { id: 'analyst', name: 'Analyste', description: "Analyse les données, trouve des tendances et des insights." },
+    { id: 'summarizer', name: 'Synthétiseur', description: "Résume les informations clés des données." },
+    { id: 'planner', name: 'Planificateur', description: "Aide à planifier les tournées ou les logistiques." }
 ];

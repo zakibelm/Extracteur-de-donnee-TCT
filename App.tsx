@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useLayoutEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
@@ -7,6 +7,7 @@ import { ExtractedData, Status, TableData, SummaryData } from './types';
 import { extractDataFromImage } from './services/geminiService';
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
+import { gsap } from 'gsap';
 pdfMake.vfs = pdfFonts.vfs;
 
 
@@ -32,6 +33,19 @@ const App: React.FC = () => {
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
 
     const [activeView, setActiveView] = useState<'extract' | 'results'>('extract');
+    
+    const container = useRef<HTMLDivElement>(null);
+
+    useLayoutEffect(() => {
+        const ctx = gsap.context(() => {
+            gsap.from(container.current, {
+                opacity: 0,
+                duration: 0.8,
+                ease: 'power3.out'
+            });
+        });
+        return () => ctx.revert();
+    }, []);
 
     const handleFileChange = (selectedFiles: File[]) => {
         setFiles(selectedFiles);
@@ -307,7 +321,7 @@ const App: React.FC = () => {
     };
 
     return (
-        <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
+        <div ref={container} className="flex h-screen bg-transparent text-[--color-foreground] font-sans">
            <Sidebar
                 isSidebarOpen={isSidebarOpen}
                 setIsSidebarOpen={setIsSidebarOpen}

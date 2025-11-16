@@ -1,4 +1,3 @@
-
 import React, { useCallback, useState } from 'react';
 import { Icons } from './Icons';
 
@@ -37,7 +36,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileChange }) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    // FIX: Explicitly type `droppedFiles` as `File[]` to fix type inference issue.
+    // FIX: Explicitly type `droppedFiles` to `File[]` to resolve type inference issues with `e.dataTransfer.files`.
     const droppedFiles: File[] = Array.from(e.dataTransfer.files);
     const validFiles = filterFiles(droppedFiles);
     if (validFiles.length > 0) {
@@ -47,7 +46,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileChange }) => {
   }, [onFileChange]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // FIX: Explicitly type `selectedFiles` as `File[]` to fix type inference issue.
+    // FIX: Explicitly type `selectedFiles` to `File[]` to resolve type inference issues with `e.target.files`.
     const selectedFiles: File[] = Array.from(e.target.files || []);
     const validFiles = filterFiles(selectedFiles);
     if (validFiles.length > 0) {
@@ -66,14 +65,14 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileChange }) => {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         className={`flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer transition-colors duration-300
-          ${isDragging ? 'border-emerald-400 bg-slate-700' : 'border-slate-600 bg-slate-800 hover:bg-slate-700'}`}
+          ${isDragging ? 'border-[--color-primary] bg-[--color-muted]' : 'border-[--color-border] bg-[--color-card] hover:bg-[--color-muted]'}`}
       >
         <div className="flex flex-col items-center justify-center pt-5 pb-6">
-          <Icons.UploadCloud className={`w-10 h-10 mb-3 ${isDragging ? 'text-emerald-400' : 'text-slate-400'}`} />
-          <p className="mb-2 text-sm text-slate-400">
-            <span className="font-semibold text-emerald-400">Cliquez pour télécharger</span> ou glissez-déposez
+          <Icons.UploadCloud className={`w-10 h-10 mb-3 ${isDragging ? 'text-[--color-primary]' : 'text-[--color-muted-foreground]'}`} />
+          <p className="mb-2 text-sm text-[--color-muted-foreground]">
+            <span className="font-semibold text-[--color-primary]">Cliquez pour télécharger</span> ou glissez-déposez
           </p>
-          <p className="text-xs text-slate-500">Images (PNG, JPG) ou PDF</p>
+          <p className="text-xs text-[--color-muted-foreground]">Images (PNG, JPG) ou PDF</p>
         </div>
         <input 
           id="dropzone-file" 
@@ -85,7 +84,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileChange }) => {
         />
       </label>
       {fileNames.length > 0 && (
-        <div className="mt-4 text-sm text-slate-300">
+        <div className="mt-4 text-sm text-[--color-foreground]">
           <h4 className="font-semibold">Fichiers sélectionnés:</h4>
           <ul className="list-disc list-inside pl-2 mt-1 max-h-24 overflow-y-auto">
             {fileNames.map((name, index) => <li key={index}>{name}</li>)}
