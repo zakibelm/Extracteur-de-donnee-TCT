@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { ParsedContent, TableData, ChatMessage } from '../types';
+import { ParsedContent, TableData } from '../types';
 
 // This is a hard requirement. The API key must be obtained from this environment variable.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -64,7 +65,7 @@ Instructions:
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, imagePart] },
+            contents: [{ parts: [{ text: prompt }, imagePart] }],
             config: {
                 responseMimeType: 'application/json',
                 responseSchema: responseSchema,
@@ -99,54 +100,5 @@ Instructions:
             }
         }
         return { headers: ["Erreur"], rows: [[errorMessage]] };
-    }
-}
-
-
-/**
- * Asks a question to the Gemini API about a given dataset.
- * @param contextData The unified table data to use as context.
- * @param history The previous chat messages for context.
- * @param userQuestion The new question from the user.
- * @returns A promise that resolves to the model's text response.
- */
-export async function askGeminiAboutData(
-    contextData: TableData,
-    history: ChatMessage[],
-    userQuestion: string
-): Promise<string> {
-    const dataAsJSON = JSON.stringify({
-        headers: contextData.headers,
-        rows: contextData.rows
-    }, null, 2);
-
-    const historyForPrompt = history.map(msg => `${msg.role}: ${msg.text}`).join('\n');
-
-    const prompt = `Tu es un assistant expert en analyse de données. On te fournit un ensemble de données sous forme de JSON et un historique de conversation. Réponds à la nouvelle question de l'utilisateur en te basant **uniquement** sur les données fournies. Sois concis et précis. Si la réponse ne se trouve pas dans les données, dis-le clairement.
-
-**Règle spéciale :** Si la question de l'utilisateur concerne une "Tournée" ou un "Véhicule" spécifique, tu DOIS formater ta réponse sous forme de tableau Markdown. Le tableau doit inclure toutes les colonnes de données pour la ou les lignes correspondantes. Utilise les en-têtes exacts des données fournies pour les colonnes du tableau.
-
---- DEBUT DES DONNÉES ---
-${dataAsJSON}
---- FIN DES DONNÉES ---
-
---- HISTORIQUE DE LA CONVERSATION ---
-${historyForPrompt}
---- FIN DE L'HISTORIQUE ---
-
-Nouvelle question de l'utilisateur: "${userQuestion}"
-
-Ta réponse:
-`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
-        return response.text;
-    } catch (error) {
-        console.error("Erreur lors de l'appel à l'API Gemini (Chat):", error);
-        throw new Error("Impossible d'obtenir une réponse de l'assistant IA.");
     }
 }

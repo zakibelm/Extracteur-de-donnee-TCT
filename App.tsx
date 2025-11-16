@@ -1,12 +1,17 @@
+
 import React, { useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
-import { ExtractedData, Status, TableData, SummaryData, ChatMessage } from './types';
-import { extractDataFromImage, askGeminiAboutData } from './services/geminiService';
+import { ExtractedData, Status, TableData, SummaryData } from './types';
+import { extractDataFromImage } from './services/geminiService';
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+pdfMake.vfs = pdfFonts.vfs;
 
-// Set worker path for pdf.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.mjs`;
+
+// Set worker path for pdf.js to match the version from the import map
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://aistudiocdn.com/pdfjs-dist@5.4.394/build/pdf.worker.mjs`;
 
 interface ProcessableFile {
     id: string;
@@ -26,9 +31,7 @@ const App: React.FC = () => {
     const [unifiedTable, setUnifiedTable] = useState<TableData | null>(null);
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
 
-    const [activeView, setActiveView] = useState<'extract' | 'chat'>('extract');
-    const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-    const [isChatLoading, setIsChatLoading] = useState(false);
+    const [activeView, setActiveView] = useState<'extract' | 'results'>('extract');
 
     const handleFileChange = (selectedFiles: File[]) => {
         setFiles(selectedFiles);
@@ -38,7 +41,6 @@ const App: React.FC = () => {
         setSummaryData(null);
         setGlobalStatus(Status.Idle);
         setActiveView('extract');
-        setChatHistory([]);
     };
 
     const fileToBase64 = (file: File): Promise<string> =>
@@ -86,10 +88,8 @@ const App: React.FC = () => {
         setUnifiedTable(null);
         setSummaryData(null);
         setActiveView('extract');
-        setChatHistory([]);
 
         try {
-            // Step 1: Flatten all files (including PDF pages) and convert to base64
             const processableFiles: ProcessableFile[] = [];
             for (const file of files) {
                 if (file.type === 'application/pdf') {
@@ -104,7 +104,6 @@ const App: React.FC = () => {
                 }
             }
             
-            // Step 2: Set initial state for all files to 'AiProcessing'
             const initialData: ExtractedData[] = processableFiles.map(({ id, file, originalFileName }) => {
                  const pageNumber = file.name.match(/-page-(\d+)\.jpg$/);
                  const displayName = originalFileName.endsWith('.pdf') && pageNumber 
@@ -115,7 +114,6 @@ const App: React.FC = () => {
             });
             setExtractedData(initialData);
 
-            // Step 3: Run Gemini Vision API in parallel for all files
             const extractionPromises = processableFiles.map(async (pfile) => {
                 const result = await extractDataFromImage(pfile.base64, pfile.mimeType);
                 const isErrorResult = result.headers.length === 1 && result.headers[0] === "Erreur";
@@ -172,83 +170,67 @@ const App: React.FC = () => {
             uniqueAdressesArrivee: [...new Set(finalTable.rows.map(r => r[adresseFinIndex]).filter(Boolean))],
         };
         setSummaryData(summary);
+        setActiveView('results');
     };
     
-    const handleSendMessage = async (message: string) => {
-        if (!unifiedTable || isChatLoading) return;
+    const handleDownloadPdf = (headers: string[], rows: string[][]) => {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const formattedDate = tomorrow.toISOString().split('T')[0];
+        const printTitle = `${formattedDate}_TCT_Filtre`;
 
-        const newUserMessage: ChatMessage = { role: 'user', text: message };
-        setChatHistory(prev => [...prev, newUserMessage]);
-        setIsChatLoading(true);
+        const docDefinition = {
+            pageSize: 'A4',
+            pageOrientation: 'landscape',
+            pageMargins: [20, 20, 20, 20],
+            content: [
+                { text: `Données Filtrées - ${printTitle}`, style: 'header' },
+                {
+                    style: 'tableExample',
+                    table: {
+                        headerRows: 1,
+                        widths: Array(headers.length).fill('*'),
+                        body: [
+                            headers.map(h => ({ text: h, style: 'tableHeader' })),
+                            ...rows.map(row => row.map(cell => (cell || '')))
+                        ]
+                    },
+                     layout: {
+                        fillColor: function (rowIndex: number) {
+                            return (rowIndex % 2 === 0) ? '#f2f2f2' : null;
+                        }
+                    }
+                }
+            ],
+            styles: {
+                header: { fontSize: 14, bold: true, margin: [0, 0, 0, 10] },
+                tableExample: { margin: [0, 5, 0, 15], fontSize: 7 },
+                tableHeader: { bold: true, fontSize: 8, color: 'black' }
+            }
+        };
 
-        try {
-            const responseText = await askGeminiAboutData(unifiedTable, chatHistory, message);
-            const modelMessage: ChatMessage = { role: 'model', text: responseText };
-            setChatHistory(prev => [...prev, modelMessage]);
-        } catch (error) {
-            console.error("Erreur de l'API Chat:", error);
-            const errorMessage: ChatMessage = { role: 'model', text: "Désolé, une erreur s'est produite. Veuillez réessayer." };
-            setChatHistory(prev => [...prev, errorMessage]);
-        } finally {
-            setIsChatLoading(false);
-        }
+        pdfMake.createPdf(docDefinition).download(`${printTitle}.pdf`);
     };
 
 
-    const downloadFile = (format: 'csv' | 'json') => {
-        if (!unifiedTable) return;
-
-        const filename = `donnees_extraites.${format}`;
-        let content = '';
-        let mimeType = '';
-
-        if (format === 'csv') {
-            const header = unifiedTable.headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',');
-            const body = unifiedTable.rows.map(row => 
-                row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')
-            ).join('\n');
-            content = `${header}\n${body}`;
-            mimeType = 'text/csv;charset=utf-8;';
-        } else { // json
-            const data = unifiedTable.rows.map(row => 
-                unifiedTable.headers.reduce((obj, header, index) => {
-                    obj[header] = row[index];
-                    return obj;
-                }, {} as Record<string, string>)
-            );
-            content = JSON.stringify(data, null, 2);
-            mimeType = 'application/json;charset=utf-8;';
-        }
-
-        const blob = new Blob([content], { type: mimeType });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const handlePrint = () => {
-        if (!unifiedTable) return;
+    const handlePrint = (headers: string[], rows: string[][]) => {
+        if (!headers || !rows) return;
 
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const formattedDate = tomorrow.toISOString().split('T')[0];
-        const printTitle = `${formattedDate}_TCT`;
+        const printTitle = `${formattedDate}_TCT_Filtre`;
 
         const tableHeader = `
             <thead>
                 <tr>
-                    ${unifiedTable.headers.map(header => `<th>${header}</th>`).join('')}
+                    ${headers.map(header => `<th>${header}</th>`).join('')}
                 </tr>
             </thead>
         `;
         const tableBody = `
             <tbody>
-                ${unifiedTable.rows.map(row => `
+                ${rows.map(row => `
                     <tr>
                         ${row.map(cell => `<td>${cell || ''}</td>`).join('')}
                     </tr>
@@ -305,7 +287,7 @@ const App: React.FC = () => {
                     </style>
                 </head>
                 <body>
-                    <h1>Données Extraites - Tableau Unifié</h1>
+                    <h1>${printTitle}</h1>
                     <table>
                         ${tableHeader}
                         ${tableBody}
@@ -338,15 +320,12 @@ const App: React.FC = () => {
                 activeView={activeView}
                 setActiveView={setActiveView}
                 extractedData={extractedData}
-                unifiedTable={unifiedTable}
-                summaryData={summaryData}
                 onGenerateResults={handleGenerateResults}
-                onDownload={downloadFile}
-                onPrint={handlePrint}
                 error={error}
-                chatHistory={chatHistory}
-                isChatLoading={isChatLoading}
-                onSendMessage={handleSendMessage}
+                unifiedTableIsReady={!!unifiedTable}
+                unifiedTable={unifiedTable}
+                onPrint={handlePrint}
+                onDownloadPdf={handleDownloadPdf}
            />
         </div>
     );
