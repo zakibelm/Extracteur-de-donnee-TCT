@@ -21,12 +21,12 @@ const responseSchema: Schema = {
                 properties: {
                     "Tournée": { type: Type.STRING, description: "Identifiant unique de la tournée." },
                     "Nom": { type: Type.STRING, description: "Nom ou description de la tournée." },
-                    "Début tournée": { type: Type.STRING, description: "Date et heure de début, ex: 'JJ/MM/YYYY HH:mm'." },
-                    "Fin tournée": { type: Type.STRING, description: "Date et heure de fin, ex: 'JJ/MM/YYYY HH:mm'." },
+                    "Début tournée": { type: Type.STRING, description: "Heure (HH:mm) ou Date+Heure (JJ/MM/AAAA HH:mm)." },
+                    "Fin tournée": { type: Type.STRING, description: "Heure (HH:mm) ou Date+Heure (JJ/MM/AAAA HH:mm)." },
                     "Classe véhicule": { type: Type.STRING, description: "Catégorie ou classe du véhicule." },
                     "Employé": { type: Type.STRING, description: "Identifiant de l'employé." },
                     "Nom de l'employé": { type: Type.STRING, description: "Nom complet de l'employé." },
-                    "Véhicule": { type: Type.STRING, description: "Plaque d'immatriculation. IMPORTANT: Format standard attendu (ex: AB-123-CD ou 1234 AB 56)." },
+                    "Véhicule": { type: Type.STRING, description: "Plaque d'immatriculation ou identifiant véhicule." },
                     "Classe véhicule affecté": { type: Type.STRING, description: "Classe du véhicule spécifiquement affecté." },
                     "Stationnement": { type: Type.STRING, description: "Lieu de stationnement." },
                     "Approuvé": { type: Type.STRING, description: "Statut d'approbation, ex: 'Oui', 'Non'." },
@@ -92,13 +92,15 @@ interface ValidationResult {
 const OBSERVER_RULES = {
     // Regex permissive pour les plaques (SIV: AA-123-AA ou FNI: 123 AAA 45) + formats spéciaux
     licensePlate: /^(?:[A-Z]{2}[-\s]?[0-9]{3}[-\s]?[A-Z]{2}|[0-9]{1,4}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{2,3}|Vehicule Perso|Pas de vehicule|Location)$/i,
-    // Date simple check (contient chiffres et / ou :)
-    dateLike: /[\d]+[\/:][\d]+/, 
+    // Format HH:mm (ex: 09:30, 9:30)
+    timeFormat: /^\d{1,2}:\d{2}$/,
+    // Format DD/MM/YYYY HH:mm (ex: 20/11/2025 14:30) ou DD/MM HH:mm
+    dateTimeFormat: /^\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\s+\d{1,2}:\d{2}$/
 };
 
 /**
- * Complexité: O(Rows * Columns).
- * Analyse purement synchrone sans effet de bord.
+ * Analyse statistique et règles métiers.
+ * Complexité: O(2N) -> Reste O(N).
  */
 function observeData(entries: Record<string, string>[]): ValidationResult {
     const issues: string[] = [];
@@ -109,9 +111,25 @@ function observeData(entries: Record<string, string>[]): ValidationResult {
         return { isValid: true, hasCriticalErrors: false, issues: [] };
     }
 
-    // Optimization: limiter le nombre d'erreurs rapportées pour ne pas saturer le context window
+    // --- Phase 1 : Analyse Statistique de Cohérence (Détection du format dominant) ---
+    let timeFormatCount = 0;
+    let dateTimeFormatCount = 0;
+
+    // On scanne la colonne "Début tournée" pour voir la tendance
+    entries.forEach(e => {
+        const val = e["Début tournée"];
+        if (!val) return;
+        if (OBSERVER_RULES.timeFormat.test(val.trim())) timeFormatCount++;
+        else if (OBSERVER_RULES.dateTimeFormat.test(val.trim())) dateTimeFormatCount++;
+    });
+
+    // Si on a un mélange (plus de 0 de chaque), on décide que la majorité l'emporte
+    const hasMixedFormats = timeFormatCount > 0 && dateTimeFormatCount > 0;
+    const preferTimeFormat = timeFormatCount >= dateTimeFormatCount; // Majorité ou égalité -> Heure simple
+    
     const MAX_REPORTED_ISSUES = 10;
 
+    // --- Phase 2 : Validation ligne par ligne ---
     for (let index = 0; index < entries.length; index++) {
         if (issues.length >= MAX_REPORTED_ISSUES) break;
 
@@ -132,10 +150,22 @@ function observeData(entries: Record<string, string>[]): ValidationResult {
             invalidCount++;
         }
 
-        // Règle 2 : Dates
-        if (entry["Début tournée"] && !OBSERVER_RULES.dateLike.test(entry["Début tournée"])) {
-            issues.push(`Tournée '${rowId}': 'Début tournée' format incorrect.`);
-            invalidCount++;
+        // Règle 2 : Cohérence des Dates (Début tournée)
+        const dateVal = entry["Début tournée"];
+        if (dateVal && dateVal.trim() !== "") {
+             if (hasMixedFormats) {
+                 if (preferTimeFormat && !OBSERVER_RULES.timeFormat.test(dateVal.trim())) {
+                     issues.push(`Tournée '${rowId}': Incohérence de format date '${dateVal}'. Veuillez harmoniser au format majoritaire (HH:mm).`);
+                     invalidCount++;
+                 } else if (!preferTimeFormat && !OBSERVER_RULES.dateTimeFormat.test(dateVal.trim())) {
+                     issues.push(`Tournée '${rowId}': Incohérence de format date '${dateVal}'. Veuillez harmoniser au format majoritaire (JJ/MM/AAAA HH:mm).`);
+                     invalidCount++;
+                 }
+             } else if (timeFormatCount === 0 && dateTimeFormatCount === 0 && !/[\d]+/.test(dateVal)) {
+                 // Si ni l'un ni l'autre ne match, c'est probablement du bruit
+                 issues.push(`Tournée '${rowId}': Format de date inconnu '${dateVal}'.`);
+                 invalidCount++;
+             }
         }
     }
 
@@ -191,7 +221,8 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
 
     const basePrompt = `Analyse cette image et extrais le tableau "Affectations des tournées".
     Retourne UNIQUEMENT un JSON valide respectant strictement le schéma fourni.
-    Assure-toi de bien distinguer les caractères ambigus (ex: 0 vs O, 1 vs I).`;
+    Assure-toi de bien distinguer les caractères ambigus (ex: 0 vs O, 1 vs I).
+    Pour les dates/heures, essaie de garder une cohérence verticale (format identique pour toute la colonne si possible).`;
 
     try {
         // --- STEP 1: EXECUTE (Initial Extraction) ---
@@ -242,19 +273,19 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
             console.log("🛠️ [Pattern Observe-Execute] Strategy: Targeted Correction.");
             console.time('Step4_Correction');
 
-            // Stratégie : On limite le prompt aux erreurs spécifiques pour réduire le bruit
+            // Stratégie : On demande explicitement l'harmonisation
             const repairDataPrompt = `
-            L'extraction comporte des erreurs. Corrige UNIQUEMENT ces points en revérifiant l'image :
+            L'extraction comporte des incohérences ou des erreurs. Corrige UNIQUEMENT ces points :
             ${observation.issues.join('\n')}
 
             Instructions :
             1. Ne modifie PAS les données déjà correctes.
-            2. Applique les corrections demandées.
+            2. Si une harmonisation de format (date ou heure) est demandée, applique le format majoritaire à toutes les lignes concernées.
             3. Renvoie le tableau JSON complet corrigé.
             `;
 
             try {
-                // Temperature légèrement supérieure (0.2) pour permettre une "réflexion" différente sur les erreurs
+                // Temperature légèrement supérieure (0.2) pour permettre une "réflexion" sur l'harmonisation
                 const correctedText = await callGemini(base64Image, mimeType, repairDataPrompt, systemInstruction, 0.2);
                 const correctedData = cleanAndParseJson(correctedText);
                 
