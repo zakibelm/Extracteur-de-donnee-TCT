@@ -92,6 +92,7 @@ async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, orig
  * @returns A promise that resolves to an array of processable file objects.
  */
 const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'>[]> => {
+    console.time(`PDF_Convert_${pdfFile.name}`);
     const fileBuffer = await pdfFile.arrayBuffer();
     const pdf = await pdfjsLib.getDocument(fileBuffer).promise;
     
@@ -100,6 +101,7 @@ const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64'
     
     const pageResults = await Promise.all(pagePromises);
 
+    console.timeEnd(`PDF_Convert_${pdfFile.name}`);
     // Filter out any pages that may have failed during conversion.
     return pageResults.filter((result): result is Omit<ProcessableFile, 'base64' | 'mimeType'> => result !== null);
 };
@@ -146,7 +148,7 @@ const App: React.FC = () => {
 
         try {
             const processableFiles: ProcessableFile[] = [];
-            console.time('Traitement total des fichiers'); // Micro-benchmark start
+            console.time('Traitement_Total_Fichiers'); // Micro-benchmark start
             for (const file of files) {
                 if (file.type === 'application/pdf') {
                     const pdfPages = await processPdf(file);
@@ -159,7 +161,7 @@ const App: React.FC = () => {
                     processableFiles.push({ file, originalFileName: file.name, id: `${file.name}-${Date.now()}`, base64, mimeType: file.type });
                 }
             }
-            console.timeEnd('Traitement total des fichiers'); // Micro-benchmark end
+            console.timeEnd('Traitement_Total_Fichiers'); // Micro-benchmark end
             
             const initialData: ExtractedData[] = processableFiles.map(({ id, file, originalFileName }) => {
                  const pageNumber = file.name.match(/-page-(\d+)\.jpg$/);
@@ -222,6 +224,7 @@ const App: React.FC = () => {
             return;
         }
         
+        console.time('PDF_Generation');
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const formattedDate = tomorrow.toISOString().split('T')[0];
@@ -259,7 +262,9 @@ const App: React.FC = () => {
 
         try {
             pdfMakeInstance.createPdf(docDefinition).download(`${printTitle}.pdf`);
+            console.timeEnd('PDF_Generation');
         } catch (e) {
+            console.timeEnd('PDF_Generation');
             console.error("Erreur lors de la création du PDF", e);
             setError("Erreur lors de la génération du PDF. Vérifiez la console.");
         }

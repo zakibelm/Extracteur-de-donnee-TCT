@@ -42,27 +42,40 @@ const responseSchema: Schema = {
 };
 
 // =========================================================
-// 0. TOOLING LAYER (Nettoyage Structurel)
+// 0. TOOLING LAYER (Nettoyage Structurel & Robustesse)
 // =========================================================
 
 /**
- * Nettoie la réponse brute de l'IA pour extraire le JSON valide.
- * Gère les blocs markdown ```json et les espaces superflus.
+ * Extraction robuste du JSON via recherche de limites d'objets.
+ * Complexité: O(n) sur la longueur de la chaîne.
+ * Corrige le défaut: Fragilité des Regex sur les préambules "Voici le JSON..."
  */
 function cleanAndParseJson(text: string): any {
-    let cleanText = text.trim();
-    
-    // Enlever les balises markdown si présentes
-    if (cleanText.startsWith("```json")) {
-        cleanText = cleanText.replace(/^```json\s?/, "").replace(/\s?```$/, "");
-    } else if (cleanText.startsWith("```")) {
-        cleanText = cleanText.replace(/^```\s?/, "").replace(/\s?```$/, "");
-    }
+    if (!text) throw new Error("Empty response");
 
+    // Tentative 1: Parsing direct (le plus rapide si l'IA respecte le schéma pur)
     try {
-        return JSON.parse(cleanText);
+        return JSON.parse(text);
     } catch (e) {
-        throw new Error("JSON_PARSE_ERROR");
+        // Fallback: Recherche des bornes de l'objet JSON
+        const firstOpen = text.indexOf('{');
+        const lastClose = text.lastIndexOf('}');
+        
+        if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+            const candidate = text.substring(firstOpen, lastClose + 1);
+            try {
+                return JSON.parse(candidate);
+            } catch (e2) {
+                 // Fallback 2: Nettoyage des caractères de contrôle invisibles
+                try {
+                    const sanitized = candidate.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+                    return JSON.parse(sanitized);
+                } catch(e3) {
+                    throw new Error("JSON_PARSE_ERROR");
+                }
+            }
+        }
+        throw new Error("NO_JSON_FOUND");
     }
 }
 
@@ -83,22 +96,33 @@ const OBSERVER_RULES = {
     dateLike: /[\d]+[\/:][\d]+/, 
 };
 
+/**
+ * Complexité: O(Rows * Columns).
+ * Analyse purement synchrone sans effet de bord.
+ */
 function observeData(entries: Record<string, string>[]): ValidationResult {
     const issues: string[] = [];
     let invalidCount = 0;
     let criticalErrors = 0;
 
-    if (!entries || entries.length === 0) {
+    if (!entries || !Array.isArray(entries) || entries.length === 0) {
         return { isValid: true, hasCriticalErrors: false, issues: [] };
     }
 
-    entries.forEach((entry, index) => {
+    // Optimization: limiter le nombre d'erreurs rapportées pour ne pas saturer le context window
+    const MAX_REPORTED_ISSUES = 10;
+
+    for (let index = 0; index < entries.length; index++) {
+        if (issues.length >= MAX_REPORTED_ISSUES) break;
+
+        const entry = entries[index];
         const rowId = entry["Tournée"] || `Ligne ${index + 1}`;
 
         // Règle Critique : La tournée (clé primaire) doit exister
         if (!entry["Tournée"] || entry["Tournée"].trim() === "") {
             issues.push(`Ligne ${index + 1}: Le champ 'Tournée' est vide (Information critique manquante).`);
             criticalErrors++;
+            continue;
         }
 
         // Règle 1 : Plaque d'immatriculation
@@ -110,10 +134,10 @@ function observeData(entries: Record<string, string>[]): ValidationResult {
 
         // Règle 2 : Dates
         if (entry["Début tournée"] && !OBSERVER_RULES.dateLike.test(entry["Début tournée"])) {
-            issues.push(`Tournée '${rowId}': 'Début tournée' (${entry["Début tournée"]}) format incorrect.`);
+            issues.push(`Tournée '${rowId}': 'Début tournée' format incorrect.`);
             invalidCount++;
         }
-    });
+    }
 
     return {
         isValid: invalidCount === 0 && criticalErrors === 0,
@@ -130,7 +154,8 @@ async function callGemini(
     base64Image: string, 
     mimeType: string, 
     promptText: string, 
-    systemInstruction: string
+    systemInstruction: string,
+    temperature: number = 0.1
 ): Promise<string> {
     const imagePart = {
         inlineData: {
@@ -146,7 +171,7 @@ async function callGemini(
             systemInstruction: systemInstruction,
             responseMimeType: 'application/json',
             responseSchema: responseSchema,
-            temperature: 0.1, // Très faible pour la précision
+            temperature: temperature,
         },
     });
 
@@ -155,8 +180,11 @@ async function callGemini(
 
 /**
  * Extracts tabular data implementing the "Observe-Execute Enrichi" pattern.
+ * Instrumentée pour mesurer les performances des étapes.
  */
 export async function extractDataFromImage(base64Image: string, mimeType: string): Promise<ParsedContent> {
+    console.time('ObserveExecute_Total');
+    
     const systemInstruction = `Tu es un extracteur de données expert pour un logiciel de logistique.
     Ta priorité absolue est la fidélité des données : ne jamais inventer d'informations.
     Si une case est vide, laisse la valeur vide "".`;
@@ -167,8 +195,10 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
 
     try {
         // --- STEP 1: EXECUTE (Initial Extraction) ---
+        console.time('Step1_Extraction');
         console.log("🔍 [Pattern Observe-Execute] Step 1: Initial Extraction...");
         const initialRawText = await callGemini(base64Image, mimeType, basePrompt, systemInstruction);
+        console.timeEnd('Step1_Extraction');
         
         let currentEntries: any[] = [];
 
@@ -179,63 +209,68 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
         } catch (jsonError) {
             // DIAGNOSIS: BROKEN_JSON
             console.warn("⚠️ [Pattern Observe-Execute] Diagnosis: BROKEN_JSON. Strategy: Repair Syntax.");
+            console.time('Step2_SyntaxRepair');
             
-            const repairJsonPrompt = `Le JSON précédent que tu as généré était syntaxiquement invalide.
+            const repairJsonPrompt = `Le JSON précédent était invalide.
+            Génère le tableau à nouveau.
+            IMPORTANT : Assure-toi que le JSON est syntaxiquement parfait.`;
             
-            Tâche : Analyse l'image à nouveau et génère le tableau.
-            IMPORTANT : Assure-toi que le JSON est parfaitement valide (pas de virgules manquantes, guillemets fermés).`;
-            
-            const repairedText = await callGemini(base64Image, mimeType, repairJsonPrompt, systemInstruction);
             try {
+                // Temperature 0 pour maximiser la structure stricte
+                const repairedText = await callGemini(base64Image, mimeType, repairJsonPrompt, systemInstruction, 0);
                 currentEntries = cleanAndParseJson(repairedText).entries;
             } catch (fatalError) {
+                console.timeEnd('Step2_SyntaxRepair');
+                console.timeEnd('ObserveExecute_Total');
                 throw new Error("Échec critique : Impossible de générer un JSON valide après réparation.");
             }
+            console.timeEnd('Step2_SyntaxRepair');
         }
 
         if (!Array.isArray(currentEntries)) {
-            throw new Error("Format de données incorrect (pas un tableau 'entries').");
+             // Fallback structurel
+             currentEntries = [];
+             console.error("Format de données incorrect (pas un tableau 'entries').");
         }
 
         // --- STEP 3: OBSERVE (Content Validation) ---
         const observation = observeData(currentEntries);
         
         // --- STEP 4: STRATEGIZE & RE-EXECUTE (Data Correction Loop) ---
-        if (!observation.isValid) {
-            console.warn("⚠️ [Pattern Observe-Execute] Diagnosis: DATA_QUALITY_ISSUES.", observation.issues);
+        if (!observation.isValid && observation.issues.length > 0) {
+            console.warn(`⚠️ [Pattern Observe-Execute] Diagnosis: DATA_QUALITY_ISSUES (${observation.issues.length} issues).`);
             console.log("🛠️ [Pattern Observe-Execute] Strategy: Targeted Correction.");
+            console.time('Step4_Correction');
 
-            // On construit une stratégie ciblée : on ne demande pas de tout refaire au hasard,
-            // on donne à l'IA la liste précise des erreurs à corriger.
+            // Stratégie : On limite le prompt aux erreurs spécifiques pour réduire le bruit
             const repairDataPrompt = `
-            L'extraction initiale comporte des erreurs de validation métier.
-            
-            Veuillez corriger UNIQUEMENT les erreurs suivantes en revérifiant l'image :
-            ${observation.issues.map(issue => `- ${issue}`).join('\n')}
+            L'extraction comporte des erreurs. Corrige UNIQUEMENT ces points en revérifiant l'image :
+            ${observation.issues.join('\n')}
 
             Instructions :
-            1. Garde les données correctes telles quelles.
-            2. Corrige les plaques d'immatriculation (ex: AA-123-AA) et les formats de dates.
-            3. Si une info est illisible, laisse vide plutôt que de mettre une valeur invalide.
-            4. Renvoie le tableau complet corrigé au format JSON.
+            1. Ne modifie PAS les données déjà correctes.
+            2. Applique les corrections demandées.
+            3. Renvoie le tableau JSON complet corrigé.
             `;
 
             try {
-                const correctedText = await callGemini(base64Image, mimeType, repairDataPrompt, systemInstruction);
+                // Temperature légèrement supérieure (0.2) pour permettre une "réflexion" différente sur les erreurs
+                const correctedText = await callGemini(base64Image, mimeType, repairDataPrompt, systemInstruction, 0.2);
                 const correctedData = cleanAndParseJson(correctedText);
                 
                 if (correctedData && Array.isArray(correctedData.entries)) {
-                    // On pourrait re-valider ici, mais pour la démo on accepte la correction (Max 1 itération)
                     currentEntries = correctedData.entries;
                     console.log("✅ [Pattern Observe-Execute] Correction applied.");
                 }
             } catch (retryError) {
                 console.error("❌ [Pattern Observe-Execute] Correction failed. Fallback to initial data.", retryError);
-                // Fallback: On garde les données initiales même imparfaites plutôt que de crasher
             }
+            console.timeEnd('Step4_Correction');
         } else {
             console.log("✅ [Pattern Observe-Execute] Observation passed. Perfect data.");
         }
+
+        console.timeEnd('ObserveExecute_Total');
 
         // Formatting for output (TableData)
         const rows: string[][] = currentEntries.map((entry: Record<string, string>) => 
@@ -245,6 +280,7 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
         return { headers: TABLE_HEADERS, rows };
 
     } catch (error) {
+        console.timeEnd('ObserveExecute_Total');
         console.error("Gemini Service Fatal Error:", error);
         let errorMessage = "Erreur d'extraction.";
         if (error instanceof Error) errorMessage = error.message;
