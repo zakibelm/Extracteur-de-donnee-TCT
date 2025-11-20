@@ -85,8 +85,8 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
             </div>
 
             {/* Table */}
-            <div className="flex-grow overflow-auto p-4">
-                <div className="border border-slate-700 rounded-md overflow-hidden">
+            <div className="flex-grow overflow-x-auto p-4">
+                <div className="border border-slate-700 rounded-md">
                     <table className="w-full text-left text-xs">
                         <thead className="sticky top-0 bg-slate-800/80 backdrop-blur-sm z-10">
                             <tr className="text-slate-300">
