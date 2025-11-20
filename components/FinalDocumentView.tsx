@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { TableData } from '../types';
 import { Button } from './Button';
@@ -13,24 +14,73 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     const [tourneeFilter, setTourneeFilter] = useState('');
     const [vehiculeFilter, setVehiculeFilter] = useState('');
 
-    const { tourneeIndex, vehiculeIndex } = useMemo(() => {
-        if (!tableData) return { tourneeIndex: -1, vehiculeIndex: -1 };
+    const { tourneeIndex, vehiculeIndex, debutTourneeIndex } = useMemo(() => {
+        if (!tableData) return { tourneeIndex: -1, vehiculeIndex: -1, debutTourneeIndex: -1 };
         return {
             tourneeIndex: tableData.headers.indexOf('Tournée'),
             vehiculeIndex: tableData.headers.indexOf('Véhicule'),
+            debutTourneeIndex: tableData.headers.indexOf('Début tournée'),
         };
     }, [tableData]);
+
+    // Fonction utilitaire pour convertir les dates/heures en timestamp pour le tri
+    const getSortValue = (val: string): number => {
+        if (!val) return Number.MAX_SAFE_INTEGER; // Les valeurs vides à la fin
+        const s = val.trim();
+
+        // Format complet: DD/MM/YYYY HH:mm
+        const fullDateMatch = s.match(/^(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{4}))?\s+(\d{1,2}):(\d{2})$/);
+        if (fullDateMatch) {
+            const [_, d, m, y, h, min] = fullDateMatch;
+            const year = y ? parseInt(y) : new Date().getFullYear();
+            return new Date(year, parseInt(m) - 1, parseInt(d), parseInt(h), parseInt(min)).getTime();
+        }
+
+        // Format heure seule: HH:mm
+        const timeMatch = s.match(/^(\d{1,2}):(\d{2})$/);
+        if (timeMatch) {
+            const [_, h, min] = timeMatch;
+            // On utilise une date de référence (ex: 1970) pour trier les heures entre elles
+            // Si vous préférez que les heures sans date soient considérées comme "Aujourd'hui", remplacez 1970 par new Date().getFullYear()
+            return new Date(1970, 0, 1, parseInt(h), parseInt(min)).getTime();
+        }
+
+        return Number.MAX_SAFE_INTEGER; // Format inconnu à la fin
+    };
 
     const filteredRows = useMemo(() => {
         if (!tableData) return [];
 
-        return tableData.rows.filter(row => {
+        // 1. Filtrage
+        let result = tableData.rows.filter(row => {
+            // Filtre Tournée (Simple include)
             const tourneeMatch = tourneeIndex === -1 || !tourneeFilter || row[tourneeIndex]?.toLowerCase().includes(tourneeFilter.toLowerCase());
-            const vehiculeMatch = vehiculeIndex === -1 || !vehiculeFilter || row[vehiculeIndex]?.toLowerCase().includes(vehiculeFilter.toLowerCase());
             
+            // Filtre Véhicule (Supporte le multi-filtre avec '+')
+            let vehiculeMatch = true;
+            if (vehiculeIndex !== -1 && vehiculeFilter) {
+                const cellValue = (row[vehiculeIndex] || '').toLowerCase();
+                const searchTerms = vehiculeFilter.split('+').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
+                
+                if (searchTerms.length > 0) {
+                    vehiculeMatch = searchTerms.some(term => cellValue.includes(term));
+                }
+            }
+
             return tourneeMatch && vehiculeMatch;
         });
-    }, [tableData, tourneeFilter, vehiculeFilter, tourneeIndex, vehiculeIndex]);
+
+        // 2. Tri par Début tournée (du plus tôt au plus tard)
+        if (debutTourneeIndex !== -1) {
+            result.sort((a, b) => {
+                const valA = getSortValue(a[debutTourneeIndex] || '');
+                const valB = getSortValue(b[debutTourneeIndex] || '');
+                return valA - valB;
+            });
+        }
+
+        return result;
+    }, [tableData, tourneeFilter, vehiculeFilter, tourneeIndex, vehiculeIndex, debutTourneeIndex]);
 
     const resetFilters = () => {
         setTourneeFilter('');
@@ -59,10 +109,10 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                             />
                         </div>
                          <div>
-                            <label className="text-xs font-semibold text-slate-400 block mb-1">Filtrer par Véhicule</label>
+                            <label className="text-xs font-semibold text-slate-400 block mb-1">Filtrer par Véhicule (Multi: 220+409)</label>
                             <input
                                 type="text"
-                                placeholder="ex: ABC-123"
+                                placeholder="ex: 220+409"
                                 value={vehiculeFilter}
                                 onChange={(e) => setVehiculeFilter(e.target.value)}
                                 className="w-full bg-slate-700 text-slate-200 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -91,7 +141,12 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                         <thead className="sticky top-0 bg-slate-800/80 backdrop-blur-sm z-10">
                             <tr className="text-slate-300">
                                 {tableData.headers.map((header, index) => (
-                                    <th key={index} className="p-2 font-semibold border-b border-slate-600">{header}</th>
+                                    <th key={index} className="p-2 font-semibold border-b border-slate-600 cursor-pointer select-none">
+                                        <div className="flex items-center">
+                                            {header}
+                                            {index === debutTourneeIndex && <Icons.ChevronRight className="w-3 h-3 ml-1 rotate-90" />}
+                                        </div>
+                                    </th>
                                 ))}
                             </tr>
                         </thead>
