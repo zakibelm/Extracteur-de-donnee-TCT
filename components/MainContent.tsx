@@ -1,9 +1,11 @@
+
 import React from 'react';
 import { ResultCard } from './ResultCard';
 import { Button } from './Button';
 import { Icons } from './Icons';
 import { ExtractedData, Status, TableData } from '../types';
 import { FinalDocumentView } from './FinalDocumentView';
+import { User } from './AuthPage';
 
 interface MainContentProps {
     activeView: 'extract' | 'document';
@@ -14,6 +16,8 @@ interface MainContentProps {
     unifiedTable: TableData | null;
     onPrint: (headers: string[], rows: string[][]) => void;
     onDownloadPdf: (headers: string[], rows: string[][]) => void;
+    onTableUpdate: (table: TableData) => void;
+    user: User;
 }
 
 export const MainContent: React.FC<MainContentProps> = ({
@@ -25,6 +29,8 @@ export const MainContent: React.FC<MainContentProps> = ({
     unifiedTable,
     onPrint,
     onDownloadPdf,
+    onTableUpdate,
+    user,
 }) => {
 
     const allProcessed = extractedData.length > 0 && extractedData.every(d => d.status === Status.Success || d.status === Status.Error);
@@ -95,6 +101,8 @@ export const MainContent: React.FC<MainContentProps> = ({
                             tableData={unifiedTable}
                             onPrint={onPrint}
                             onDownloadPdf={onDownloadPdf}
+                            onTableUpdate={onTableUpdate}
+                            user={user}
                         />
                     )}
                 </div>

@@ -230,6 +230,11 @@ const App: React.FC = () => {
         setUnifiedTable(finalTable);
         setActiveView('document');
     };
+
+    // Callback pour mettre à jour le tableau depuis les composants enfants
+    const handleTableUpdate = (newTableData: TableData) => {
+        setUnifiedTable(newTableData);
+    };
     
     const handleDownloadPdf = (headers: string[], rows: string[][]) => {
         console.time('PDF_Generation');
@@ -447,8 +452,10 @@ const App: React.FC = () => {
                 onGenerateResults={handleGenerateResults}
                 error={error}
                 unifiedTable={unifiedTable}
+                onTableUpdate={handleTableUpdate}
                 onPrint={handlePrint}
                 onDownloadPdf={handleDownloadPdf}
+                user={currentUser}
            />
         </div>
     );
