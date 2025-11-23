@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TableData } from '../types';
 import { Button } from './Button';
 import { Icons } from './Icons';
@@ -13,13 +13,25 @@ interface FinalDocumentViewProps {
 export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData, onPrint, onDownloadPdf }) => {
     const [tourneeFilter, setTourneeFilter] = useState('');
     const [vehiculeFilter, setVehiculeFilter] = useState('');
+    // État local pour permettre la modification des données (Editable Rows)
+    const [rows, setRows] = useState<string[][]>([]);
 
-    const { tourneeIndex, vehiculeIndex, debutTourneeIndex } = useMemo(() => {
-        if (!tableData) return { tourneeIndex: -1, vehiculeIndex: -1, debutTourneeIndex: -1 };
+    // Synchronisation initiale quand les données arrivent du parent
+    useEffect(() => {
+        if (tableData) {
+            // On fait une copie profonde pour éviter les références partagées inattendues, 
+            // bien que pour des strings simples, une copie superficielle des tableaux suffise souvent.
+            setRows(tableData.rows.map(row => [...row]));
+        }
+    }, [tableData]);
+
+    const { tourneeIndex, vehiculeIndex, debutTourneeIndex, changementIndex } = useMemo(() => {
+        if (!tableData) return { tourneeIndex: -1, vehiculeIndex: -1, debutTourneeIndex: -1, changementIndex: -1 };
         return {
             tourneeIndex: tableData.headers.indexOf('Tournée'),
             vehiculeIndex: tableData.headers.indexOf('Véhicule'),
             debutTourneeIndex: tableData.headers.indexOf('Début tournée'),
+            changementIndex: tableData.headers.indexOf('Changement'),
         };
     }, [tableData]);
 
@@ -41,7 +53,6 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         if (timeMatch) {
             const [_, h, min] = timeMatch;
             // On utilise une date de référence (ex: 1970) pour trier les heures entre elles
-            // Si vous préférez que les heures sans date soient considérées comme "Aujourd'hui", remplacez 1970 par new Date().getFullYear()
             return new Date(1970, 0, 1, parseInt(h), parseInt(min)).getTime();
         }
 
@@ -49,10 +60,10 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     };
 
     const filteredRows = useMemo(() => {
-        if (!tableData) return [];
+        if (!rows || rows.length === 0) return [];
 
         // 1. Filtrage
-        let result = tableData.rows.filter(row => {
+        let result = rows.filter(row => {
             // Filtre Tournée (Simple include)
             const tourneeMatch = tourneeIndex === -1 || !tourneeFilter || row[tourneeIndex]?.toLowerCase().includes(tourneeFilter.toLowerCase());
             
@@ -80,11 +91,20 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         }
 
         return result;
-    }, [tableData, tourneeFilter, vehiculeFilter, tourneeIndex, vehiculeIndex, debutTourneeIndex]);
+    }, [rows, tourneeFilter, vehiculeFilter, tourneeIndex, vehiculeIndex, debutTourneeIndex]);
 
     const resetFilters = () => {
         setTourneeFilter('');
         setVehiculeFilter('');
+    };
+
+    const handleChangementChange = (rowRef: string[], newValue: string) => {
+        if (changementIndex !== -1) {
+            // Mutation directe de la référence du tableau (performant pour l'édition)
+            rowRef[changementIndex] = newValue;
+            // On déclenche le re-render en créant une nouvelle référence pour le tableau parent 'rows'
+            setRows([...rows]);
+        }
     };
 
     if (!tableData) {
@@ -154,9 +174,25 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                             {filteredRows.length > 0 ? (
                                 filteredRows.map((row, rowIndex) => (
                                     <tr key={rowIndex} className="border-t border-slate-700 even:bg-slate-700/30 hover:bg-slate-700/50">
-                                        {row.map((cell, cellIndex) => (
-                                            <td key={cellIndex} className="p-2 text-slate-300 whitespace-nowrap">{cell}</td>
-                                        ))}
+                                        {row.map((cell, cellIndex) => {
+                                            // Si c'est la colonne "Changement", on rend un Input
+                                            if (cellIndex === changementIndex) {
+                                                return (
+                                                    <td key={cellIndex} className="p-1">
+                                                        <input 
+                                                            type="text" 
+                                                            value={cell}
+                                                            onChange={(e) => handleChangementChange(row, e.target.value)}
+                                                            className="w-full bg-slate-900 text-emerald-400 border border-slate-600 rounded px-2 py-1 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
+                                                        />
+                                                    </td>
+                                                );
+                                            }
+                                            // Sinon, affichage standard
+                                            return (
+                                                <td key={cellIndex} className="p-2 text-slate-300 whitespace-nowrap">{cell}</td>
+                                            );
+                                        })}
                                     </tr>
                                 ))
                             ) : (
@@ -171,7 +207,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 </div>
             </div>
              <div className="flex-shrink-0 p-2 bg-slate-800/50 border-t border-slate-700 text-right text-sm text-slate-400">
-                Affiche {filteredRows.length} sur {tableData.rows.length} lignes
+                Affiche {filteredRows.length} sur {rows.length} lignes
             </div>
         </div>
     );

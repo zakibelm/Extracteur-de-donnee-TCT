@@ -15,7 +15,8 @@
     "pdfjs-dist": "^5.4.394",
     "react-markdown": "9",
     "remark-gfm": "4",
-    "pdfmake": "0.2.20"
+    "jspdf": "2.5.1",
+    "jspdf-autotable": "3.8.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

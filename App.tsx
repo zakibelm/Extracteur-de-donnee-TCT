@@ -1,3 +1,4 @@
+
 /**
  * <summary>
  * Gain de performance : Le traitement des pages PDF est maintenant parallélisé, réduisant le temps de conversion (ex: de 5s à 0.5s pour 10 pages).
@@ -10,37 +11,9 @@ import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { ExtractedData, Status, TableData } from './types';
 import { extractDataFromImage } from './services/geminiService';
-import pdfMake from "pdfmake/build/pdfmake";
-import pdfFonts from "pdfmake/build/vfs_fonts";
-
-// FIX: Correctly assign the virtual file system for pdfmake fonts with robust checks.
-// esm.sh or different bundlers might export these differently (default vs named).
-const pdfMakeInstance = (pdfMake as any).default || pdfMake;
-const pdfFontsInstance = (pdfFonts as any).default || pdfFonts;
-
-if (pdfMakeInstance) {
-    // Try to find the vfs object in common locations within the imported module
-    let vfs: any = null;
-    
-    if (pdfFontsInstance) {
-        if (pdfFontsInstance.pdfMake && pdfFontsInstance.pdfMake.vfs) {
-            vfs = pdfFontsInstance.pdfMake.vfs;
-        } else if (pdfFontsInstance.vfs) {
-            vfs = pdfFontsInstance.vfs;
-        } else {
-            vfs = pdfFontsInstance;
-        }
-    }
-    
-    if (vfs) {
-        pdfMakeInstance.vfs = vfs;
-    } else {
-        console.warn("pdfMake warning: Could not find vfs_fonts. PDF generation might fail.");
-    }
-} else {
-    console.error("pdfMake error: Module failed to load.");
-}
-
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import { AuthPage, User } from './components/AuthPage';
 
 // Set worker path for pdf.js to match the version from the import map
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://aistudiocdn.com/pdfjs-dist@5.4.394/build/pdf.worker.mjs`;
@@ -108,6 +81,9 @@ const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64'
 
 
 const App: React.FC = () => {
+    // Auth State
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+
     const [files, setFiles] = useState<File[]>([]);
     const [extractedData, setExtractedData] = useState<ExtractedData[]>([]);
     const [globalStatus, setGlobalStatus] = useState<Status>(Status.Idle);
@@ -117,6 +93,20 @@ const App: React.FC = () => {
     const [unifiedTable, setUnifiedTable] = useState<TableData | null>(null);
 
     const [activeView, setActiveView] = useState<'extract' | 'document'>('extract');
+
+    // Handlers Auth
+    const handleLogin = (user: User) => {
+        setCurrentUser(user);
+    };
+
+    const handleLogout = () => {
+        setCurrentUser(null);
+        // Reset app state on logout
+        setFiles([]);
+        setExtractedData([]);
+        setUnifiedTable(null);
+        setGlobalStatus(Status.Idle);
+    };
 
     const handleFileChange = (selectedFiles: File[]) => {
         setFiles(selectedFiles);
@@ -204,8 +194,31 @@ const App: React.FC = () => {
             return;
         }
 
-        const masterHeaders = successfulExtractions[0].content!.headers;
-        let allRows = successfulExtractions.flatMap(d => d.content!.rows);
+        // Clone des en-têtes pour ne pas muter l'objet original
+        const masterHeaders = [...successfulExtractions[0].content!.headers];
+        
+        // Recherche de l'index de la colonne "Véhicule"
+        const vehiculeIndex = masterHeaders.indexOf("Véhicule");
+        
+        // Si la colonne existe, on ajoute "Changement" juste après
+        if (vehiculeIndex !== -1 && !masterHeaders.includes("Changement")) {
+            masterHeaders.splice(vehiculeIndex + 1, 0, "Changement");
+        }
+
+        let allRows = successfulExtractions.flatMap(d => {
+             return d.content!.rows.map(row => {
+                 // Clone de la ligne
+                 const newRow = [...row];
+                 
+                 if (vehiculeIndex !== -1) {
+                     // Valeur par défaut = Numéro du véhicule
+                     const vehiculeVal = newRow[vehiculeIndex] || "";
+                     // Insertion à la position adéquate
+                     newRow.splice(vehiculeIndex + 1, 0, vehiculeVal);
+                 }
+                 return newRow;
+             });
+        });
 
         const uniqueRows = Array.from(new Set(allRows.map(row => JSON.stringify(row))))
             .map(str => JSON.parse(str as string) as string[]);
@@ -219,54 +232,60 @@ const App: React.FC = () => {
     };
     
     const handleDownloadPdf = (headers: string[], rows: string[][]) => {
-        if (!pdfMakeInstance) {
-            setError("La génération de PDF n'est pas disponible (module non chargé).");
-            return;
-        }
-        
         console.time('PDF_Generation');
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const formattedDate = tomorrow.toISOString().split('T')[0];
         const printTitle = `${formattedDate}_TCT_Filtre`;
 
-        const docDefinition = {
-            pageSize: 'A4' as const,
-            pageOrientation: 'landscape' as const,
-            pageMargins: [20, 20, 20, 20] as [number, number, number, number],
-            content: [
-                { text: `Données Filtrées - ${printTitle}`, style: 'header' },
-                {
-                    style: 'tableExample',
-                    table: {
-                        headerRows: 1,
-                        widths: Array(headers.length).fill('*'),
-                        body: [
-                            headers.map(h => ({ text: h, style: 'tableHeader' })),
-                            ...rows.map(row => row.map(cell => (cell || '')))
-                        ]
-                    },
-                     layout: {
-                        fillColor: function (rowIndex: number) {
-                            return (rowIndex % 2 === 0) ? '#f2f2f2' : null;
-                        }
-                    }
-                }
-            ],
-            styles: {
-                header: { fontSize: 14, bold: true, margin: [0, 0, 0, 10] as [number, number, number, number] },
-                tableExample: { margin: [0, 5, 0, 15] as [number, number, number, number], fontSize: 7 },
-                tableHeader: { bold: true, fontSize: 8, color: 'black' }
-            }
-        };
-
         try {
-            pdfMakeInstance.createPdf(docDefinition).download(`${printTitle}.pdf`);
+            // Initialisation de jsPDF en mode PAYSAGE ('l' pour landscape)
+            // @ts-ignore
+            const doc = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            doc.setFontSize(14);
+            doc.text(`Données Filtrées - ${printTitle}`, 14, 15);
+
+            // Utilisation de jspdf-autotable pour générer le tableau
+            // @ts-ignore
+            autoTable(doc, {
+                head: [headers],
+                body: rows,
+                startY: 20,
+                styles: {
+                    fontSize: 5, // Police minuscule pour faire tenir 14+ colonnes
+                    cellPadding: 1,
+                    overflow: 'linebreak', // Retour à la ligne auto
+                    valign: 'middle',
+                    halign: 'left',
+                    lineWidth: 0.1,
+                    lineColor: [200, 200, 200]
+                },
+                headStyles: {
+                    fillColor: [22, 160, 133], // Emerald green
+                    textColor: 255,
+                    fontSize: 6, // En-têtes légèrement plus grands
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                alternateRowStyles: {
+                    fillColor: [245, 245, 245]
+                },
+                theme: 'grid', // Lignes de grille visibles partout
+                margin: { top: 20, left: 5, right: 5, bottom: 10 }, // Marges minimales
+                tableWidth: 'auto'
+            });
+
+            doc.save(`${printTitle}.pdf`);
             console.timeEnd('PDF_Generation');
         } catch (e) {
             console.timeEnd('PDF_Generation');
             console.error("Erreur lors de la création du PDF", e);
-            setError("Erreur lors de la génération du PDF. Vérifiez la console.");
+            setError(`Erreur lors de la génération du PDF: ${(e as Error).message}`);
         }
     };
 
@@ -300,56 +319,87 @@ const App: React.FC = () => {
             <html>
                 <head>
                     <title>${printTitle}</title>
+                    <meta charset="utf-8" />
                     <style>
-                        @media print {
-                            @page {
-                                size: A4 landscape;
-                                margin: 0.7cm;
-                            }
-                            body {
-                                margin: 0;
-                            }
+                        /* Forçage du format Paysage */
+                        @page {
+                            size: A4 landscape;
+                            margin: 3mm; /* Marges extrêmes */
                         }
+                        
                         body { 
-                            font-family: sans-serif; 
-                            margin: 1cm;
+                            font-family: 'Helvetica Neue', Arial, sans-serif;
+                            margin: 0;
+                            padding: 0;
+                            background: white;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                            width: 100%;
                         }
+
                         h1 { 
-                            font-size: 14pt; 
-                            margin-bottom: 0.5cm; 
+                            font-size: 10pt; 
+                            margin: 5px 0; 
+                            text-align: center;
+                            color: #000;
                         }
+                        
+                        /* Conteneur principal */
+                        .print-container {
+                            width: 100%;
+                        }
+
                         table { 
                             width: 100%; 
                             border-collapse: collapse; 
-                            font-size: 7pt;
-                            table-layout: auto;
+                            /* Police minuscule critique pour mobile */
+                            font-size: 5pt; 
+                            table-layout: auto; /* Permet aux colonnes de s'ajuster au contenu */
                         }
+
                         th, td { 
-                            border: 1px solid #ccc; 
-                            padding: 2px 4px; 
+                            border: 0.5px solid #444; 
+                            padding: 1px 2px; 
                             text-align: left; 
+                            vertical-align: middle;
+                            /* Césure agressive des mots pour éviter l'explosion du tableau */
                             word-wrap: break-word;
-                            line-height: 1.1;
+                            overflow-wrap: break-word;
+                            word-break: break-all; 
+                            max-width: 100px; /* Limite arbitraire pour forcer le retour à la ligne */
                         }
+
                         th { 
-                            background-color: #f2f2f2 !important; 
+                            background-color: #ddd !important; 
+                            color: #000 !important;
                             font-weight: bold; 
-                            -webkit-print-color-adjust: exact !important;
-                            color-adjust: exact !important;
+                            text-align: center;
+                            font-size: 5.5pt;
                         }
+
                         tr:nth-child(even) { 
                             background-color: #f9f9f9 !important; 
-                            -webkit-print-color-adjust: exact !important;
-                            color-adjust: exact !important;
+                        }
+                        
+                        /* Hack spécifique pour essayer de forcer le navigateur mobile à dézoomer */
+                        @media print {
+                            body {
+                                width: 100%;
+                            }
+                            table {
+                                width: 100%;
+                            }
                         }
                     </style>
                 </head>
                 <body>
                     <h1>${printTitle}</h1>
-                    <table>
-                        ${tableHeader}
-                        ${tableBody}
-                    </table>
+                    <div class="print-container">
+                        <table>
+                            ${tableHeader}
+                            ${tableBody}
+                        </table>
+                    </div>
                 </body>
             </html>
         `;
@@ -358,11 +408,25 @@ const App: React.FC = () => {
         if (printWindow) {
             printWindow.document.write(printContent);
             printWindow.document.close();
-            printWindow.focus();
-            printWindow.print();
-            printWindow.close();
+            
+            // Délai plus long pour s'assurer que le style est appliqué sur mobile
+            setTimeout(() => {
+                printWindow.focus();
+                try {
+                    printWindow.print();
+                } catch (e) {
+                    console.error("Erreur impression:", e);
+                    alert("L'impression a échoué. Utilisez le bouton PDF.");
+                }
+                // Fermeture automatique après impression (délai pour mobile)
+                // setTimeout(() => printWindow.close(), 1000); 
+            }, 800);
         }
     };
+
+    if (!currentUser) {
+        return <AuthPage onLogin={handleLogin} />;
+    }
 
     return (
         <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
@@ -373,6 +437,8 @@ const App: React.FC = () => {
                 onFileChange={handleFileChange}
                 onExtractData={handleExtractData}
                 globalStatus={globalStatus}
+                user={currentUser}
+                onLogout={handleLogout}
            />
            <MainContent
                 activeView={activeView}
