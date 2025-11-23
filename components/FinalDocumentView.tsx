@@ -142,6 +142,11 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     // 4. Confirmation : On valide le changement et on le sauvegarde globalement
     const confirmChange = () => {
         if (tableData) {
+            // Modification demandée : Mettre à jour la colonne "Véhicule" avec la nouvelle valeur "Changement"
+            if (pendingChange && vehiculeIndex !== -1) {
+                pendingChange.row[vehiculeIndex] = pendingChange.newValue;
+            }
+
             // Création d'une copie des données avec les nouvelles lignes
             const newTable = {
                 ...tableData,
@@ -182,6 +187,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 <div className="space-y-4">
                     <p className="text-slate-300">
                         Vous êtes sur le point de modifier le véhicule pour la tournée <span className="font-bold text-white">{pendingChange?.tournee}</span>.
+                        <br/><span className="text-sm text-sky-400">La colonne "Véhicule" sera également mise à jour avec cette nouvelle valeur.</span>
                     </p>
                     
                     <div className="grid grid-cols-2 gap-4 bg-slate-900/50 p-4 rounded-lg border border-slate-700">
