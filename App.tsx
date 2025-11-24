@@ -1,8 +1,8 @@
 
 /**
  * <summary>
- * Gain de performance : Le traitement des pages PDF est maintenant parallélisé, réduisant le temps de conversion (ex: de 5s à 0.5s pour 10 pages).
- * Robustesse accrue : La conversion de chaque page est isolée ; un échec sur une page n'arrête plus le traitement du PDF entier.
+ * Gain de performance : Le traitement des pages PDF est maintenant parallélisé.
+ * Robustesse accrue : Gestion des erreurs par page et sauvegarde sécurisée (localStorage).
  * </summary>
  */
 import React, { useState, useCallback, useEffect } from 'react';
@@ -15,7 +15,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { AuthPage, User } from './components/AuthPage';
 
-// Set worker path for pdf.js to match the version from the import map
+// Set worker path for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://aistudiocdn.com/pdfjs-dist@5.4.394/build/pdf.worker.mjs`;
 
 interface ProcessableFile {
@@ -28,11 +28,6 @@ interface ProcessableFile {
 
 /**
  * Processes a single page of a PDF document into an image File object.
- * This function is designed to be run in parallel for multiple pages.
- * @param pdf - The loaded PDF document proxy from pdf.js.
- * @param pageNum - The page number to process.
- * @param originalPdfName - The filename of the original PDF for naming the output.
- * @returns A promise that resolves to a processable file object or null if an error occurs.
  */
 async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, originalPdfName: string): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'> | null> {
     try {
@@ -55,31 +50,26 @@ async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, orig
         return null;
     } catch (error) {
         console.error(`Erreur lors du traitement de la page ${pageNum} de ${originalPdfName}`, error);
-        return null; // Return null on error for a specific page, allowing others to succeed
+        return null; 
     }
 }
 
 /**
  * Converts all pages of a PDF file into an array of image files in parallel.
- * @param pdfFile The PDF file to process.
- * @returns A promise that resolves to an array of processable file objects.
  */
 const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'>[]> => {
     console.time(`PDF_Convert_${pdfFile.name}`);
     const fileBuffer = await pdfFile.arrayBuffer();
     const pdf = await pdfjsLib.getDocument(fileBuffer).promise;
     
-    // Create an array of promises, one for each page, to run them in parallel.
     const pagePromises = Array.from({ length: pdf.numPages }, (_, i) => processPage(pdf, i + 1, pdfFile.name));
-    
     const pageResults = await Promise.all(pagePromises);
 
     console.timeEnd(`PDF_Convert_${pdfFile.name}`);
-    // Filter out any pages that may have failed during conversion.
     return pageResults.filter((result): result is Omit<ProcessableFile, 'base64' | 'mimeType'> => result !== null);
 };
 
-// Helper function to build unified table logic (reusable)
+// Helper function to build unified table logic
 const buildUnifiedTable = (dataList: ExtractedData[]): TableData | null => {
     const successfulExtractions = dataList
         .filter(d => d.status === Status.Success && d.content && d.content.rows.length > 0 && d.content.headers[0] !== 'Erreur');
@@ -88,13 +78,10 @@ const buildUnifiedTable = (dataList: ExtractedData[]): TableData | null => {
         return null;
     }
 
-    // Clone des en-têtes pour ne pas muter l'objet original
     const masterHeaders = [...successfulExtractions[0].content!.headers];
     
-    // Recherche de l'index de la colonne "Véhicule"
     const vehiculeIndex = masterHeaders.indexOf("Véhicule");
     
-    // Si la colonne existe, on ajoute "Changement" et "Changement par" juste après
     if (vehiculeIndex !== -1) {
         if (!masterHeaders.includes("Changement")) {
             masterHeaders.splice(vehiculeIndex + 1, 0, "Changement");
@@ -106,23 +93,18 @@ const buildUnifiedTable = (dataList: ExtractedData[]): TableData | null => {
 
     let allRows = successfulExtractions.flatMap(d => {
             return d.content!.rows.map(row => {
-                // Clone de la ligne
                 const newRow = [...row];
                 
                 if (vehiculeIndex !== -1) {
-                    // Valeur par défaut = Numéro du véhicule
                     const vehiculeVal = newRow[vehiculeIndex] || "";
-                    
-                    // Insertion à la position adéquate (on insère deux colonnes vides)
-                    // Note: on insère d'abord "Changement par" (index+2) puis "Changement" (index+1) 
-                    // ou on fait splice une fois avec les deux éléments.
-                    // Ici on insère la valeur du véhicule dans "Changement" pour initialiser, et vide pour "Changement par".
+                    // Insertion : Changement (init avec valeur actuelle), Changement par (init vide)
                     newRow.splice(vehiculeIndex + 1, 0, vehiculeVal, ""); 
                 }
                 return newRow;
             });
     });
 
+    // Deduplication simple basée sur le contenu JSON de la ligne
     const uniqueRows = Array.from(new Set(allRows.map(row => JSON.stringify(row))))
         .map(str => JSON.parse(str as string) as string[]);
         
@@ -132,8 +114,7 @@ const buildUnifiedTable = (dataList: ExtractedData[]): TableData | null => {
     };
 };
 
-
-const App: React.FC = () => {
+export const App: React.FC = () => {
     // Auth State
     const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -161,7 +142,7 @@ const App: React.FC = () => {
         if (unifiedTable && extractedData.length === 0) {
             setActiveView('document');
         }
-    }, []); // Ne s'exécute qu'au montage
+    }, []);
 
     // Handlers Auth
     const handleLogin = (user: User) => {
@@ -170,12 +151,11 @@ const App: React.FC = () => {
 
     const handleLogout = () => {
         setCurrentUser(null);
-        // Reset app state on logout
         setFiles([]);
         setExtractedData([]);
         setUnifiedTable(null);
         setGlobalStatus(Status.Idle);
-        localStorage.removeItem('edt_unified_table'); // Sécurité : nettoyer le stockage local
+        localStorage.removeItem('edt_unified_table'); 
     };
 
     const handleFileChange = (selectedFiles: File[]) => {
@@ -185,16 +165,13 @@ const App: React.FC = () => {
         setUnifiedTable(null);
         setGlobalStatus(Status.Idle);
         setActiveView('extract');
-        localStorage.removeItem('edt_unified_table'); // Nettoyer le stockage pour recommencer à zéro (Nouveau cycle)
+        localStorage.removeItem('edt_unified_table'); // Réinitialisation au nouvel import
     };
 
     const handleDeleteResult = (id: string) => {
-        // 1. Mettre à jour les données extraites
         const updatedData = extractedData.filter(item => item.id !== id);
         setExtractedData(updatedData);
 
-        // 2. Si un tableau unifié existait, on le met à jour dynamiquement
-        // Cela permet de garder la cohérence sans avoir à recliquer sur "Générer"
         if (unifiedTable || updatedData.length > 0) {
             const newTable = buildUnifiedTable(updatedData);
             if (newTable) {
@@ -203,3 +180,233 @@ const App: React.FC = () => {
                     localStorage.setItem('edt_unified_table', JSON.stringify(newTable));
                 } catch (e) {
                      console.warn("Impossible de sauvegarder après suppression (Quota ?)", e);
+                }
+            } else {
+                setUnifiedTable(null);
+                localStorage.removeItem('edt_unified_table');
+                if (activeView === 'document' || activeView === 'report') {
+                     setActiveView('extract');
+                }
+            }
+        }
+    };
+
+    const handleExtractData = async () => {
+        if (files.length === 0) return;
+
+        setGlobalStatus(Status.Processing);
+        setExtractedData([]);
+        setError(null);
+        setUnifiedTable(null); 
+        
+        // Nettoyage préventif
+        localStorage.removeItem('edt_unified_table');
+        
+        let processableFiles: ProcessableFile[] = [];
+        
+        try {
+            for (const file of files) {
+                if (file.type === 'application/pdf') {
+                    const pageImages = await processPdf(file);
+                    for (const page of pageImages) {
+                         const base64 = await new Promise<string>((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                const result = reader.result as string;
+                                resolve(result.split(',')[1]);
+                            };
+                            reader.readAsDataURL(page.file);
+                        });
+                        processableFiles.push({ ...page, base64, mimeType: 'image/jpeg' });
+                    }
+                } else {
+                     const base64 = await new Promise<string>((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const result = reader.result as string;
+                            resolve(result.split(',')[1]);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                    processableFiles.push({ 
+                        id: `${file.name}-${Date.now()}`,
+                        file, 
+                        originalFileName: file.name, 
+                        base64, 
+                        mimeType: file.type 
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Erreur pré-traitement", e);
+            setError("Erreur lors de la préparation des fichiers.");
+            setGlobalStatus(Status.Error);
+            return;
+        }
+
+        setGlobalStatus(Status.AiProcessing);
+        
+        // Initialiser l'état avec des placeholders pour afficher le chargement
+        const initialDataState = processableFiles.map(f => ({
+            id: f.id,
+            fileName: f.originalFileName.includes(f.file.name) ? f.file.name : f.originalFileName + " (page)",
+            imageSrc: `data:${f.mimeType};base64,${f.base64}`,
+            content: null,
+            status: Status.Processing // Changé à AiProcessing individuellement si besoin
+        }));
+        setExtractedData(initialDataState);
+
+        // Traitement parallèle
+        const promises = processableFiles.map(async (pFile, index) => {
+             try {
+                 // Petite mise à jour pour dire que cette image spécifique est chez l'IA
+                 setExtractedData(prev => {
+                    const newArr = [...prev];
+                    if(newArr[index]) newArr[index].status = Status.AiProcessing;
+                    return newArr;
+                 });
+
+                 const content = await extractDataFromImage(pFile.base64, pFile.mimeType);
+                 
+                 const status = content.headers[0] === 'Erreur' ? Status.Error : Status.Success;
+                 
+                 setExtractedData(prev => {
+                     const newArr = [...prev];
+                     if(newArr[index]) {
+                         newArr[index].content = content;
+                         newArr[index].status = status;
+                     }
+                     return newArr;
+                 });
+                 
+                 return { status };
+             } catch (e) {
+                 setExtractedData(prev => {
+                     const newArr = [...prev];
+                     if(newArr[index]) {
+                         newArr[index].content = { headers: ['Erreur'], rows: [['Echec extraction']] };
+                         newArr[index].status = Status.Error;
+                     }
+                     return newArr;
+                 });
+                 return { status: Status.Error };
+             }
+        });
+
+        await Promise.all(promises);
+        setGlobalStatus(Status.Idle);
+    };
+
+    const handleGenerateResults = () => {
+        const unified = buildUnifiedTable(extractedData);
+        if (unified) {
+            setUnifiedTable(unified);
+            setActiveView('document');
+            try {
+                localStorage.setItem('edt_unified_table', JSON.stringify(unified));
+            } catch (e) {
+                console.warn("Stockage local saturé, impossible de sauvegarder le document final.", e);
+                // On pourrait notifier l'utilisateur ici
+            }
+        } else {
+            setError("Aucune donnée valide à afficher.");
+        }
+    };
+
+    const handleTableUpdate = (newTable: TableData) => {
+        setUnifiedTable(newTable);
+        try {
+            localStorage.setItem('edt_unified_table', JSON.stringify(newTable));
+        } catch (e) {
+            console.warn("Erreur sauvegarde update", e);
+        }
+    };
+
+    const handlePrint = (headers: string[], rows: string[][]) => {
+        const printWindow = window.open('', '', 'height=600,width=800');
+        if (printWindow) {
+            printWindow.document.write('<html><head><title>Impression - ADT</title>');
+            printWindow.document.write('<style>');
+            printWindow.document.write(`
+                body { font-family: sans-serif; padding: 20px; }
+                table { border-collapse: collapse; width: 100%; font-size: 10px; }
+                th, td { border: 1px solid #ddd; padding: 4px; text-align: left; }
+                th { background-color: #f2f2f2; font-weight: bold; }
+                h1 { color: #333; font-size: 18px; margin-bottom: 10px; }
+                .meta { margin-bottom: 20px; font-size: 12px; color: #666; }
+            `);
+            printWindow.document.write('</style></head><body>');
+            printWindow.document.write('<h1>ADT - Rapport d\'Extraction</h1>');
+            printWindow.document.write(`<div class="meta">Généré le ${new Date().toLocaleString()} par ${currentUser?.numDome || 'Inconnu'}</div>`);
+            printWindow.document.write('<table>');
+            
+            printWindow.document.write('<thead><tr>');
+            headers.forEach(h => printWindow.document.write(`<th>${h}</th>`));
+            printWindow.document.write('</tr></thead>');
+            
+            printWindow.document.write('<tbody>');
+            rows.forEach(row => {
+                printWindow.document.write('<tr>');
+                row.forEach(cell => printWindow.document.write(`<td>${cell}</td>`));
+                printWindow.document.write('</tr>');
+            });
+            printWindow.document.write('</tbody></table>');
+            
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.print();
+        }
+    };
+
+    const handleDownloadPdf = (headers: string[], rows: string[][]) => {
+        const doc = new jsPDF({ orientation: 'landscape' });
+        
+        doc.setFontSize(14);
+        doc.text("ADT - Rapport d'Extraction", 14, 15);
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Généré le : ${new Date().toLocaleString()} par ${currentUser?.numDome}`, 14, 22);
+
+        autoTable(doc, {
+            head: [headers],
+            body: rows,
+            startY: 25,
+            styles: { fontSize: 7, cellPadding: 2 },
+            headStyles: { fillColor: [2, 132, 199] }, // sky-600
+        });
+
+        doc.save(`ADT_Export_${new Date().toISOString().slice(0,10)}.pdf`);
+    };
+
+    if (!currentUser) {
+        return <AuthPage onLogin={handleLogin} />;
+    }
+
+    return (
+        <div className="flex h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden">
+            <Sidebar 
+                isSidebarOpen={isSidebarOpen}
+                setIsSidebarOpen={setIsSidebarOpen}
+                files={files}
+                onFileChange={handleFileChange}
+                onExtractData={handleExtractData}
+                globalStatus={globalStatus}
+                user={currentUser}
+                onLogout={handleLogout}
+            />
+            <MainContent 
+                activeView={activeView}
+                setActiveView={setActiveView}
+                extractedData={extractedData}
+                onGenerateResults={handleGenerateResults}
+                error={error}
+                unifiedTable={unifiedTable}
+                onPrint={handlePrint}
+                onDownloadPdf={handleDownloadPdf}
+                onTableUpdate={handleTableUpdate}
+                user={currentUser}
+                onDeleteResult={handleDeleteResult}
+            />
+        </div>
+    );
+};

@@ -32,12 +32,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex-grow p-4 overflow-y-auto flex flex-col">
                 <header className={`flex items-center gap-4 mb-8 ${isSidebarOpen ? 'justify-start' : 'justify-center'}`}>
                     <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg flex-shrink-0">
-                        <span className="text-2xl font-bold text-white">EDT</span>
+                        <span className="text-2xl font-bold text-white">ADT</span>
                     </div>
                     {isSidebarOpen && (
                         <div>
                             <h1 className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
-                                EDT
+                                ADT
                             </h1>
                             <p className="text-sm text-slate-400">Extracteur de Données</p>
                         </div>

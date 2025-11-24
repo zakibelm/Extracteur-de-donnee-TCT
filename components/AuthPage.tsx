@@ -97,7 +97,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 p-8 text-center">
           <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-            <span className="text-3xl font-bold text-white">EDT</span>
+            <span className="text-3xl font-bold text-white">ADT</span>
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">
             {isLogin ? 'Bienvenue' : 'Créer un compte'}
