@@ -6,10 +6,11 @@ import { Icons } from './Icons';
 import { ExtractedData, Status, TableData } from '../types';
 import { FinalDocumentView } from './FinalDocumentView';
 import { User } from './AuthPage';
+import { ReportView } from './ReportView';
 
 interface MainContentProps {
-    activeView: 'extract' | 'document';
-    setActiveView: (view: 'extract' | 'document') => void;
+    activeView: 'extract' | 'document' | 'report';
+    setActiveView: (view: 'extract' | 'document' | 'report') => void;
     extractedData: ExtractedData[];
     onGenerateResults: () => void;
     error: string | null;
@@ -18,6 +19,7 @@ interface MainContentProps {
     onDownloadPdf: (headers: string[], rows: string[][]) => void;
     onTableUpdate: (table: TableData) => void;
     user: User;
+    onDeleteResult: (id: string) => void;
 }
 
 export const MainContent: React.FC<MainContentProps> = ({
@@ -31,6 +33,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     onDownloadPdf,
     onTableUpdate,
     user,
+    onDeleteResult,
 }) => {
 
     const allProcessed = extractedData.length > 0 && extractedData.every(d => d.status === Status.Success || d.status === Status.Error);
@@ -64,7 +67,11 @@ export const MainContent: React.FC<MainContentProps> = ({
                     <h2 className="text-2xl font-bold text-center mb-8 text-slate-300">Extraction par Fichier</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {extractedData.map((data) => (
-                            <ResultCard key={data.id} data={data} />
+                            <ResultCard 
+                                key={data.id} 
+                                data={data} 
+                                onDelete={onDeleteResult}
+                            />
                         ))}
                     </div>
                 </div>
@@ -92,17 +99,33 @@ export const MainContent: React.FC<MainContentProps> = ({
                             <Icons.Eye className="inline-block mr-2 w-5 h-5" />
                             Document Final
                         </button>
+                        <button
+                            onClick={() => setActiveView('report')}
+                            disabled={!unifiedTable}
+                            className={`px-3 py-2 font-medium text-sm rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeView === 'report' ? 'border-b-2 border-amber-400 text-amber-400' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                            <Icons.ClipboardList className="inline-block mr-2 w-5 h-5" />
+                            Rapport Modifications
+                        </button>
                     </nav>
                 </div>
 
                 <div className="flex-grow">
-                    {activeView === 'extract' ? renderExtractionView() : (
+                    {activeView === 'extract' && renderExtractionView()}
+                    {activeView === 'document' && (
                          <FinalDocumentView
                             tableData={unifiedTable}
                             onPrint={onPrint}
                             onDownloadPdf={onDownloadPdf}
                             onTableUpdate={onTableUpdate}
                             user={user}
+                        />
+                    )}
+                    {activeView === 'report' && (
+                        <ReportView
+                            tableData={unifiedTable}
+                            onPrint={onPrint}
+                            onDownloadPdf={onDownloadPdf}
                         />
                     )}
                 </div>

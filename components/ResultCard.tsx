@@ -1,12 +1,14 @@
+
 import React from 'react';
 import { ExtractedData, Status } from '../types';
 import { Icons } from './Icons';
 
 interface ResultCardProps {
   data: ExtractedData;
+  onDelete: (id: string) => void;
 }
 
-export const ResultCard: React.FC<ResultCardProps> = ({ data }) => {
+export const ResultCard: React.FC<ResultCardProps> = ({ data, onDelete }) => {
   const { fileName, imageSrc, content, status } = data;
 
   const getStatusIndicator = () => {
@@ -29,7 +31,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ data }) => {
         return (
           <div className="flex items-center text-emerald-400">
             <Icons.CheckCircle className="w-4 h-4 mr-2" />
-            <span>Succès</span>
+            <span>Terminé</span>
           </div>
         );
       case Status.Error:
@@ -40,67 +42,65 @@ export const ResultCard: React.FC<ResultCardProps> = ({ data }) => {
           </div>
         );
       default:
-        return null;
+        return <span className="text-slate-500">En attente</span>;
     }
   };
 
-  const renderContent = () => {
-    if (status === Status.AiProcessing || status === Status.Processing) {
-      return (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-slate-500">
-             {status === Status.AiProcessing && "Analyse par l'IA..."}
-             {status === Status.Processing && "Traitement en cours..."}
-          </div>
-        </div>
-      );
-    }
-    if (!content) {
-      return "Aucun contenu n'a été extrait.";
-    }
-    if (typeof content === 'string') {
-       // Also check for empty string
-      return content.trim() ? content : "Aucun contenu textuel trouvé.";
-    }
-    // It's a table
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 bg-slate-800">
-            <tr className="text-slate-300">
-              {content.headers.map((header, index) => (
-                <th key={index} className="p-1.5 font-semibold border-b border-slate-600">{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {content.rows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="border-t border-slate-700 even:bg-slate-800/50 hover:bg-slate-700/50">
-                {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="p-1.5 text-slate-300">{cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-  
   return (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-lg shadow-lg overflow-hidden flex flex-col h-full">
-      <div className="relative h-40 overflow-hidden">
-        <img src={imageSrc} alt={fileName} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-black/40"></div>
+    <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 relative group">
+      {/* Header Image & Controls */}
+      <div className="relative h-40 bg-slate-900 overflow-hidden">
+        <img 
+          src={imageSrc} 
+          alt={fileName} 
+          className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-300"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
+        
+        {/* Delete Button */}
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                onDelete(data.id);
+            }}
+            className="absolute top-2 right-2 p-2 bg-slate-900/80 hover:bg-red-600/90 text-slate-300 hover:text-white rounded-full transition-all duration-200 backdrop-blur-sm shadow-lg z-10"
+            title="Supprimer ce fichier"
+        >
+            <Icons.Trash className="w-4 h-4" />
+        </button>
       </div>
-      <div className="p-4 flex flex-col flex-grow">
-        <div className="flex justify-between items-start mb-2">
-          <h3 className="font-bold text-slate-200 break-all pr-2">{fileName}</h3>
-          <div className="text-xs font-medium flex-shrink-0">{getStatusIndicator()}</div>
+
+      {/* Body */}
+      <div className="p-4 flex-grow flex flex-col">
+        <div className="flex justify-between items-start mb-3">
+          <h3 className="font-semibold text-slate-100 truncate max-w-[80%]" title={fileName}>
+            {fileName}
+          </h3>
         </div>
-        <div className="mt-2 bg-slate-900 rounded-md text-sm flex-grow h-48 overflow-y-auto whitespace-pre-wrap font-mono">
-          {renderContent()}
+
+        <div className="mb-4 text-sm font-medium">
+          {getStatusIndicator()}
         </div>
+
+        {/* Stats/Preview */}
+        {status === Status.Success && content && (
+          <div className="mt-auto space-y-2 text-xs text-slate-400 bg-slate-900/50 p-3 rounded-md border border-slate-700/50">
+            <div className="flex justify-between">
+              <span>Lignes extraites:</span>
+              <span className="font-mono text-emerald-400">{content.rows.length}</span>
+            </div>
+             <div className="flex justify-between">
+              <span>Colonnes:</span>
+              <span className="font-mono text-sky-400">{content.headers.length}</span>
+            </div>
+          </div>
+        )}
+        
+        {status === Status.Error && (
+             <div className="mt-auto text-xs text-red-400 bg-red-900/10 p-2 rounded border border-red-900/20">
+                Échec de l'analyse.
+             </div>
+        )}
       </div>
     </div>
   );

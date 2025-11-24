@@ -5,7 +5,7 @@
  * Robustesse accrue : La conversion de chaque page est isolée ; un échec sur une page n'arrête plus le traitement du PDF entier.
  * </summary>
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
@@ -79,6 +79,59 @@ const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64'
     return pageResults.filter((result): result is Omit<ProcessableFile, 'base64' | 'mimeType'> => result !== null);
 };
 
+// Helper function to build unified table logic (reusable)
+const buildUnifiedTable = (dataList: ExtractedData[]): TableData | null => {
+    const successfulExtractions = dataList
+        .filter(d => d.status === Status.Success && d.content && d.content.rows.length > 0 && d.content.headers[0] !== 'Erreur');
+
+    if (successfulExtractions.length === 0) {
+        return null;
+    }
+
+    // Clone des en-têtes pour ne pas muter l'objet original
+    const masterHeaders = [...successfulExtractions[0].content!.headers];
+    
+    // Recherche de l'index de la colonne "Véhicule"
+    const vehiculeIndex = masterHeaders.indexOf("Véhicule");
+    
+    // Si la colonne existe, on ajoute "Changement" et "Changement par" juste après
+    if (vehiculeIndex !== -1) {
+        if (!masterHeaders.includes("Changement")) {
+            masterHeaders.splice(vehiculeIndex + 1, 0, "Changement");
+        }
+        if (!masterHeaders.includes("Changement par")) {
+            masterHeaders.splice(vehiculeIndex + 2, 0, "Changement par");
+        }
+    }
+
+    let allRows = successfulExtractions.flatMap(d => {
+            return d.content!.rows.map(row => {
+                // Clone de la ligne
+                const newRow = [...row];
+                
+                if (vehiculeIndex !== -1) {
+                    // Valeur par défaut = Numéro du véhicule
+                    const vehiculeVal = newRow[vehiculeIndex] || "";
+                    
+                    // Insertion à la position adéquate (on insère deux colonnes vides)
+                    // Note: on insère d'abord "Changement par" (index+2) puis "Changement" (index+1) 
+                    // ou on fait splice une fois avec les deux éléments.
+                    // Ici on insère la valeur du véhicule dans "Changement" pour initialiser, et vide pour "Changement par".
+                    newRow.splice(vehiculeIndex + 1, 0, vehiculeVal, ""); 
+                }
+                return newRow;
+            });
+    });
+
+    const uniqueRows = Array.from(new Set(allRows.map(row => JSON.stringify(row))))
+        .map(str => JSON.parse(str as string) as string[]);
+        
+    return {
+        headers: masterHeaders,
+        rows: uniqueRows,
+    };
+};
+
 
 const App: React.FC = () => {
     // Auth State
@@ -90,9 +143,25 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-    const [unifiedTable, setUnifiedTable] = useState<TableData | null>(null);
+    // Initialisation différée pour récupérer le tableau sauvegardé
+    const [unifiedTable, setUnifiedTable] = useState<TableData | null>(() => {
+        try {
+            const savedTable = localStorage.getItem('edt_unified_table');
+            return savedTable ? JSON.parse(savedTable) : null;
+        } catch (e) {
+            console.error("Erreur lors du chargement du tableau depuis le stockage local", e);
+            return null;
+        }
+    });
 
-    const [activeView, setActiveView] = useState<'extract' | 'document'>('extract');
+    const [activeView, setActiveView] = useState<'extract' | 'document' | 'report'>('extract');
+
+    // Effet pour basculer automatiquement sur la vue document si un tableau est restauré
+    useEffect(() => {
+        if (unifiedTable && extractedData.length === 0) {
+            setActiveView('document');
+        }
+    }, []); // Ne s'exécute qu'au montage
 
     // Handlers Auth
     const handleLogin = (user: User) => {
@@ -106,6 +175,7 @@ const App: React.FC = () => {
         setExtractedData([]);
         setUnifiedTable(null);
         setGlobalStatus(Status.Idle);
+        localStorage.removeItem('edt_unified_table'); // Sécurité : nettoyer le stockage local
     };
 
     const handleFileChange = (selectedFiles: File[]) => {
@@ -115,350 +185,21 @@ const App: React.FC = () => {
         setUnifiedTable(null);
         setGlobalStatus(Status.Idle);
         setActiveView('extract');
+        localStorage.removeItem('edt_unified_table'); // Nettoyer le stockage pour recommencer à zéro (Nouveau cycle)
     };
 
-    const fileToBase64 = (file: File): Promise<string> =>
-        new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve((reader.result as string).split(',')[1]);
-            reader.onerror = (error) => reject(error);
-        });
+    const handleDeleteResult = (id: string) => {
+        // 1. Mettre à jour les données extraites
+        const updatedData = extractedData.filter(item => item.id !== id);
+        setExtractedData(updatedData);
 
-    const handleExtractData = useCallback(async () => {
-        if (files.length === 0) {
-            setError("Veuillez sélectionner au moins un fichier.");
-            return;
-        }
-
-        setGlobalStatus(Status.Processing);
-        setError(null);
-        setUnifiedTable(null);
-        setActiveView('extract');
-
-        try {
-            const processableFiles: ProcessableFile[] = [];
-            console.time('Traitement_Total_Fichiers'); // Micro-benchmark start
-            for (const file of files) {
-                if (file.type === 'application/pdf') {
-                    const pdfPages = await processPdf(file);
-                    for (const page of pdfPages) {
-                        const base64 = await fileToBase64(page.file);
-                        processableFiles.push({ ...page, base64, mimeType: page.file.type });
-                    }
-                } else {
-                    const base64 = await fileToBase64(file);
-                    processableFiles.push({ file, originalFileName: file.name, id: `${file.name}-${Date.now()}`, base64, mimeType: file.type });
-                }
-            }
-            console.timeEnd('Traitement_Total_Fichiers'); // Micro-benchmark end
-            
-            const initialData: ExtractedData[] = processableFiles.map(({ id, file, originalFileName }) => {
-                 const pageNumber = file.name.match(/-page-(\d+)\.jpg$/);
-                 const displayName = originalFileName.endsWith('.pdf') && pageNumber 
-                     ? `${originalFileName} (Page ${pageNumber[1]})` 
-                     : originalFileName;
-
-                return { id, fileName: displayName, imageSrc: URL.createObjectURL(file), content: null, status: Status.AiProcessing };
-            });
-            setExtractedData(initialData);
-
-            const extractionPromises = processableFiles.map(async (pfile) => {
-                const result = await extractDataFromImage(pfile.base64, pfile.mimeType);
-                const isErrorResult = result.headers.length === 1 && result.headers[0] === "Erreur";
-                
-                setExtractedData(prev => prev.map(item =>
-                    item.id === pfile.id
-                        ? { ...item, content: result, status: isErrorResult ? Status.Error : Status.Success }
-                        : item
-                ));
-            });
-            
-            await Promise.all(extractionPromises);
-            setGlobalStatus(Status.Success);
-
-        } catch (e) {
-            console.error("Erreur générale lors de l'extraction:", e);
-            setError("Une erreur est survenue lors de l'extraction. Veuillez vérifier la console pour plus de détails.");
-            setGlobalStatus(Status.Error);
-            setExtractedData(prev => prev.map(item => ({ ...item, status: Status.Error })));
-        }
-    }, [files]);
-    
-    const handleGenerateResults = () => {
-        const successfulExtractions = extractedData
-            .filter(d => d.status === Status.Success && d.content && d.content.rows.length > 0 && d.content.headers[0] !== 'Erreur');
-
-        if (successfulExtractions.length === 0) {
-            setError("Aucune donnée valide à traiter.");
-            return;
-        }
-
-        // Clone des en-têtes pour ne pas muter l'objet original
-        const masterHeaders = [...successfulExtractions[0].content!.headers];
-        
-        // Recherche de l'index de la colonne "Véhicule"
-        const vehiculeIndex = masterHeaders.indexOf("Véhicule");
-        
-        // Si la colonne existe, on ajoute "Changement" juste après
-        if (vehiculeIndex !== -1 && !masterHeaders.includes("Changement")) {
-            masterHeaders.splice(vehiculeIndex + 1, 0, "Changement");
-        }
-
-        let allRows = successfulExtractions.flatMap(d => {
-             return d.content!.rows.map(row => {
-                 // Clone de la ligne
-                 const newRow = [...row];
-                 
-                 if (vehiculeIndex !== -1) {
-                     // Valeur par défaut = Numéro du véhicule
-                     const vehiculeVal = newRow[vehiculeIndex] || "";
-                     // Insertion à la position adéquate
-                     newRow.splice(vehiculeIndex + 1, 0, vehiculeVal);
-                 }
-                 return newRow;
-             });
-        });
-
-        const uniqueRows = Array.from(new Set(allRows.map(row => JSON.stringify(row))))
-            .map(str => JSON.parse(str as string) as string[]);
-            
-        const finalTable: TableData = {
-            headers: masterHeaders,
-            rows: uniqueRows,
-        };
-        setUnifiedTable(finalTable);
-        setActiveView('document');
-    };
-
-    // Callback pour mettre à jour le tableau depuis les composants enfants
-    const handleTableUpdate = (newTableData: TableData) => {
-        setUnifiedTable(newTableData);
-    };
-    
-    const handleDownloadPdf = (headers: string[], rows: string[][]) => {
-        console.time('PDF_Generation');
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const formattedDate = tomorrow.toISOString().split('T')[0];
-        const printTitle = `${formattedDate}_TCT_Filtre`;
-
-        try {
-            // Initialisation de jsPDF en mode PAYSAGE ('l' pour landscape)
-            // @ts-ignore
-            const doc = new jsPDF({
-                orientation: 'landscape',
-                unit: 'mm',
-                format: 'a4'
-            });
-
-            doc.setFontSize(14);
-            doc.text(`Données Filtrées - ${printTitle}`, 14, 15);
-
-            // Utilisation de jspdf-autotable pour générer le tableau
-            // @ts-ignore
-            autoTable(doc, {
-                head: [headers],
-                body: rows,
-                startY: 20,
-                styles: {
-                    fontSize: 5, // Police minuscule pour faire tenir 14+ colonnes
-                    cellPadding: 1,
-                    overflow: 'linebreak', // Retour à la ligne auto
-                    valign: 'middle',
-                    halign: 'left',
-                    lineWidth: 0.1,
-                    lineColor: [200, 200, 200]
-                },
-                headStyles: {
-                    fillColor: [22, 160, 133], // Emerald green
-                    textColor: 255,
-                    fontSize: 6, // En-têtes légèrement plus grands
-                    fontStyle: 'bold',
-                    halign: 'center'
-                },
-                alternateRowStyles: {
-                    fillColor: [245, 245, 245]
-                },
-                theme: 'grid', // Lignes de grille visibles partout
-                margin: { top: 20, left: 5, right: 5, bottom: 10 }, // Marges minimales
-                tableWidth: 'auto'
-            });
-
-            doc.save(`${printTitle}.pdf`);
-            console.timeEnd('PDF_Generation');
-        } catch (e) {
-            console.timeEnd('PDF_Generation');
-            console.error("Erreur lors de la création du PDF", e);
-            setError(`Erreur lors de la génération du PDF: ${(e as Error).message}`);
-        }
-    };
-
-
-    const handlePrint = (headers: string[], rows: string[][]) => {
-        if (!headers || !rows) return;
-
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const formattedDate = tomorrow.toISOString().split('T')[0];
-        const printTitle = `${formattedDate}_TCT_Filtre`;
-
-        const tableHeader = `
-            <thead>
-                <tr>
-                    ${headers.map(header => `<th>${header}</th>`).join('')}
-                </tr>
-            </thead>
-        `;
-        const tableBody = `
-            <tbody>
-                ${rows.map(row => `
-                    <tr>
-                        ${row.map(cell => `<td>${cell || ''}</td>`).join('')}
-                    </tr>
-                `).join('')}
-            </tbody>
-        `;
-
-        const printContent = `
-            <html>
-                <head>
-                    <title>${printTitle}</title>
-                    <meta charset="utf-8" />
-                    <style>
-                        /* Forçage du format Paysage */
-                        @page {
-                            size: A4 landscape;
-                            margin: 3mm; /* Marges extrêmes */
-                        }
-                        
-                        body { 
-                            font-family: 'Helvetica Neue', Arial, sans-serif;
-                            margin: 0;
-                            padding: 0;
-                            background: white;
-                            -webkit-print-color-adjust: exact !important;
-                            print-color-adjust: exact !important;
-                            width: 100%;
-                        }
-
-                        h1 { 
-                            font-size: 10pt; 
-                            margin: 5px 0; 
-                            text-align: center;
-                            color: #000;
-                        }
-                        
-                        /* Conteneur principal */
-                        .print-container {
-                            width: 100%;
-                        }
-
-                        table { 
-                            width: 100%; 
-                            border-collapse: collapse; 
-                            /* Police minuscule critique pour mobile */
-                            font-size: 5pt; 
-                            table-layout: auto; /* Permet aux colonnes de s'ajuster au contenu */
-                        }
-
-                        th, td { 
-                            border: 0.5px solid #444; 
-                            padding: 1px 2px; 
-                            text-align: left; 
-                            vertical-align: middle;
-                            /* Césure agressive des mots pour éviter l'explosion du tableau */
-                            word-wrap: break-word;
-                            overflow-wrap: break-word;
-                            word-break: break-all; 
-                            max-width: 100px; /* Limite arbitraire pour forcer le retour à la ligne */
-                        }
-
-                        th { 
-                            background-color: #ddd !important; 
-                            color: #000 !important;
-                            font-weight: bold; 
-                            text-align: center;
-                            font-size: 5.5pt;
-                        }
-
-                        tr:nth-child(even) { 
-                            background-color: #f9f9f9 !important; 
-                        }
-                        
-                        /* Hack spécifique pour essayer de forcer le navigateur mobile à dézoomer */
-                        @media print {
-                            body {
-                                width: 100%;
-                            }
-                            table {
-                                width: 100%;
-                            }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <h1>${printTitle}</h1>
-                    <div class="print-container">
-                        <table>
-                            ${tableHeader}
-                            ${tableBody}
-                        </table>
-                    </div>
-                </body>
-            </html>
-        `;
-
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-            printWindow.document.write(printContent);
-            printWindow.document.close();
-            
-            // Délai plus long pour s'assurer que le style est appliqué sur mobile
-            setTimeout(() => {
-                printWindow.focus();
+        // 2. Si un tableau unifié existait, on le met à jour dynamiquement
+        // Cela permet de garder la cohérence sans avoir à recliquer sur "Générer"
+        if (unifiedTable || updatedData.length > 0) {
+            const newTable = buildUnifiedTable(updatedData);
+            if (newTable) {
+                setUnifiedTable(newTable);
                 try {
-                    printWindow.print();
+                    localStorage.setItem('edt_unified_table', JSON.stringify(newTable));
                 } catch (e) {
-                    console.error("Erreur impression:", e);
-                    alert("L'impression a échoué. Utilisez le bouton PDF.");
-                }
-                // Fermeture automatique après impression (délai pour mobile)
-                // setTimeout(() => printWindow.close(), 1000); 
-            }, 800);
-        }
-    };
-
-    if (!currentUser) {
-        return <AuthPage onLogin={handleLogin} />;
-    }
-
-    return (
-        <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
-           <Sidebar
-                isSidebarOpen={isSidebarOpen}
-                setIsSidebarOpen={setIsSidebarOpen}
-                files={files}
-                onFileChange={handleFileChange}
-                onExtractData={handleExtractData}
-                globalStatus={globalStatus}
-                user={currentUser}
-                onLogout={handleLogout}
-           />
-           <MainContent
-                activeView={activeView}
-                setActiveView={setActiveView}
-                extractedData={extractedData}
-                onGenerateResults={handleGenerateResults}
-                error={error}
-                unifiedTable={unifiedTable}
-                onTableUpdate={handleTableUpdate}
-                onPrint={handlePrint}
-                onDownloadPdf={handleDownloadPdf}
-                user={currentUser}
-           />
-        </div>
-    );
-};
-
-export default App;
+                     console.warn("Impossible de sauvegarder après suppression (Quota ?)", e);

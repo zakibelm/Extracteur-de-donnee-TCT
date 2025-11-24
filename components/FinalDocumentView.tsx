@@ -38,19 +38,19 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         }
     }, [tableData]);
 
-    const { tourneeIndex, vehiculeIndex, debutTourneeIndex, changementIndex, employeIndex } = useMemo(() => {
-        if (!tableData) return { tourneeIndex: -1, vehiculeIndex: -1, debutTourneeIndex: -1, changementIndex: -1, employeIndex: -1 };
+    const { tourneeIndex, vehiculeIndex, debutTourneeIndex, changementIndex, changementParIndex, employeIndex } = useMemo(() => {
+        if (!tableData) return { tourneeIndex: -1, vehiculeIndex: -1, debutTourneeIndex: -1, changementIndex: -1, changementParIndex: -1, employeIndex: -1 };
         return {
             tourneeIndex: tableData.headers.indexOf('Tournée'),
             vehiculeIndex: tableData.headers.indexOf('Véhicule'),
             debutTourneeIndex: tableData.headers.indexOf('Début tournée'),
             changementIndex: tableData.headers.indexOf('Changement'),
+            changementParIndex: tableData.headers.indexOf('Changement par'),
             employeIndex: tableData.headers.indexOf('Employé'),
         };
     }, [tableData]);
 
     // Fonction de normalisation stricte pour la comparaison d'ID
-    // Enlève tout ce qui n'est pas lettre ou chiffre pour une comparaison robuste (ex: "A-123" == "a123")
     const normalizeId = (str: any) => {
         if (!str) return '';
         return String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -103,12 +103,10 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
 
     // --- Gestion des Changements ---
 
-    // 1. Quand on clique dans l'input : on sauvegarde la valeur actuelle pour pouvoir annuler si besoin
     const handleInputFocus = (currentValue: string) => {
         setFocusedValue(currentValue);
     };
 
-    // 2. Quand on tape : mise à jour visuelle immédiate (Controlled Component)
     const handleInputChange = (rowRef: string[], newValue: string) => {
         if (changementIndex !== -1) {
             rowRef[changementIndex] = newValue;
@@ -116,12 +114,9 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         }
     };
 
-    // 3. Quand on quitte le champ (Blur) ou Enter : Vérification
     const handleInputBlur = (rowRef: string[], newValue: string) => {
-        // Si la valeur n'a pas changé par rapport au focus initial, on ne fait rien
         if (newValue === focusedValue) return;
 
-        // Sinon, on ouvre la modale de confirmation
         const tourneeVal = tourneeIndex !== -1 ? rowRef[tourneeIndex] : 'Inconnue';
         
         setPendingChange({
@@ -135,36 +130,55 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowRef: string[], newValue: string) => {
         if (e.key === 'Enter') {
-            (e.target as HTMLInputElement).blur(); // Déclenche le handleInputBlur
+            (e.target as HTMLInputElement).blur();
         }
     };
 
-    // 4. Confirmation : On valide le changement et on le sauvegarde globalement
     const confirmChange = () => {
-        if (tableData) {
-            // Modification demandée : Mettre à jour la colonne "Véhicule" avec la nouvelle valeur "Changement"
-            if (pendingChange && vehiculeIndex !== -1) {
-                pendingChange.row[vehiculeIndex] = pendingChange.newValue;
-            }
+        if (tableData && pendingChange) {
+            // Copie sécurisée pour l'état React
+            const rowIndex = rows.indexOf(pendingChange.row);
+            
+            if (rowIndex !== -1) {
+                const newRows = [...rows];
+                const newRow = [...newRows[rowIndex]];
+                
+                // 1. Mettre à jour la colonne Changement
+                if (changementIndex !== -1) {
+                    newRow[changementIndex] = pendingChange.newValue;
+                }
+                
+                // 2. Mettre à jour la colonne Véhicule (Assignation)
+                if (vehiculeIndex !== -1) {
+                    newRow[vehiculeIndex] = pendingChange.newValue;
+                }
 
-            // Création d'une copie des données avec les nouvelles lignes
-            const newTable = {
-                ...tableData,
-                rows: rows
-            };
-            // Propagation de la mise à jour au composant parent (App) pour persistance
-            onTableUpdate(newTable);
+                // 3. Mettre à jour la colonne "Changement par" (Traçabilité 24h)
+                if (changementParIndex !== -1) {
+                    // Instruction spécifique : "va être num dôme de l utilisateur"
+                    newRow[changementParIndex] = user.numDome;
+                }
+                
+                newRows[rowIndex] = newRow;
+                setRows(newRows);
+                
+                // Persistance globale (Local Storage pour la journée)
+                const newTable = {
+                    ...tableData,
+                    rows: newRows
+                };
+                onTableUpdate(newTable);
+            }
         }
         setIsModalOpen(false);
         setPendingChange(null);
         setFocusedValue('');
     };
 
-    // 5. Annulation : On remet l'ancienne valeur
     const cancelChange = () => {
         if (pendingChange && changementIndex !== -1) {
             pendingChange.row[changementIndex] = pendingChange.oldValue;
-            setRows([...rows]); // Update visuel du rollback
+            setRows([...rows]);
         }
         setIsModalOpen(false);
         setPendingChange(null);
@@ -182,12 +196,15 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
 
     return (
         <div className="flex flex-col h-full text-slate-200 relative">
-            {/* Modal de confirmation */}
             <Modal isOpen={isModalOpen} onClose={cancelChange} title="Confirmer le changement">
                 <div className="space-y-4">
                     <p className="text-slate-300">
                         Vous êtes sur le point de modifier le véhicule pour la tournée <span className="font-bold text-white">{pendingChange?.tournee}</span>.
-                        <br/><span className="text-sm text-sky-400">La colonne "Véhicule" sera également mise à jour avec cette nouvelle valeur.</span>
+                        <br/>
+                        <span className="text-sm text-amber-400 font-bold flex items-center mt-2">
+                            <Icons.CheckCircle className="w-4 h-4 mr-1"/>
+                            Le véhicule assigné sera automatiquement mis à jour.
+                        </span>
                     </p>
                     
                     <div className="grid grid-cols-2 gap-4 bg-slate-900/50 p-4 rounded-lg border border-slate-700">
@@ -213,10 +230,8 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 </div>
             </Modal>
 
-            {/* Toolbar */}
             <div className="flex-shrink-0 p-4 bg-slate-800/50 border-b border-slate-700">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                    {/* Filters */}
                     <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-semibold text-slate-400 block mb-1">Filtrer par Tournée</label>
@@ -239,7 +254,6 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                             />
                         </div>
                     </div>
-                    {/* Actions */}
                     <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2">
                          <Button onClick={resetFilters} className="bg-slate-600 hover:bg-slate-500 text-sm py-2 px-3">
                             Réinitialiser
@@ -254,7 +268,6 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 </div>
             </div>
 
-            {/* Table */}
             <div className="flex-grow overflow-x-auto p-4">
                 <div className="border border-slate-700 rounded-md">
                     <table className="w-full text-left text-xs">
@@ -273,15 +286,12 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                         <tbody>
                             {filteredRows.length > 0 ? (
                                 filteredRows.map((row, rowIndex) => {
-                                    // Logique de permission CORRECTE :
-                                    // On compare la colonne "Véhicule" (l'assignation) avec le Numéro de Dôme de l'utilisateur.
-                                    
                                     const rawRowId = vehiculeIndex !== -1 ? row[vehiculeIndex] : '';
                                     const normRowId = normalizeId(rawRowId);
                                     const normUserDome = normalizeId(user?.numDome);
                                     
-                                    // Le user est autorisé si le Dôme entré correspond au Véhicule assigné dans le tableau
-                                    const isMyTour = normUserDome.length > 0 && normRowId.length > 0 && normRowId === normUserDome;
+                                    // Permission basée sur la colonne Véhicule (Assignation)
+                                    const isMyTour = normUserDome.length > 0 && normRowId === normUserDome;
                                     
                                     const canEdit = isMyTour;
 
@@ -305,7 +315,9 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                                                             ? 'bg-slate-900 text-emerald-400 border-slate-600 focus:ring-2 focus:ring-emerald-500 focus:outline-none cursor-text' 
                                                                             : 'bg-slate-800/50 text-slate-500 border-transparent cursor-not-allowed italic'
                                                                         }`}
-                                                                    title={canEdit ? 'Cliquez pour modifier le véhicule' : `Verrouillé : Assigné au Dôme ${rawRowId || 'Inconnu'}`}
+                                                                    title={canEdit 
+                                                                        ? 'Cliquez pour modifier le véhicule' 
+                                                                        : `Verrouillé: Assigné au Dôme "${rawRowId}" (Vous êtes "${user?.numDome}")`}
                                                                 />
                                                                 {!canEdit && (
                                                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600">
@@ -314,6 +326,12 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                                                 )}
                                                             </div>
                                                         </td>
+                                                    );
+                                                }
+                                                // Style spécial pour "Changement par"
+                                                if (cellIndex === changementParIndex) {
+                                                    return (
+                                                         <td key={cellIndex} className="p-2 text-sky-400 font-medium whitespace-nowrap text-xs">{cell}</td>
                                                     );
                                                 }
                                                 return (
