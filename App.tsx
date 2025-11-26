@@ -3,7 +3,7 @@
  * <summary>
  * Gain de performance : Le traitement des pages PDF est maintenant parallélisé.
  * Robustesse accrue : Gestion des erreurs par page et sauvegarde sécurisée (localStorage).
- * Optimisation : SAFETY MODE RÉSEAU -> Compression drastique (< 300Ko) via URL.createObjectURL pour éviter crash RAM mobile.
+ * Optimisation : SAFETY MODE RÉSEAU -> Compression drastique (< 200Ko, 600px) via URL.createObjectURL pour éviter crash RAM mobile.
  * </summary>
  */
 import React, { useState, useCallback, useEffect } from 'react';
@@ -31,14 +31,12 @@ interface ProcessableFile {
  * Optimise une image de manière ADAPTATIVE pour garantir l'envoi API sur MOBILE.
  * ULTRA-LIGHT MODE :
  * 1. Utilise URL.createObjectURL pour ne PAS charger le fichier brut en RAM (Anti-Crash Mobile).
- * 2. Résolution MAX de départ : 768px.
- * 3. Cible : Moins de 300Ko.
+ * 2. Résolution MAX de départ : 600px (Suffisant pour texte A4).
+ * 3. Cible : Moins de 200Ko.
  */
 const optimizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         // OPTIMISATION RAM CRITIQUE : Utiliser createObjectURL au lieu de FileReader
-        // FileReader charge tout le fichier en RAM (crash sur mobile si > 5Mo)
-        // createObjectURL garde le fichier sur disque/cache et crée un pointeur.
         const objectUrl = URL.createObjectURL(file);
         const img = new Image();
         img.src = objectUrl;
@@ -55,11 +53,11 @@ const optimizeImage = (file: File): Promise<string> => {
                 return;
             }
 
-            // MODE ULTRA-LIGHT STRICT (768px = Tablette/Mobile Safe)
-            const MAX_START_WIDTH = 768;
+            // MODE ULTRA-LIGHT STRICT (600px = Mobile Safe)
+            const MAX_START_WIDTH = 600;
             let width = img.width;
             let height = img.height;
-            let quality = 0.6; 
+            let quality = 0.5; // Qualité de départ basse
 
             // Redimensionnement initial agressif
             if (width > MAX_START_WIDTH) {
@@ -68,8 +66,8 @@ const optimizeImage = (file: File): Promise<string> => {
                 height = height * scale;
             }
 
-            // Target: Under 300KB to be absolutely safe for mobile 3G/4G
-            const MAX_BASE64_LENGTH = 400000; // ~300KB payload (Base64 est 33% plus gros que binaire)
+            // Target: Under 200KB to be absolutely safe for mobile 3G/4G
+            const MAX_BASE64_LENGTH = 300000; // ~220KB payload
             let dataUrl = "";
             let attempt = 0;
             let success = false;
@@ -96,7 +94,7 @@ const optimizeImage = (file: File): Promise<string> => {
                     width *= 0.8; // -20% size
                     height *= 0.8;
                     quality -= 0.1; // -10% quality
-                    if (quality < 0.3) quality = 0.3; // Min quality floor
+                    if (quality < 0.2) quality = 0.2; // Min quality floor
                     attempt++;
                 }
             }
@@ -119,14 +117,14 @@ const optimizeImage = (file: File): Promise<string> => {
 
 /**
  * Processes a single page of a PDF document into an image File object.
- * Forces output to match the constraints (approx 768px width).
+ * Forces output to match the constraints (approx 600px width).
  */
 async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, originalPdfName: string): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'> | null> {
     try {
         const page = await pdf.getPage(pageNum);
         
-        // Scale 1.3 sur A4 ~ 770px de large. Très léger.
-        const viewport = page.getViewport({ scale: 1.3 }); 
+        // Scale 1.0 sur A4 ~ 600px de large. Très léger.
+        const viewport = page.getViewport({ scale: 1.0 }); 
         
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');

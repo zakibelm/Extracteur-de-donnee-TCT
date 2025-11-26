@@ -195,7 +195,7 @@ async function callGemini(
     };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro', // Modèle "Thinking" performant
+        model: 'gemini-2.0-flash-exp', // Modèle Vision Performant
         contents: { parts: [{ text: promptText }, imagePart] },
         config: {
             systemInstruction: systemInstruction,
