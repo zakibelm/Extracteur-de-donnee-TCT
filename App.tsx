@@ -3,7 +3,7 @@
  * <summary>
  * Gain de performance : Le traitement des pages PDF est maintenant parallélisé.
  * Robustesse accrue : Gestion des erreurs par page et sauvegarde sécurisée (localStorage).
- * Optimisation : Compression intelligente des images (haute fidélité pour l'OCR).
+ * Optimisation : Compression intelligente et ADAPTATIVE des images (boucle de réduction jusqu'à < 1Mo).
  * </summary>
  */
 import React, { useState, useCallback, useEffect } from 'react';
@@ -28,28 +28,15 @@ interface ProcessableFile {
 }
 
 /**
- * Optimise une image intelligemment pour l'IA.
+ * Optimise une image de manière ADAPTATIVE pour garantir l'envoi API.
  * Stratégie :
- * 1. Si fichier < 2Mo : Pas de compression (Qualité Max).
- * 2. Si fichier > 2Mo : Redimensionnement HD (2048px) et compression légère (0.85)
- *    pour passer sous la barre des erreurs réseau sans flouter le texte.
+ * 1. Commence avec une résolution correcte (1600px).
+ * 2. Génère le Base64.
+ * 3. Vérifie le poids. Si > 1Mo (limite stricte mobile), on réduit dimensions et qualité et on recommence.
+ * 4. Répète jusqu'à succès.
  */
 const optimizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
-        // SEUIL DE QUALITÉ : 2 Mo
-        // Si l'image est déjà légère, on ne la touche pas pour garantir une précision maximale à l'IA.
-        if (file.size < 2 * 1024 * 1024) {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const result = event.target?.result as string;
-                resolve(result.split(',')[1]);
-            };
-            reader.onerror = (err) => reject(err);
-            return;
-        }
-
-        // Si l'image est lourde, on utilise le Canvas pour l'optimiser
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onload = (event) => {
@@ -57,28 +44,69 @@ const optimizeImage = (file: File): Promise<string> => {
             img.src = event.target?.result as string;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                // 2048px est suffisant pour lire du texte A4 même petit, tout en réduisant drastiquement le poids (vs 4000px+)
-                const MAX_WIDTH = 2048; 
-                const scaleSize = MAX_WIDTH / img.width;
-                const width = (img.width > MAX_WIDTH) ? MAX_WIDTH : img.width;
-                const height = (img.width > MAX_WIDTH) ? img.height * scaleSize : img.height;
-
-                canvas.width = width;
-                canvas.height = height;
-
                 const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    // Algorithme de lissage pour garder le texte net
+                
+                if (!ctx) {
+                    reject(new Error("Impossible de créer le contexte canvas"));
+                    return;
+                }
+
+                // Initial settings
+                let width = img.width;
+                let height = img.height;
+                let quality = 0.7; // Start quality
+                const MAX_START_WIDTH = 1600;
+
+                // Initial resize if huge
+                if (width > MAX_START_WIDTH) {
+                    const scale = MAX_START_WIDTH / width;
+                    width = MAX_START_WIDTH;
+                    height = height * scale;
+                }
+
+                // 1MB Binary approx equals ~1.35 Million Base64 chars
+                // We target slightly under to be safe (1.2M chars ~ 900KB)
+                const MAX_BASE64_LENGTH = 1200000; 
+                let dataUrl = "";
+                let attempt = 0;
+                let success = false;
+
+                // Adaptive Loop
+                while (attempt < 6 && !success) {
+                    canvas.width = width;
+                    canvas.height = height;
+                    
                     ctx.imageSmoothingEnabled = true;
                     ctx.imageSmoothingQuality = 'high';
                     ctx.drawImage(img, 0, 0, width, height);
                     
-                    // Qualité 0.85 : Très peu d'artefacts visuels, mais poids divisé par ~4 ou ~5
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                    resolve(dataUrl.split(',')[1]);
-                } else {
-                    reject(new Error("Impossible de créer le contexte canvas"));
+                    dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    
+                    // Check size
+                    const base64Content = dataUrl.split(',')[1];
+                    if (base64Content.length <= MAX_BASE64_LENGTH) {
+                        success = true;
+                        resolve(base64Content);
+                    } else {
+                        // Too big, reduce aggressively
+                        console.log(`Image trop lourde (${(base64Content.length / 1024 / 1024).toFixed(2)} MB Base64). Tentative ${attempt + 1}: Réduction...`);
+                        width *= 0.8; // Reduce size by 20%
+                        height *= 0.8;
+                        quality -= 0.1; // Reduce quality
+                        if (quality < 0.3) quality = 0.3; // Floor quality
+                        attempt++;
+                    }
                 }
+
+                if (!success) {
+                    // Fail-safe: send whatever we have if we exhausted attempts (unlikely)
+                    console.warn("Limite de compression atteinte, envoi du dernier résultat.");
+                    resolve(dataUrl.split(',')[1]);
+                }
+                
+                // Cleanup
+                canvas.width = 0;
+                canvas.height = 0;
             };
             img.onerror = (err) => reject(err);
         };
@@ -92,8 +120,8 @@ const optimizeImage = (file: File): Promise<string> => {
 async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, originalPdfName: string): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'> | null> {
     try {
         const page = await pdf.getPage(pageNum);
-        // Scale 2 is good for OCR, but consumes memory. 
-        const viewport = page.getViewport({ scale: 2 });
+        // Scale 1.5 is sufficient for 1600px width on standard A4, reduces memory usage vs scale 2.
+        const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
@@ -101,8 +129,8 @@ async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, orig
 
         if (context) {
             await page.render({ canvasContext: context, viewport: viewport }).promise;
-            // Compression quality reduced to 0.8 to save bandwidth/memory while keeping text sharp
-            const blob: Blob | null = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+            // Compression quality reduced to 0.6 for reliability
+            const blob: Blob | null = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.6));
             
             // Clean up canvas to free memory immediately
             canvas.width = 0;
@@ -130,7 +158,8 @@ const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64'
     const pdf = await pdfjsLib.getDocument(fileBuffer).promise;
     
     const results: Omit<ProcessableFile, 'base64' | 'mimeType'>[] = [];
-    const BATCH_SIZE = 3; // Process 3 pages at a time to save memory
+    // Batch size reduced to 2 for tighter memory control on mobile
+    const BATCH_SIZE = 2; 
 
     for (let i = 0; i < pdf.numPages; i += BATCH_SIZE) {
         const batchPromises = [];
@@ -284,7 +313,6 @@ export const App: React.FC = () => {
         
         try {
             // STEP 1: Pre-processing (Compression / Conversion)
-            // Done sequentially to manage memory
             for (const file of files) {
                 if (file.type === 'application/pdf') {
                     const pageImages = await processPdf(file);
@@ -300,8 +328,7 @@ export const App: React.FC = () => {
                         processableFiles.push({ ...page, base64, mimeType: 'image/jpeg' });
                     }
                 } else {
-                    // C'est ici que l'optimisation des images uploadées se fait
-                    // On compresse l'image avant de l'ajouter à la liste
+                    // OPTIMISATION SYSTÉMATIQUE ET ADAPTATIVE
                     try {
                         const base64 = await optimizeImage(file);
                         processableFiles.push({ 
@@ -309,11 +336,11 @@ export const App: React.FC = () => {
                             file, 
                             originalFileName: file.name, 
                             base64, 
-                            mimeType: 'image/jpeg' // optimizeImage retourne toujours du JPEG
+                            mimeType: 'image/jpeg' 
                         });
                     } catch (optError) {
                         console.error(`Erreur d'optimisation pour ${file.name}`, optError);
-                        // Fallback au FileReader standard si l'optimisation échoue
+                         // Fallback en cas d'erreur inattendue
                          const base64 = await new Promise<string>((resolve) => {
                             const reader = new FileReader();
                             reader.onloadend = () => {
@@ -341,7 +368,7 @@ export const App: React.FC = () => {
 
         setGlobalStatus(Status.AiProcessing);
         
-        // Initialiser l'état avec des placeholders pour afficher le chargement
+        // Init UI state
         const initialDataState = processableFiles.map(f => ({
             id: f.id,
             fileName: f.originalFileName.includes(f.file.name) ? f.file.name : f.originalFileName + " (page)",
@@ -351,46 +378,32 @@ export const App: React.FC = () => {
         }));
         setExtractedData(initialDataState);
 
-        // STEP 2: AI Processing with Concurrency Control (Queue)
-        // We limit parallel requests to 3 to avoid "Rate Limit" errors on large batches
-        const CONCURRENCY_LIMIT = 3;
-        const results = [];
+        // STEP 2: AI Processing - SEQUENTIAL (1 by 1)
+        // CRITICAL FIX: Limit concurrency to 1 to prevent Network/XHR errors on large files.
+        const CONCURRENCY_LIMIT = 1; 
         
         for (let i = 0; i < processableFiles.length; i += CONCURRENCY_LIMIT) {
             const batch = processableFiles.slice(i, i + CONCURRENCY_LIMIT);
             
             const batchPromises = batch.map(async (pFile) => {
-                const index = processableFiles.indexOf(pFile); // Find original index for state update
+                const index = processableFiles.indexOf(pFile);
                 
                 try {
-                     // Update status to processing
-                     setExtractedData(prev => {
-                        const newArr = [...prev];
-                        if(newArr[index]) newArr[index].status = Status.AiProcessing;
-                        return newArr;
-                     });
+                     setExtractedData(prev => prev.map((item, idx) => 
+                        idx === index ? { ...item, status: Status.AiProcessing } : item
+                     ));
 
                      const content = await extractDataFromImage(pFile.base64, pFile.mimeType);
                      const status = content.headers[0] === 'Erreur' ? Status.Error : Status.Success;
                      
-                     setExtractedData(prev => {
-                         const newArr = [...prev];
-                         if(newArr[index]) {
-                             newArr[index].content = content;
-                             newArr[index].status = status;
-                         }
-                         return newArr;
-                     });
+                     setExtractedData(prev => prev.map((item, idx) => 
+                        idx === index ? { ...item, content: content, status: status } : item
+                     ));
                      return { status };
                 } catch (e) {
-                     setExtractedData(prev => {
-                         const newArr = [...prev];
-                         if(newArr[index]) {
-                             newArr[index].content = { headers: ['Erreur'], rows: [['Echec extraction']] };
-                             newArr[index].status = Status.Error;
-                         }
-                         return newArr;
-                     });
+                     setExtractedData(prev => prev.map((item, idx) => 
+                        idx === index ? { ...item, content: { headers: ['Erreur'], rows: [['Echec extraction']] }, status: Status.Error } : item
+                     ));
                      return { status: Status.Error };
                 }
             });
