@@ -32,7 +32,7 @@ interface ProcessableFile {
  * ULTRA-LIGHT MODE :
  * 1. Utilise URL.createObjectURL pour ne PAS charger le fichier brut en RAM (Anti-Crash Mobile).
  * 2. Résolution MAX de départ : 600px (Suffisant pour texte A4).
- * 3. Cible : Moins de 200Ko.
+ * 3. Cible : Moins de 150Ko (200 000 chars base64).
  */
 const optimizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -66,8 +66,8 @@ const optimizeImage = (file: File): Promise<string> => {
                 height = height * scale;
             }
 
-            // Target: Under 200KB to be absolutely safe for mobile 3G/4G
-            const MAX_BASE64_LENGTH = 300000; // ~220KB payload
+            // Target: Under 150KB to be absolutely safe for mobile 3G/4G
+            const MAX_BASE64_LENGTH = 200000; // ~150KB payload
             let dataUrl = "";
             let attempt = 0;
             let success = false;
@@ -117,14 +117,14 @@ const optimizeImage = (file: File): Promise<string> => {
 
 /**
  * Processes a single page of a PDF document into an image File object.
- * Forces output to match the constraints (approx 600px width).
+ * Forces output to match the constraints (approx 500-600px width).
  */
 async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, originalPdfName: string): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'> | null> {
     try {
         const page = await pdf.getPage(pageNum);
         
-        // Scale 1.0 sur A4 ~ 600px de large. Très léger.
-        const viewport = page.getViewport({ scale: 1.0 }); 
+        // Scale 0.8 sur A4 ~ 475px de large. Extrêmement léger pour mobile.
+        const viewport = page.getViewport({ scale: 0.8 }); 
         
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');

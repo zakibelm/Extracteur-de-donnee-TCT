@@ -195,7 +195,7 @@ async function callGemini(
     };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp', // Modèle Vision Performant
+        model: 'gemini-2.0-flash-exp', // Correction : Utilisation du modèle 2.0 Flash Exp (le seul valide pour la vision performante actuelle)
         contents: { parts: [{ text: promptText }, imagePart] },
         config: {
             systemInstruction: systemInstruction,
