@@ -30,7 +30,6 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         tournee: string;
     } | null>(null);
     const [focusedValue, setFocusedValue] = useState<string>('');
-    const [showLocalWarning, setShowLocalWarning] = useState(true);
 
     // Synchronisation initiale
     useEffect(() => {
@@ -231,21 +230,6 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 </div>
             </Modal>
             
-            {showLocalWarning && (
-                <div className="bg-sky-900/30 border-b border-sky-500/30 p-2 px-4 flex justify-between items-center text-xs text-sky-200">
-                    <div className="flex items-center">
-                        <Icons.Download className="w-4 h-4 mr-2 text-sky-400" />
-                        <span>
-                            <strong>Mode Local :</strong> Pour partager ce tableau, 
-                            Exportez le fichier JSON (Menu gauche) et envoyez-le à vos utilisateurs.
-                        </span>
-                    </div>
-                    <button onClick={() => setShowLocalWarning(false)} className="text-sky-400 hover:text-white">
-                        <Icons.X className="w-4 h-4" />
-                    </button>
-                </div>
-            )}
-
             <div className="flex-shrink-0 p-4 bg-slate-800/50 border-b border-slate-700">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                     <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">

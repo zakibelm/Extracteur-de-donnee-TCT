@@ -14,11 +14,8 @@ interface SidebarProps {
     onExtractData: () => void;
     globalStatus: Status;
     user?: User;
-    onLogout?: () => void;
     onRemoveFile: (fileName: string) => void;
     isAdmin: boolean;
-    onBackup: () => void;
-    onRestore: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -29,11 +26,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onExtractData,
     globalStatus,
     user,
-    onLogout,
     onRemoveFile,
-    isAdmin,
-    onBackup,
-    onRestore
+    isAdmin
 }) => {
     return (
         <aside className={`relative bg-slate-800 flex flex-col transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-96 border-r border-slate-700' : 'w-0 border-none'}`}>
@@ -84,27 +78,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
                         
                         <div className="flex-grow"></div>
-
-                        {/* SECTION SECONDAIRE : SAUVEGARDE (BAS DE PAGE) */}
-                        <div className="mt-8 border-t border-slate-700 pt-4 opacity-80 hover:opacity-100 transition-opacity">
-                            <h4 className="text-[10px] font-bold text-slate-500 uppercase mb-2 px-1 flex items-center">
-                                <Icons.Lock className="w-3 h-3 mr-1" />
-                                Outils Système (Sauvegarde)
-                            </h4>
-                            <div className="grid grid-cols-2 gap-2">
-                                <Button onClick={onBackup} className="bg-slate-700 hover:bg-slate-600 text-[10px] py-2 px-2 border border-slate-600 justify-center h-auto">
-                                    <div className="flex flex-col items-center gap-1">
-                                        <Icons.Download className="w-4 h-4 text-sky-400" /> 
-                                        <span>Sauvegarder</span>
-                                    </div>
-                                </Button>
-                                <label className="flex flex-col items-center justify-center px-2 py-2 border border-slate-600 bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-medium rounded-md cursor-pointer transition-colors shadow-sm h-auto text-center">
-                                    <Icons.Upload className="w-4 h-4 text-emerald-400 mb-1" /> 
-                                    Restaurer
-                                    <input type="file" onChange={onRestore} className="hidden" accept=".json" />
-                                </label>
-                            </div>
-                        </div>
                     </>
                 ) : (
                      <div className="flex flex-col items-center justify-center text-center p-6 border border-slate-700 rounded-lg bg-slate-800/50">
@@ -113,15 +86,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <p className="text-xs text-slate-400 mt-2 mb-4">
                             Consultez et modifiez les tournées qui vous sont assignées.
                         </p>
-                        
-                        <div className="w-full border-t border-slate-700 pt-4 mt-4">
-                            <p className="text-[10px] text-slate-500 mb-2">Besoin de récupérer le tableau ?</p>
-                            <label className="flex items-center justify-center w-full px-4 py-2 border border-slate-600 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium rounded-md cursor-pointer transition-colors shadow-sm">
-                                <Icons.Upload className="mr-2 w-4 h-4 text-emerald-400" /> 
-                                Ouvrir une Sauvegarde
-                                <input type="file" onChange={onRestore} className="hidden" accept=".json" />
-                            </label>
-                        </div>
                     </div>
                 )}
 

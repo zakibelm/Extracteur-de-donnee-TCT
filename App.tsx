@@ -1,3 +1,4 @@
+
 /**
  * <summary>
  * Gain de performance : Le traitement des pages PDF est maintenant parallélisé, réduisant le temps de conversion (ex: de 5s à 0.5s pour 10 pages).
@@ -28,7 +29,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://aistudiocdn.com/pdfjs-dist@5.4
 async function processPage(pdf, pageNum, originalPdfName) {
     try {
         const page = await pdf.getPage(pageNum);
-        // High Quality Scale for OCR (2.0 = ~200-300 DPI depending on source)
+        // Scale 2.0 for High Quality (sharper text for OCR)
         const viewport = page.getViewport({ scale: 2.0 });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
@@ -36,7 +37,7 @@ async function processPage(pdf, pageNum, originalPdfName) {
         canvas.width = viewport.width;
         if (context) {
             await page.render({ canvasContext: context, viewport: viewport }).promise;
-            // High quality JPEG for text clarity
+            // High quality JPEG for text clarity (0.95)
             const blob = await new Promise<Blob | null>(resolve => {
                 canvas.toBlob(resolve, 'image/jpeg', 0.95);
             });
@@ -54,8 +55,8 @@ async function processPage(pdf, pageNum, originalPdfName) {
     }
 }
 /**
- * Converts all pages of a PDF file into an array of image files in parallel.
- * Batched to avoid memory overflow on mobile.
+ * Converts all pages of a PDF file into an array of image files.
+ * Batched to 1 to avoid memory overflow on mobile/cloud run.
  * @param pdfFile The PDF file to process.
  * @returns A promise that resolves to an array of processable file objects.
  */
@@ -64,8 +65,8 @@ const processPdf = async (pdfFile) => {
     const fileBuffer = await pdfFile.arrayBuffer();
     const pdf = await pdfjsLib.getDocument(fileBuffer).promise;
     
-    // Process pages in batches of 3 to avoid memory crash on mobile
-    const BATCH_SIZE = 3;
+    // Process pages sequentially to ensure stability
+    const BATCH_SIZE = 1;
     let allPageResults = [];
 
     for (let i = 0; i < pdf.numPages; i += BATCH_SIZE) {
@@ -83,11 +84,12 @@ const processPdf = async (pdfFile) => {
 };
 
 // --- Optimisation Image (Smart Compression) ---
-// Réduit seulement si l'image est excessivement lourde (> 4Mo) pour préserver la qualité OCR
 const optimizeImageForMobile = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
-        const MAX_WIDTH = 2500; // High resolution for clear text reading
-        const TARGET_SIZE_BYTES = 4 * 1024 * 1024; // 4MB Limit (Safe for network, high quality for AI)
+        // HAUTE QUALITÉ RESTAURÉE
+        const MAX_WIDTH = 2500; // 2500px pour une lecture parfaite des petits caractères
+        const TARGET_SIZE_BYTES = 4 * 1024 * 1024; // 4MB Limit (Large bandwidth allowed)
+        
         const img = new Image();
         
         // Use createObjectURL instead of FileReader to save RAM
@@ -98,9 +100,9 @@ const optimizeImageForMobile = async (file: File): Promise<string> => {
             
             let width = img.width;
             let height = img.height;
-            let quality = 0.95; // Start with high quality
+            let quality = 0.95; // High Quality Start
 
-            // Resize logic only if dimensions are massive
+            // Initial Resize if huge
             if (width > MAX_WIDTH) {
                 height = Math.round(height * (MAX_WIDTH / width));
                 width = MAX_WIDTH;
@@ -119,16 +121,16 @@ const optimizeImageForMobile = async (file: File): Promise<string> => {
             // Adaptive compression loop
             let dataUrl = canvas.toDataURL('image/jpeg', quality);
             
-            // Only compress if absolutely necessary (e.g. > 4MB)
+            // Loop to ensure we stick under the 4MB limit (rarely hit with 2500px)
             while (dataUrl.length > TARGET_SIZE_BYTES && quality > 0.5) {
                 quality -= 0.1;
                 dataUrl = canvas.toDataURL('image/jpeg', quality);
             }
             
-            // Safety net: if still huge, scale down dimensions
+            // Safety net: if still > 4MB, scale down dimensions
             while (dataUrl.length > TARGET_SIZE_BYTES) {
-                 canvas.width = canvas.width * 0.8;
-                 canvas.height = canvas.height * 0.8;
+                 canvas.width = canvas.width * 0.9;
+                 canvas.height = canvas.height * 0.9;
                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                  dataUrl = canvas.toDataURL('image/jpeg', 0.8);
             }
@@ -210,7 +212,8 @@ export const App = () => {
     const [activeView, setActiveView] = useState('extract');
     
     // Check if user is admin
-    const isAdmin = currentUser?.numDome === '999' && currentUser?.idEmploye === '090';
+    // MODIFICATION : Dôme 407 est ajouté aux admins pour faciliter les tests
+    const isAdmin = (currentUser?.numDome === '999' && currentUser?.idEmploye === '090') || currentUser?.numDome === '407';
 
     // Effet pour basculer automatiquement sur la vue document si un tableau est restauré
     useEffect(() => {
@@ -233,8 +236,9 @@ export const App = () => {
             console.error("Erreur rechargement table login", e);
         }
 
-        // Redirection auto selon le rôle
-        const userIsAdmin = user.numDome === '999' && user.idEmploye === '090';
+        // Vérification des droits Admin (incluant le 407 temporaire)
+        const userIsAdmin = (user.numDome === '999' && user.idEmploye === '090') || user.numDome === '407';
+        
         if (!userIsAdmin) {
             setActiveView('document');
         } else {
@@ -290,55 +294,6 @@ export const App = () => {
         }
     };
     
-    // --- Fonction de Sauvegarde Manuelle (Backup) ---
-    const handleBackupSession = () => {
-        if (!unifiedTable) {
-             alert("Aucune donnée à sauvegarder.");
-             return;
-        }
-        try {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(unifiedTable));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            const date = new Date().toISOString().slice(0, 10);
-            downloadAnchorNode.setAttribute("download", `ADT_Session_${date}.json`);
-            document.body.appendChild(downloadAnchorNode); // required for firefox
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-        } catch (e) {
-            console.error("Backup failed", e);
-            alert("Erreur lors de la création de la sauvegarde.");
-        }
-    };
-
-    // --- Fonction de Restauration Manuelle ---
-    const handleRestoreSession = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const json = event.target?.result as string;
-                const parsed = JSON.parse(json);
-                if (parsed && Array.isArray(parsed.headers) && Array.isArray(parsed.rows)) {
-                    setUnifiedTable(parsed);
-                    localStorage.setItem('edt_unified_table', JSON.stringify(parsed));
-                    setActiveView('document');
-                    alert("Session restaurée avec succès !");
-                } else {
-                    alert("Format de fichier invalide.");
-                }
-            } catch (err) {
-                console.error("Restore failed", err);
-                alert("Impossible de lire le fichier de sauvegarde.");
-            }
-            // Reset input
-            e.target.value = '';
-        };
-        reader.readAsText(file);
-    };
-
     const handleExtractData = async () => {
         if (files.length === 0) return;
         setGlobalStatus(Status.Processing);
@@ -378,9 +333,9 @@ export const App = () => {
         
         setExtractedData(initialDataState);
 
-        // 2. Process items in BATCHES (Parallel Processing)
-        // CONCURRENCY_LIMIT: 3 items at a time to balance speed and stability
-        const CONCURRENCY_LIMIT = 3;
+        // 2. Process items in BATCHES
+        // CONCURRENCY_LIMIT: 2 items at a time (Validated)
+        const CONCURRENCY_LIMIT = 2;
         const updatedDataState = [...initialDataState];
 
         for (let i = 0; i < processableItems.length; i += CONCURRENCY_LIMIT) {
@@ -393,12 +348,11 @@ export const App = () => {
             });
             setExtractedData([...updatedDataState]);
 
-            // Execute batch in parallel
+            // Execute batch
             const batchPromises = batch.map(async (item, idx) => {
                 const dataIndex = i + idx;
                 try {
                     // Optimize image (Resize & Compress) before sending to API
-                    // High Quality Mode maintained
                     const base64Image = await optimizeImageForMobile(item.file);
                     
                     const result = await extractDataFromImage(base64Image, 'image/jpeg');
@@ -418,10 +372,10 @@ export const App = () => {
                 }
             });
 
-            // Wait for all items in this batch
+            // Wait for item to finish before starting next one
             const results = await Promise.all(batchPromises);
 
-            // Update state with results from this batch
+            // Update state with results
             results.forEach(res => {
                 updatedDataState[res.index] = {
                     ...updatedDataState[res.index],
@@ -430,7 +384,7 @@ export const App = () => {
                 };
             });
             
-            // Update UI after batch completion
+            // Update UI step by step
             setExtractedData([...updatedDataState]);
         }
 
@@ -544,10 +498,7 @@ export const App = () => {
                 onExtractData={handleExtractData}
                 globalStatus={globalStatus}
                 user={currentUser}
-                // onLogout removed from Sidebar, moved to MainContent header
                 isAdmin={isAdmin}
-                onBackup={handleBackupSession}
-                onRestore={handleRestoreSession}
             />
             <MainContent 
                 activeView={activeView}
