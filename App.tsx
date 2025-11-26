@@ -246,6 +246,16 @@ export const App: React.FC = () => {
 
     const [activeView, setActiveView] = useState<'extract' | 'document' | 'report'>('extract');
 
+    // Détermine si l'utilisateur est admin
+    const isAdmin = currentUser?.numDome === '999' && currentUser?.idEmploye === '090';
+
+    // Effet pour rediriger automatiquement les non-admins
+    useEffect(() => {
+        if (currentUser && !isAdmin && activeView === 'extract') {
+            setActiveView('document');
+        }
+    }, [currentUser, isAdmin, activeView]);
+
     useEffect(() => {
         if (unifiedTable && extractedData.length === 0) {
             setActiveView('document');
@@ -254,6 +264,15 @@ export const App: React.FC = () => {
 
     const handleLogin = (user: User) => {
         setCurrentUser(user);
+        // Redirection immédiate si non admin
+        if (user.numDome !== '999' || user.idEmploye !== '090') {
+            setActiveView('document');
+            // Fermer la sidebar par défaut pour les utilisateurs non-admin pour plus de place
+            setIsSidebarOpen(false);
+        } else {
+            setActiveView('extract');
+            setIsSidebarOpen(true);
+        }
     };
 
     const handleLogout = () => {
@@ -275,6 +294,16 @@ export const App: React.FC = () => {
         localStorage.removeItem('edt_unified_table');
     };
 
+    const handleRemoveFile = (fileName: string) => {
+        const newFiles = files.filter(f => f.name !== fileName);
+        setFiles(newFiles);
+        if (newFiles.length === 0) {
+            setExtractedData([]);
+            setUnifiedTable(null);
+            localStorage.removeItem('edt_unified_table');
+        }
+    };
+
     const handleDeleteResult = (id: string) => {
         const updatedData = extractedData.filter(item => item.id !== id);
         setExtractedData(updatedData);
@@ -292,7 +321,8 @@ export const App: React.FC = () => {
                 setUnifiedTable(null);
                 localStorage.removeItem('edt_unified_table');
                 if (activeView === 'document' || activeView === 'report') {
-                     setActiveView('extract');
+                     // Si admin, on retourne à extract, sinon on reste sur document (qui sera vide)
+                     if (isAdmin) setActiveView('extract');
                 }
             }
         }
@@ -504,6 +534,8 @@ export const App: React.FC = () => {
                 globalStatus={globalStatus}
                 user={currentUser}
                 onLogout={handleLogout}
+                onRemoveFile={handleRemoveFile}
+                isAdmin={isAdmin}
             />
             <MainContent 
                 activeView={activeView}
@@ -517,6 +549,7 @@ export const App: React.FC = () => {
                 onTableUpdate={handleTableUpdate}
                 user={currentUser}
                 onDeleteResult={handleDeleteResult}
+                isAdmin={isAdmin}
             />
         </div>
     );
