@@ -12,8 +12,6 @@ import { extractDataFromImage } from './services/geminiService';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { AuthPage, User } from './components/AuthPage';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 // Set worker path for pdf.js to match the version from the import map
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://aistudiocdn.com/pdfjs-dist@5.4.394/build/pdf.worker.mjs`;
@@ -467,21 +465,6 @@ export const App = () => {
         printWindow.document.write(htmlContent);
         printWindow.document.close();
     };
-    const handleDownloadPdf = (headers, rows) => {
-        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-        doc.setFontSize(8);
-        doc.text("Document Final - ADT", 14, 10);
-        // @ts-ignore
-        doc.autoTable({
-            head: [headers],
-            body: rows,
-            startY: 15,
-            styles: { fontSize: 5, cellPadding: 1, overflow: 'ellipsize' },
-            theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-        });
-        doc.save(`ADT_Document_${new Date().toISOString().slice(0, 10)}.pdf`);
-    };
 
     if (!currentUser) {
         return <AuthPage onLogin={handleLogin} />;
@@ -508,7 +491,6 @@ export const App = () => {
                 error={error}
                 unifiedTable={unifiedTable}
                 onPrint={handlePrint}
-                onDownloadPdf={handleDownloadPdf}
                 onTableUpdate={handleTableUpdate}
                 user={currentUser}
                 onDeleteResult={handleDeleteResult}

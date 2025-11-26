@@ -9,12 +9,11 @@ import { User } from './AuthPage';
 interface FinalDocumentViewProps {
     tableData: TableData | null;
     onPrint: (headers: string[], rows: string[][]) => void;
-    onDownloadPdf: (headers: string[], rows: string[][]) => void;
     onTableUpdate: (table: TableData) => void;
     user: User;
 }
 
-export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData, onPrint, onDownloadPdf, onTableUpdate, user }) => {
+export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData, onPrint, onTableUpdate, user }) => {
     const [tourneeFilter, setTourneeFilter] = useState('');
     const [vehiculeFilter, setVehiculeFilter] = useState('');
     
@@ -257,9 +256,6 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                     <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2">
                          <Button onClick={resetFilters} className="bg-slate-600 hover:bg-slate-500 text-sm py-2 px-3">
                             Réinitialiser
-                        </Button>
-                         <Button onClick={() => onDownloadPdf(tableData.headers, filteredRows)} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3">
-                            <Icons.FilePdf className="mr-2" /> PDF
                         </Button>
                         <Button onClick={() => onPrint(tableData.headers, filteredRows)} className="bg-slate-500 hover:bg-slate-600 text-sm py-2 px-3">
                             <Icons.Print className="mr-2" /> Imprimer
