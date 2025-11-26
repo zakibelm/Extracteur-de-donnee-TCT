@@ -3,7 +3,7 @@
  * <summary>
  * Gain de performance : Le traitement des pages PDF est maintenant parallélisé.
  * Robustesse accrue : Gestion des erreurs par page et sauvegarde sécurisée (localStorage).
- * Optimisation : SAFETY MODE RÉSEAU -> Compression drastique (< 500Ko) pour passer sur tous les réseaux mobiles.
+ * Optimisation : SAFETY MODE RÉSEAU -> Compression drastique (< 300Ko) via URL.createObjectURL pour éviter crash RAM mobile.
  * </summary>
  */
 import React, { useState, useCallback, useEffect } from 'react';
@@ -30,96 +30,103 @@ interface ProcessableFile {
 /**
  * Optimise une image de manière ADAPTATIVE pour garantir l'envoi API sur MOBILE.
  * ULTRA-LIGHT MODE :
- * 1. Résolution MAX de départ : 800px (Suffisant pour lecture OCR, très léger).
- * 2. Cible : Moins de 350Ko (0.35MB) pour passer instantanément.
+ * 1. Utilise URL.createObjectURL pour ne PAS charger le fichier brut en RAM (Anti-Crash Mobile).
+ * 2. Résolution MAX de départ : 768px.
+ * 3. Cible : Moins de 300Ko.
  */
 const optimizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target?.result as string;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
+        // OPTIMISATION RAM CRITIQUE : Utiliser createObjectURL au lieu de FileReader
+        // FileReader charge tout le fichier en RAM (crash sur mobile si > 5Mo)
+        // createObjectURL garde le fichier sur disque/cache et crée un pointeur.
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.src = objectUrl;
+
+        img.onload = () => {
+            // Libérer la mémoire du blob immédiatement
+            URL.revokeObjectURL(objectUrl);
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            if (!ctx) {
+                reject(new Error("Impossible de créer le contexte canvas"));
+                return;
+            }
+
+            // MODE ULTRA-LIGHT STRICT (768px = Tablette/Mobile Safe)
+            const MAX_START_WIDTH = 768;
+            let width = img.width;
+            let height = img.height;
+            let quality = 0.6; 
+
+            // Redimensionnement initial agressif
+            if (width > MAX_START_WIDTH) {
+                const scale = MAX_START_WIDTH / width;
+                width = MAX_START_WIDTH;
+                height = height * scale;
+            }
+
+            // Target: Under 300KB to be absolutely safe for mobile 3G/4G
+            const MAX_BASE64_LENGTH = 400000; // ~300KB payload (Base64 est 33% plus gros que binaire)
+            let dataUrl = "";
+            let attempt = 0;
+            let success = false;
+
+            // Adaptive Loop
+            while (attempt < 6 && !success) {
+                canvas.width = width;
+                canvas.height = height;
                 
-                if (!ctx) {
-                    reject(new Error("Impossible de créer le contexte canvas"));
-                    return;
-                }
-
-                // Initial settings - MODE ULTRA-LIGHT
-                let width = img.width;
-                let height = img.height;
-                let quality = 0.6; 
-                const MAX_START_WIDTH = 800; // 800px suffit largement pour du texte A4
-
-                // Initial resize if huge
-                if (width > MAX_START_WIDTH) {
-                    const scale = MAX_START_WIDTH / width;
-                    width = MAX_START_WIDTH;
-                    height = height * scale;
-                }
-
-                // Target: Under 350KB to be absolutely safe for mobile 3G/4G
-                const MAX_BASE64_LENGTH = 450000; // ~350KB payload
-                let dataUrl = "";
-                let attempt = 0;
-                let success = false;
-
-                // Adaptive Loop
-                while (attempt < 6 && !success) {
-                    canvas.width = width;
-                    canvas.height = height;
-                    
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'medium'; // 'high' consomme trop de mémoire sur mobile
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    dataUrl = canvas.toDataURL('image/jpeg', quality);
-                    
-                    // Check size
-                    const base64Content = dataUrl.split(',')[1];
-                    
-                    if (base64Content.length <= MAX_BASE64_LENGTH) {
-                        success = true;
-                        resolve(base64Content);
-                    } else {
-                        // Too big, reduce aggressively
-                        width *= 0.8; // -20% size
-                        height *= 0.8;
-                        quality -= 0.1; // -10% quality
-                        if (quality < 0.3) quality = 0.3; // Min quality floor
-                        attempt++;
-                    }
-                }
-
-                if (!success) {
-                    // Fail-safe
-                    resolve(dataUrl.split(',')[1]);
-                }
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'medium'; // 'high' consomme trop de mémoire sur mobile
+                ctx.drawImage(img, 0, 0, width, height);
                 
-                // Cleanup
-                canvas.width = 0;
-                canvas.height = 0;
-            };
-            img.onerror = (err) => reject(err);
+                dataUrl = canvas.toDataURL('image/jpeg', quality);
+                
+                // Check size
+                const base64Content = dataUrl.split(',')[1];
+                
+                if (base64Content.length <= MAX_BASE64_LENGTH) {
+                    success = true;
+                    resolve(base64Content);
+                } else {
+                    // Too big, reduce aggressively
+                    width *= 0.8; // -20% size
+                    height *= 0.8;
+                    quality -= 0.1; // -10% quality
+                    if (quality < 0.3) quality = 0.3; // Min quality floor
+                    attempt++;
+                }
+            }
+
+            if (!success) {
+                // Fail-safe
+                resolve(dataUrl.split(',')[1]);
+            }
+            
+            // Cleanup
+            canvas.width = 0;
+            canvas.height = 0;
         };
-        reader.onerror = (err) => reject(err);
+        img.onerror = (err) => {
+            URL.revokeObjectURL(objectUrl);
+            reject(err);
+        };
     });
 };
 
 /**
  * Processes a single page of a PDF document into an image File object.
- * Forces output to match the constraints (approx 800px width).
+ * Forces output to match the constraints (approx 768px width).
  */
 async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, originalPdfName: string): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'> | null> {
     try {
         const page = await pdf.getPage(pageNum);
         
-        // Scale 1.4 sur A4 ~ 830px de large. Très léger.
-        const viewport = page.getViewport({ scale: 1.4 }); 
+        // Scale 1.3 sur A4 ~ 770px de large. Très léger.
+        const viewport = page.getViewport({ scale: 1.3 }); 
         
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
@@ -333,7 +340,7 @@ export const App: React.FC = () => {
                         });
                     } catch (optError) {
                         console.error(`Erreur d'optimisation pour ${file.name}`, optError);
-                        // Fallback simple
+                        // Fallback simple (mais via optimizeImage normalement ça ne fail pas)
                          const base64 = await new Promise<string>((resolve) => {
                             const reader = new FileReader();
                             reader.onloadend = () => {
