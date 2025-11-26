@@ -3,7 +3,7 @@
  * <summary>
  * Gain de performance : Le traitement des pages PDF est maintenant parallélisé.
  * Robustesse accrue : Gestion des erreurs par page et sauvegarde sécurisée (localStorage).
- * Optimisation : Compression intelligente et ADAPTATIVE des images (boucle de réduction jusqu'à < 1Mo).
+ * Optimisation : SAFETY MODE RÉSEAU -> Compression drastique (< 500Ko) pour passer sur tous les réseaux mobiles.
  * </summary>
  */
 import React, { useState, useCallback, useEffect } from 'react';
@@ -28,12 +28,10 @@ interface ProcessableFile {
 }
 
 /**
- * Optimise une image de manière ADAPTATIVE pour garantir l'envoi API.
- * Stratégie :
- * 1. Commence avec une résolution correcte (1600px).
- * 2. Génère le Base64.
- * 3. Vérifie le poids. Si > 1Mo (limite stricte mobile), on réduit dimensions et qualité et on recommence.
- * 4. Répète jusqu'à succès.
+ * Optimise une image de manière ADAPTATIVE pour garantir l'envoi API sur MOBILE.
+ * ULTRA-LIGHT MODE :
+ * 1. Résolution MAX de départ : 800px (Suffisant pour lecture OCR, très léger).
+ * 2. Cible : Moins de 350Ko (0.35MB) pour passer instantanément.
  */
 const optimizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -51,11 +49,11 @@ const optimizeImage = (file: File): Promise<string> => {
                     return;
                 }
 
-                // Initial settings
+                // Initial settings - MODE ULTRA-LIGHT
                 let width = img.width;
                 let height = img.height;
-                let quality = 0.7; // Start quality
-                const MAX_START_WIDTH = 1600;
+                let quality = 0.6; 
+                const MAX_START_WIDTH = 800; // 800px suffit largement pour du texte A4
 
                 // Initial resize if huge
                 if (width > MAX_START_WIDTH) {
@@ -64,9 +62,8 @@ const optimizeImage = (file: File): Promise<string> => {
                     height = height * scale;
                 }
 
-                // 1MB Binary approx equals ~1.35 Million Base64 chars
-                // We target slightly under to be safe (1.2M chars ~ 900KB)
-                const MAX_BASE64_LENGTH = 1200000; 
+                // Target: Under 350KB to be absolutely safe for mobile 3G/4G
+                const MAX_BASE64_LENGTH = 450000; // ~350KB payload
                 let dataUrl = "";
                 let attempt = 0;
                 let success = false;
@@ -77,30 +74,29 @@ const optimizeImage = (file: File): Promise<string> => {
                     canvas.height = height;
                     
                     ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
+                    ctx.imageSmoothingQuality = 'medium'; // 'high' consomme trop de mémoire sur mobile
                     ctx.drawImage(img, 0, 0, width, height);
                     
                     dataUrl = canvas.toDataURL('image/jpeg', quality);
                     
                     // Check size
                     const base64Content = dataUrl.split(',')[1];
+                    
                     if (base64Content.length <= MAX_BASE64_LENGTH) {
                         success = true;
                         resolve(base64Content);
                     } else {
                         // Too big, reduce aggressively
-                        console.log(`Image trop lourde (${(base64Content.length / 1024 / 1024).toFixed(2)} MB Base64). Tentative ${attempt + 1}: Réduction...`);
-                        width *= 0.8; // Reduce size by 20%
+                        width *= 0.8; // -20% size
                         height *= 0.8;
-                        quality -= 0.1; // Reduce quality
-                        if (quality < 0.3) quality = 0.3; // Floor quality
+                        quality -= 0.1; // -10% quality
+                        if (quality < 0.3) quality = 0.3; // Min quality floor
                         attempt++;
                     }
                 }
 
                 if (!success) {
-                    // Fail-safe: send whatever we have if we exhausted attempts (unlikely)
-                    console.warn("Limite de compression atteinte, envoi du dernier résultat.");
+                    // Fail-safe
                     resolve(dataUrl.split(',')[1]);
                 }
                 
@@ -116,12 +112,15 @@ const optimizeImage = (file: File): Promise<string> => {
 
 /**
  * Processes a single page of a PDF document into an image File object.
+ * Forces output to match the constraints (approx 800px width).
  */
 async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, originalPdfName: string): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'> | null> {
     try {
         const page = await pdf.getPage(pageNum);
-        // Scale 1.5 is sufficient for 1600px width on standard A4, reduces memory usage vs scale 2.
-        const viewport = page.getViewport({ scale: 1.5 });
+        
+        // Scale 1.4 sur A4 ~ 830px de large. Très léger.
+        const viewport = page.getViewport({ scale: 1.4 }); 
+        
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
@@ -129,10 +128,10 @@ async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, orig
 
         if (context) {
             await page.render({ canvasContext: context, viewport: viewport }).promise;
-            // Compression quality reduced to 0.6 for reliability
-            const blob: Blob | null = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.6));
+            // Compression quality 0.5 direct pour être ultra léger
+            const blob: Blob | null = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.5));
             
-            // Clean up canvas to free memory immediately
+            // Clean up canvas
             canvas.width = 0;
             canvas.height = 0;
             
@@ -150,7 +149,7 @@ async function processPage(pdf: pdfjsLib.PDFDocumentProxy, pageNum: number, orig
 }
 
 /**
- * Converts PDF pages in batches to prevent memory crash on mobile/large files.
+ * Converts PDF pages in batches.
  */
 const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64' | 'mimeType'>[]> => {
     console.time(`PDF_Convert_${pdfFile.name}`);
@@ -158,7 +157,6 @@ const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64'
     const pdf = await pdfjsLib.getDocument(fileBuffer).promise;
     
     const results: Omit<ProcessableFile, 'base64' | 'mimeType'>[] = [];
-    // Batch size reduced to 2 for tighter memory control on mobile
     const BATCH_SIZE = 2; 
 
     for (let i = 0; i < pdf.numPages; i += BATCH_SIZE) {
@@ -211,7 +209,7 @@ const buildUnifiedTable = (dataList: ExtractedData[]): TableData | null => {
             });
     });
 
-    // Deduplication simple basée sur le contenu JSON de la ligne
+    // Deduplication simple
     const uniqueRows = Array.from(new Set(allRows.map(row => JSON.stringify(row))))
         .map(str => JSON.parse(str as string) as string[]);
         
@@ -231,27 +229,24 @@ export const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-    // Initialisation différée pour récupérer le tableau sauvegardé
     const [unifiedTable, setUnifiedTable] = useState<TableData | null>(() => {
         try {
             const savedTable = localStorage.getItem('edt_unified_table');
             return savedTable ? JSON.parse(savedTable) : null;
         } catch (e) {
-            console.error("Erreur lors du chargement du tableau depuis le stockage local", e);
+            console.error("Erreur chargement localStorage", e);
             return null;
         }
     });
 
     const [activeView, setActiveView] = useState<'extract' | 'document' | 'report'>('extract');
 
-    // Effet pour basculer automatiquement sur la vue document si un tableau est restauré
     useEffect(() => {
         if (unifiedTable && extractedData.length === 0) {
             setActiveView('document');
         }
     }, []);
 
-    // Handlers Auth
     const handleLogin = (user: User) => {
         setCurrentUser(user);
     };
@@ -272,7 +267,7 @@ export const App: React.FC = () => {
         setUnifiedTable(null);
         setGlobalStatus(Status.Idle);
         setActiveView('extract');
-        localStorage.removeItem('edt_unified_table'); // Réinitialisation au nouvel import
+        localStorage.removeItem('edt_unified_table');
     };
 
     const handleDeleteResult = (id: string) => {
@@ -286,7 +281,7 @@ export const App: React.FC = () => {
                 try {
                     localStorage.setItem('edt_unified_table', JSON.stringify(newTable));
                 } catch (e) {
-                     console.warn("Impossible de sauvegarder après suppression (Quota ?)", e);
+                     console.warn("Quota storage exceeded", e);
                 }
             } else {
                 setUnifiedTable(null);
@@ -305,8 +300,6 @@ export const App: React.FC = () => {
         setExtractedData([]);
         setError(null);
         setUnifiedTable(null); 
-        
-        // Nettoyage préventif
         localStorage.removeItem('edt_unified_table');
         
         let processableFiles: ProcessableFile[] = [];
@@ -328,7 +321,7 @@ export const App: React.FC = () => {
                         processableFiles.push({ ...page, base64, mimeType: 'image/jpeg' });
                     }
                 } else {
-                    // OPTIMISATION SYSTÉMATIQUE ET ADAPTATIVE
+                    // OPTIMISATION SYSTÉMATIQUE ET ADAPTATIVE (ULTRA-LIGHT)
                     try {
                         const base64 = await optimizeImage(file);
                         processableFiles.push({ 
@@ -340,7 +333,7 @@ export const App: React.FC = () => {
                         });
                     } catch (optError) {
                         console.error(`Erreur d'optimisation pour ${file.name}`, optError);
-                         // Fallback en cas d'erreur inattendue
+                        // Fallback simple
                          const base64 = await new Promise<string>((resolve) => {
                             const reader = new FileReader();
                             reader.onloadend = () => {
@@ -368,7 +361,6 @@ export const App: React.FC = () => {
 
         setGlobalStatus(Status.AiProcessing);
         
-        // Init UI state
         const initialDataState = processableFiles.map(f => ({
             id: f.id,
             fileName: f.originalFileName.includes(f.file.name) ? f.file.name : f.originalFileName + " (page)",
@@ -379,7 +371,6 @@ export const App: React.FC = () => {
         setExtractedData(initialDataState);
 
         // STEP 2: AI Processing - SEQUENTIAL (1 by 1)
-        // CRITICAL FIX: Limit concurrency to 1 to prevent Network/XHR errors on large files.
         const CONCURRENCY_LIMIT = 1; 
         
         for (let i = 0; i < processableFiles.length; i += CONCURRENCY_LIMIT) {
@@ -422,8 +413,7 @@ export const App: React.FC = () => {
             try {
                 localStorage.setItem('edt_unified_table', JSON.stringify(unified));
             } catch (e) {
-                console.warn("Stockage local saturé, impossible de sauvegarder le document final.", e);
-                // On pourrait notifier l'utilisateur ici
+                console.warn("Stockage local saturé", e);
             }
         } else {
             setError("Aucune donnée valide à afficher.");
@@ -452,40 +442,28 @@ export const App: React.FC = () => {
                 th { background-color: #eee; font-weight: bold; }
                 h1 { font-size: 14px; margin-bottom: 5px; }
                 .meta { margin-bottom: 10px; font-size: 8px; color: #666; }
-                /* Impression Mobile Force Zoom Out */
-                @media print {
-                   body { zoom: 55%; } 
-                }
+                @media print { body { zoom: 55%; } }
             `);
             printWindow.document.write('</style></head><body>');
             printWindow.document.write('<h1>ADT - Rapport d\'Extraction</h1>');
             printWindow.document.write(`<div class="meta">Généré le ${new Date().toLocaleString()} par ${currentUser?.numDome || 'Inconnu'}</div>`);
             printWindow.document.write('<table>');
-            
             printWindow.document.write('<thead><tr>');
             headers.forEach(h => printWindow.document.write(`<th>${h}</th>`));
-            printWindow.document.write('</tr></thead>');
-            
-            printWindow.document.write('<tbody>');
+            printWindow.document.write('</tr></thead><tbody>');
             rows.forEach(row => {
                 printWindow.document.write('<tr>');
                 row.forEach(cell => printWindow.document.write(`<td>${cell}</td>`));
                 printWindow.document.write('</tr>');
             });
-            printWindow.document.write('</tbody></table>');
-            
-            printWindow.document.write('</body></html>');
+            printWindow.document.write('</tbody></table></body></html>');
             printWindow.document.close();
-            // Petit délai pour laisser le temps aux styles de s'appliquer
-            setTimeout(() => {
-                printWindow.print();
-            }, 500);
+            setTimeout(() => { printWindow.print(); }, 500);
         }
     };
 
     const handleDownloadPdf = (headers: string[], rows: string[][]) => {
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-        
         doc.setFontSize(10);
         doc.text("ADT - Rapport d'Extraction", 10, 10);
         doc.setFontSize(8);
@@ -498,11 +476,7 @@ export const App: React.FC = () => {
             startY: 20,
             styles: { fontSize: 5, cellPadding: 1, overflow: 'linebreak' },
             headStyles: { fillColor: [2, 132, 199], textColor: 255 },
-            columnStyles: {
-                // Optimisation pour les colonnes larges
-                12: { cellWidth: 20 }, // Adresse début
-                13: { cellWidth: 20 }  // Adresse fin
-            },
+            columnStyles: { 12: { cellWidth: 20 }, 13: { cellWidth: 20 } },
             margin: { top: 20, left: 5, right: 5, bottom: 5 },
             theme: 'grid'
         });
