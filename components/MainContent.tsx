@@ -21,6 +21,7 @@ interface MainContentProps {
     user: User;
     onDeleteResult: (id: string) => void;
     isAdmin: boolean;
+    onLogout: () => void;
 }
 
 export const MainContent: React.FC<MainContentProps> = ({
@@ -36,6 +37,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     user,
     onDeleteResult,
     isAdmin,
+    onLogout,
 }) => {
 
     const allProcessed = extractedData.length > 0 && extractedData.every(d => d.status === Status.Success || d.status === Status.Error);
@@ -84,7 +86,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     return (
         <main className="flex-grow p-4 md:p-8 overflow-y-auto flex flex-col">
              <div className="max-w-7xl mx-auto w-full flex flex-col flex-grow">
-                <div className="border-b border-slate-700 mb-4">
+                <div className="border-b border-slate-700 mb-4 flex justify-between items-center">
                     <nav className="flex space-x-4" aria-label="Tabs">
                         {isAdmin && (
                             <button
@@ -112,6 +114,19 @@ export const MainContent: React.FC<MainContentProps> = ({
                             Rapport Modifications
                         </button>
                     </nav>
+
+                    <div className="flex items-center space-x-4 pb-2">
+                        <div className="text-right hidden sm:block">
+                            <p className="text-sm font-bold text-slate-200">Dôme: {user.numDome}</p>
+                        </div>
+                        <button
+                            onClick={onLogout}
+                            className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-full transition-colors"
+                            title="Se déconnecter"
+                        >
+                            <Icons.LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-grow">

@@ -550,6 +550,7 @@ export const App: React.FC = () => {
                 user={currentUser}
                 onDeleteResult={handleDeleteResult}
                 isAdmin={isAdmin}
+                onLogout={handleLogout}
             />
         </div>
     );
