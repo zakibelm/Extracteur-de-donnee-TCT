@@ -264,6 +264,18 @@ export const App: React.FC = () => {
 
     const handleLogin = (user: User) => {
         setCurrentUser(user);
+        
+        // Recharger le tableau depuis le stockage local pour être sûr d'avoir la dernière version
+        // C'est crucial pour le partage Admin -> User
+        try {
+            const savedTable = localStorage.getItem('edt_unified_table');
+            if (savedTable) {
+                setUnifiedTable(JSON.parse(savedTable));
+            }
+        } catch (e) {
+            console.error("Erreur rechargement table au login", e);
+        }
+
         // Redirection immédiate si non admin
         if (user.numDome !== '999' || user.idEmploye !== '090') {
             setActiveView('document');
@@ -277,11 +289,15 @@ export const App: React.FC = () => {
 
     const handleLogout = () => {
         setCurrentUser(null);
+        // On vide les fichiers sources de l'interface car ils sont liés à la session
         setFiles([]);
         setExtractedData([]);
-        setUnifiedTable(null);
         setGlobalStatus(Status.Idle);
-        localStorage.removeItem('edt_unified_table'); 
+        
+        // CRUCIAL: On NE supprime PAS le unifiedTable ni le localStorage ici.
+        // Cela permet à l'utilisateur suivant (sur le même PC) de voir le document généré.
+        // setUnifiedTable(null); // <-- Commenté pour persistance visuelle immédiate au re-login
+        // localStorage.removeItem('edt_unified_table'); // <-- Commenté pour persistance stockage
     };
 
     const handleFileChange = (selectedFiles: File[]) => {
@@ -291,6 +307,7 @@ export const App: React.FC = () => {
         setUnifiedTable(null);
         setGlobalStatus(Status.Idle);
         setActiveView('extract');
+        // Ici on nettoie car l'Admin commence un NOUVEAU travail
         localStorage.removeItem('edt_unified_table');
     };
 
