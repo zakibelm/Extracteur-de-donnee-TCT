@@ -48,11 +48,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     setError(null);
   };
 
-  const handleSwitchMode = () => {
-    setIsLogin(!isLogin);
+  const setMode = (mode: 'login' | 'signup') => {
+    const login = mode === 'login';
+    setIsLogin(login);
     setError(null);
     setSuccess(null);
     setFormData({ numDome: '', idEmploye: '', telephone: '', email: '' });
+    
+    // Règle métier : L'inscription est forcée en mode Conducteur
+    if (!login) {
+        setSelectedRole('driver');
+    }
   };
 
   const handleSaveConfig = () => {
@@ -88,7 +94,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                 setError("Identifiants incorrects ou compte inexistant.");
             }
         } else {
-            // Inscription
+            // Inscription (Toujours Driver ici)
             if (!formData.telephone?.trim()) {
                 setError("Le numéro de téléphone est requis pour l'inscription.");
                 setIsLoading(false);
@@ -177,15 +183,38 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
       </Modal>
 
       <div className="max-w-md w-full">
-        {/* Titre externe ou intégré - Ici intégré au dessus du form comme demandé */}
-        
-        <div className="bg-slate-800 rounded-xl shadow-2xl overflow-hidden border border-slate-700">
+        <div className="bg-slate-800 rounded-xl shadow-2xl overflow-hidden border border-slate-700 flex flex-col">
+          
+          {/* TABS HEADER */}
+          <div className="flex border-b border-slate-700">
+            <button
+                onClick={() => setMode('login')}
+                className={`flex-1 py-4 text-sm font-bold uppercase tracking-wider transition-colors ${
+                    isLogin 
+                    ? 'bg-slate-800 text-emerald-400 border-b-2 border-emerald-400' 
+                    : 'bg-slate-900/50 text-slate-500 hover:text-slate-300'
+                }`}
+            >
+                Connexion
+            </button>
+            <button
+                onClick={() => setMode('signup')}
+                className={`flex-1 py-4 text-sm font-bold uppercase tracking-wider transition-colors ${
+                    !isLogin 
+                    ? 'bg-slate-800 text-sky-400 border-b-2 border-sky-400' 
+                    : 'bg-slate-900/50 text-slate-500 hover:text-slate-300'
+                }`}
+            >
+                Inscription
+            </button>
+          </div>
+
           <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 p-6 text-center">
             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 backdrop-blur-sm">
               <span className="text-2xl font-bold text-white">ADT</span>
             </div>
             <h2 className="text-xl font-bold text-white">
-              {isLogin ? 'Bienvenue' : 'Créer un compte'}
+              {isLogin ? 'Bienvenue' : 'Nouveau Compte'}
             </h2>
           </div>
 
@@ -198,16 +227,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     {/* Carte Administrateur */}
                     <button
                         type="button"
-                        onClick={() => setSelectedRole('admin')}
+                        onClick={() => isLogin && setSelectedRole('admin')}
+                        disabled={!isLogin}
                         className={`relative p-4 rounded-lg border-2 flex flex-col items-center justify-center text-center transition-all duration-200 ${
                             selectedRole === 'admin'
                                 ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-lg shadow-emerald-500/10'
-                                : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
+                                : !isLogin
+                                    ? 'border-slate-800 bg-slate-900/50 text-slate-600 cursor-not-allowed opacity-50'
+                                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
                         }`}
                     >
                         {selectedRole === 'admin' && (
                             <div className="absolute top-2 right-2">
                                 <Icons.CheckCircle className="w-4 h-4 text-emerald-500" />
+                            </div>
+                        )}
+                        {!isLogin && (
+                             <div className="absolute top-2 right-2 bg-slate-700 text-[10px] text-slate-400 px-1.5 rounded">
+                                Réservé
                             </div>
                         )}
                         <Icons.UserCog className={`w-8 h-8 mb-2 ${selectedRole === 'admin' ? 'text-emerald-400' : 'text-slate-500'}`} />
@@ -312,4 +349,36 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
 
               {error && (
                 <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-start">
-                  <Icons.XCircle className="w-5 h-5 mr-2 flex-shrink-0
+                  <Icons.XCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {success && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400 text-sm flex items-start">
+                  <Icons.CheckCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+                  <span>{success}</span>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className={`w-full ${selectedRole === 'admin' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'}`}
+              >
+                {isLoading ? (
+                  <>
+                    <Icons.Loader className="animate-spin mr-2" />
+                    Traitement...
+                  </>
+                ) : (
+                  isLogin ? 'Se connecter' : "S'inscrire"
+                )}
+              </Button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
