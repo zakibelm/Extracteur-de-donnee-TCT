@@ -16,6 +16,7 @@ interface MainContentProps {
     error: string | null;
     unifiedTable: TableData | null;
     onPrint: (headers: string[], rows: string[][]) => void;
+    onDownloadPdf: (headers: string[], rows: string[][]) => void;
     onTableUpdate: (table: TableData) => void;
     user: User;
     onDeleteResult: (id: string) => void;
@@ -31,6 +32,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     error,
     unifiedTable,
     onPrint,
+    onDownloadPdf,
     onTableUpdate,
     user,
     onDeleteResult,
@@ -133,6 +135,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                          <FinalDocumentView
                             tableData={unifiedTable}
                             onPrint={onPrint}
+                            onDownloadPdf={onDownloadPdf}
                             onTableUpdate={onTableUpdate}
                             user={user}
                         />
@@ -141,6 +144,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                         <ReportView
                             tableData={unifiedTable}
                             onPrint={onPrint}
+                            onDownloadPdf={onDownloadPdf}
                         />
                     )}
                     {/* Fallback pour utilisateur standard si aucun tableau n'est chargé */}

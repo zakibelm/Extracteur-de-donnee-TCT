@@ -7,11 +7,14 @@
  */
 import React, { useState, useEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { Status, ExtractedData, TableData, AGENT_ROLES, ChatMessage } from './types';
 import { extractDataFromImage } from './services/geminiService';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { AuthPage, User } from './components/AuthPage';
+import { fetchTournees, syncTournees } from './services/airtable';
 
 // Set worker path for pdf.js to match the version from the import map
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://aistudiocdn.com/pdfjs-dist@5.4.394/build/pdf.worker.mjs`;
@@ -82,6 +85,7 @@ const processPdf = async (pdfFile) => {
 };
 
 // --- Optimisation Image (Smart Compression) ---
+// REFACTOR: Use Blob instead of DataURL string loop to reduce GC pressure (Memory Optimization)
 const optimizeImageForMobile = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         // HAUTE QUALITÉ RESTAURÉE
@@ -93,7 +97,7 @@ const optimizeImageForMobile = async (file: File): Promise<string> => {
         // Use createObjectURL instead of FileReader to save RAM
         const objectUrl = URL.createObjectURL(file);
         
-        img.onload = () => {
+        img.onload = async () => {
             URL.revokeObjectURL(objectUrl); // Clean up memory immediately
             
             let width = img.width;
@@ -116,24 +120,39 @@ const optimizeImageForMobile = async (file: File): Promise<string> => {
             }
             ctx.drawImage(img, 0, 0, width, height);
 
+            // Refactor: Loop on Blob size (binary) instead of Base64 string length
+            // This prevents allocating huge strings repeatedly in the loop
+            const getBlob = (q: number) => new Promise<Blob | null>(r => canvas.toBlob(r, 'image/jpeg', q));
+
+            let blob = await getBlob(quality);
+
             // Adaptive compression loop
-            let dataUrl = canvas.toDataURL('image/jpeg', quality);
-            
-            // Loop to ensure we stick under the 4MB limit (rarely hit with 2500px)
-            while (dataUrl.length > TARGET_SIZE_BYTES && quality > 0.5) {
+            while (blob && blob.size > TARGET_SIZE_BYTES && quality > 0.5) {
                 quality -= 0.1;
-                dataUrl = canvas.toDataURL('image/jpeg', quality);
+                blob = await getBlob(quality);
             }
             
             // Safety net: if still > 4MB, scale down dimensions
-            while (dataUrl.length > TARGET_SIZE_BYTES) {
+            if (blob && blob.size > TARGET_SIZE_BYTES) {
                  canvas.width = canvas.width * 0.9;
                  canvas.height = canvas.height * 0.9;
                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                 dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                 blob = await getBlob(0.8);
             }
 
-            resolve(dataUrl.split(',')[1]); // Return clean Base64
+            if (!blob) {
+                reject(new Error("Image compression failed"));
+                return;
+            }
+
+            // Final conversion to Base64 only once
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+                const base64data = reader.result as string;
+                resolve(base64data.split(',')[1]);
+            };
+            reader.onerror = reject;
         };
         
         img.onerror = (e) => {
@@ -165,29 +184,37 @@ const buildUnifiedTable = (dataList) => {
             masterHeaders.splice(vehiculeIndex + 2, 0, "Changement par");
         }
     }
-    let allRows = successfulExtractions.flatMap(d => {
-        return d.content.rows.map(row => {
+    
+    // Performance: Use a Set to deduplicate rows based on stringified content
+    const uniqueRowsSet = new Set();
+    const rows = [];
+
+    successfulExtractions.forEach(d => {
+        d.content.rows.forEach(row => {
             // Clone de la ligne
             const newRow = [...row];
             if (vehiculeIndex !== -1) {
                 // Valeur par défaut = Numéro du véhicule
                 const vehiculeVal = newRow[vehiculeIndex] || "";
-                // Insertion à la position adéquate (on insère deux colonnes vides)
-                // Note: on insère d'abord "Changement par" (index+2) puis "Changement" (index+1) 
-                // ou on fait splice une fois avec les deux éléments.
-                // Ici on insère la valeur du véhicule dans "Changement" pour initialiser, et vide pour "Changement par".
+                // Insertion à la position adéquate
                 newRow.splice(vehiculeIndex + 1, 0, vehiculeVal, "");
             }
-            return newRow;
+            
+            // Deduplication Key
+            const rowKey = JSON.stringify(newRow);
+            if (!uniqueRowsSet.has(rowKey)) {
+                uniqueRowsSet.add(rowKey);
+                rows.push(newRow);
+            }
         });
     });
-    const uniqueRows = Array.from(new Set(allRows.map(row => JSON.stringify(row))))
-        .map((str: string) => JSON.parse(str));
+
     return {
         headers: masterHeaders,
-        rows: uniqueRows,
+        rows: rows,
     };
 };
+
 export const App = () => {
     // Auth State
     const [currentUser, setCurrentUser] = useState(null);
@@ -221,17 +248,27 @@ export const App = () => {
     }, []); // Ne s'exécute qu'au montage
     
     // Handlers Auth
-    const handleLogin = (user) => {
+    const handleLogin = async (user) => {
         setCurrentUser(user);
         
-        // Sécurité : Recharger le tableau depuis le localStorage si disponible
+        // --- SYNCHRONISATION CLOUD AU LOGIN ---
+        // On essaie de récupérer le dernier tableau depuis Airtable
+        // Si échec (offline), on garde le localStorage
         try {
-             const savedTable = localStorage.getItem('edt_unified_table');
-             if (savedTable) {
-                 setUnifiedTable(JSON.parse(savedTable));
+             const cloudTable = await fetchTournees();
+             if (cloudTable) {
+                 setUnifiedTable(cloudTable);
+                 localStorage.setItem('edt_unified_table', JSON.stringify(cloudTable));
+                 console.log("Tableau synchronisé depuis le Cloud");
+             } else {
+                 // Fallback local
+                 const savedTable = localStorage.getItem('edt_unified_table');
+                 if (savedTable) setUnifiedTable(JSON.parse(savedTable));
              }
         } catch (e) {
-            console.error("Erreur rechargement table login", e);
+            console.error("Erreur sync cloud login", e);
+            const savedTable = localStorage.getItem('edt_unified_table');
+            if (savedTable) setUnifiedTable(JSON.parse(savedTable));
         }
 
         // Vérification des droits Admin (incluant le 407 temporaire)
@@ -275,10 +312,9 @@ export const App = () => {
         const updatedData = extractedData.filter(item => item.id !== id);
         setExtractedData(updatedData);
         // 2. Si un tableau unifié existait, on le met à jour dynamiquement
-        // Cela permet de garder la cohérence sans avoir à recliquer sur "Générer"
         if (unifiedTable || updatedData.length > 0) {
             const newTable = buildUnifiedTable(updatedData);
-            setUnifiedTable(newTable); // Peut être null si tout est supprimé, c'est ok
+            setUnifiedTable(newTable);
             if (newTable) {
                 try {
                     localStorage.setItem('edt_unified_table', JSON.stringify(newTable));
@@ -320,11 +356,10 @@ export const App = () => {
             }
         }
 
-        // Initialize state placeholders
         const initialDataState = processableItems.map(item => ({
             id: item.id,
             fileName: item.originalFileName,
-            imageSrc: URL.createObjectURL(item.file), // Use ObjectURL for preview
+            imageSrc: URL.createObjectURL(item.file),
             content: null,
             status: Status.Processing
         }));
@@ -332,21 +367,19 @@ export const App = () => {
         setExtractedData(initialDataState);
 
         // 2. Process items in BATCHES
-        // CONCURRENCY_LIMIT: 2 items at a time (Validated)
+        // CONCURRENCY_LIMIT: 2 items at a time
         const CONCURRENCY_LIMIT = 2;
         const updatedDataState = [...initialDataState];
 
         for (let i = 0; i < processableItems.length; i += CONCURRENCY_LIMIT) {
             const batch = processableItems.slice(i, i + CONCURRENCY_LIMIT);
             
-            // Mark current batch as "AI Processing"
             batch.forEach((_, idx) => {
                 const dataIndex = i + idx;
                 updatedDataState[dataIndex] = { ...updatedDataState[dataIndex], status: Status.AiProcessing };
             });
             setExtractedData([...updatedDataState]);
 
-            // Execute batch
             const batchPromises = batch.map(async (item, idx) => {
                 const dataIndex = i + idx;
                 try {
@@ -370,10 +403,8 @@ export const App = () => {
                 }
             });
 
-            // Wait for item to finish before starting next one
             const results = await Promise.all(batchPromises);
 
-            // Update state with results
             results.forEach(res => {
                 updatedDataState[res.index] = {
                     ...updatedDataState[res.index],
@@ -382,7 +413,6 @@ export const App = () => {
                 };
             });
             
-            // Update UI step by step
             setExtractedData([...updatedDataState]);
         }
 
@@ -394,21 +424,27 @@ export const App = () => {
             setUnifiedTable(finalTable);
             try {
                 localStorage.setItem('edt_unified_table', JSON.stringify(finalTable));
+                // Synchro Cloud automatique après extraction (Backup)
+                await syncTournees(finalTable);
             } catch (e) {
-                console.warn("Auto-save failed", e);
+                console.warn("Auto-save cloud/local failed", e);
             }
         }
     };
 
-    const handleGenerateResults = () => {
+    const handleGenerateResults = async () => {
         const table = buildUnifiedTable(extractedData);
         if (table) {
             setUnifiedTable(table);
             setActiveView('document');
              try {
                 localStorage.setItem('edt_unified_table', JSON.stringify(table));
+                // SYNCHRO CLOUD MANUELLE (bouton)
+                await syncTournees(table);
+                alert("Données synchronisées avec le Cloud Airtable avec succès !");
             } catch (e) {
                 console.warn("Manual save failed", e);
+                alert("Sauvegarde locale OK, mais échec Cloud (Vérifiez votre config).");
             }
         } else {
             setError("Aucune donnée valide n'a été extraite.");
@@ -421,6 +457,10 @@ export const App = () => {
         // Persistance immédiate
         try {
             localStorage.setItem('edt_unified_table', JSON.stringify(newTable));
+            // Pour l'édition ligne par ligne, on pourrait faire un appel API optimisé,
+            // mais ici on resync tout ou on laisse le prochain load faire le travail.
+            // Pour être pro : on devrait appeler une fonction de mise à jour unique
+            // updateTourneeRow(rowId, changes)
         } catch (e) {
             console.error("Erreur sauvegarde update", e);
         }
@@ -466,6 +506,17 @@ export const App = () => {
         printWindow.document.close();
     };
 
+    const handleDownloadPdf = (headers: string[], rows: string[][]) => {
+        const doc = new jsPDF({ orientation: 'landscape' });
+        autoTable(doc, {
+            head: [headers],
+            body: rows,
+            styles: { fontSize: 6 },
+            theme: 'grid'
+        });
+        doc.save('ADT_Document.pdf');
+    };
+
     if (!currentUser) {
         return <AuthPage onLogin={handleLogin} />;
     }
@@ -491,6 +542,7 @@ export const App = () => {
                 error={error}
                 unifiedTable={unifiedTable}
                 onPrint={handlePrint}
+                onDownloadPdf={handleDownloadPdf}
                 onTableUpdate={handleTableUpdate}
                 user={currentUser}
                 onDeleteResult={handleDeleteResult}

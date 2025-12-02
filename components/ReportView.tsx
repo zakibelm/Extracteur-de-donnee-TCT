@@ -7,9 +7,10 @@ import { Icons } from './Icons';
 interface ReportViewProps {
     tableData: TableData | null;
     onPrint: (headers: string[], rows: string[][]) => void;
+    onDownloadPdf: (headers: string[], rows: string[][]) => void;
 }
 
-export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint }) => {
+export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDownloadPdf }) => {
     
     // Détermination des colonnes et filtrage
     const { headers, filteredRows, changementParIndex } = useMemo(() => {
@@ -53,6 +54,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint }) =>
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
+                        <Button onClick={() => onDownloadPdf(headers, filteredRows)} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3" disabled={filteredRows.length === 0}>
+                             <Icons.FilePdf className="mr-2" /> PDF
+                        </Button>
                         <Button 
                             onClick={() => onPrint(headers, filteredRows)} 
                             className="bg-slate-500 hover:bg-slate-600 text-sm py-2 px-3"
