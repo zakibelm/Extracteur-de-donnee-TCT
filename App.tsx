@@ -261,13 +261,20 @@ export const App = () => {
     };
     
     // Callback pour mettre à jour le tableau depuis FinalDocumentView (édition manuelle)
-    const handleTableUpdate = (newTable: TableData) => {
+    const handleTableUpdate = async (newTable: TableData) => {
         setUnifiedTable(newTable);
         // Persistance immédiate
         try {
             localStorage.setItem('edt_unified_table', JSON.stringify(newTable));
         } catch (e) {
             console.error("Erreur sauvegarde update", e);
+        }
+
+        // Sauvegarde silencieuse côté Airtable pour refléter les changements chauffeur
+        try {
+            await syncTournees(newTable);
+        } catch (e) {
+            console.warn("Sync Airtable après modification échouée", e);
         }
     };
 

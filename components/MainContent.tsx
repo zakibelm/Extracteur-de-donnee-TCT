@@ -17,7 +17,7 @@ interface MainContentProps {
     unifiedTable: TableData | null;
     onPrint: (headers: string[], rows: string[][]) => void;
     onDownloadPdf: (headers: string[], rows: string[][]) => void;
-    onTableUpdate: (table: TableData) => void;
+    onTableUpdate: (table: TableData) => Promise<void> | void;
     user: User;
     onDeleteResult: (id: string) => void;
     isAdmin: boolean;
