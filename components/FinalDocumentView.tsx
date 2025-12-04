@@ -10,7 +10,7 @@ interface FinalDocumentViewProps {
     tableData: TableData | null;
     onPrint: (headers: string[], rows: string[][]) => void;
     onDownloadPdf: (headers: string[], rows: string[][]) => void;
-    onTableUpdate: (table: TableData) => void;
+    onTableUpdate: (table: TableData) => Promise<void> | void;
     user: User;
 }
 
@@ -23,6 +23,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
 
     // États pour la gestion de la confirmation
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isSavingChange, setIsSavingChange] = useState(false);
     const [pendingChange, setPendingChange] = useState<{
         row: string[];
         oldValue: string;
@@ -30,6 +31,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         tournee: string;
     } | null>(null);
     const [focusedValue, setFocusedValue] = useState<string>('');
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     // Synchronisation initiale
     useEffect(() => {
@@ -134,12 +136,15 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         }
     };
 
-    const confirmChange = () => {
+    const confirmChange = async () => {
         if (tableData && pendingChange) {
             // Copie sécurisée pour l'état React
+            const previousRows = rows.map(r => [...r]);
             const rowIndex = rows.indexOf(pendingChange.row);
-            
+
             if (rowIndex !== -1) {
+                setIsSavingChange(true);
+                let saveSucceeded = false;
                 const newRows = [...rows];
                 const newRow = [...newRows[rowIndex]];
                 
@@ -161,18 +166,32 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 
                 newRows[rowIndex] = newRow;
                 setRows(newRows);
-                
+
                 // Persistance globale (Local Storage pour la journée)
                 const newTable = {
                     ...tableData,
                     rows: newRows
                 };
-                onTableUpdate(newTable);
+
+                try {
+                    await onTableUpdate(newTable);
+                    setSaveError(null);
+                    saveSucceeded = true;
+                } catch (err) {
+                    console.error('Sync Airtable/local échouée', err);
+                    setRows(previousRows);
+                    setSaveError("La sauvegarde a échoué. Merci de réessayer ou de vérifier la connexion.");
+                } finally {
+                    setIsSavingChange(false);
+                }
+
+                if (saveSucceeded) {
+                    setIsModalOpen(false);
+                    setPendingChange(null);
+                    setFocusedValue('');
+                }
             }
         }
-        setIsModalOpen(false);
-        setPendingChange(null);
-        setFocusedValue('');
     };
 
     const cancelChange = () => {
@@ -183,6 +202,8 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         setIsModalOpen(false);
         setPendingChange(null);
         setFocusedValue('');
+        setSaveError(null);
+        setIsSavingChange(false);
     };
 
     const resetFilters = () => {
@@ -218,13 +239,19 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                         </div>
                     </div>
 
+                    {saveError && (
+                        <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded p-3">
+                            {saveError}
+                        </p>
+                    )}
+
                     <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-slate-700">
-                        <Button onClick={cancelChange} className="bg-slate-600 hover:bg-slate-500">
+                        <Button onClick={cancelChange} className="bg-slate-600 hover:bg-slate-500" disabled={isSavingChange}>
                             Annuler
                         </Button>
-                        <Button onClick={confirmChange} className="bg-emerald-600 hover:bg-emerald-700">
+                        <Button onClick={confirmChange} className="bg-emerald-600 hover:bg-emerald-700" disabled={isSavingChange}>
                             <Icons.CheckCircle className="mr-2" />
-                            Valider le changement
+                            {isSavingChange ? 'Sauvegarde...' : 'Valider le changement'}
                         </Button>
                     </div>
                 </div>
