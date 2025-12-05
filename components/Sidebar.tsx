@@ -9,10 +9,17 @@ import { User } from './AuthPage';
 interface SidebarProps {
     isSidebarOpen: boolean;
     setIsSidebarOpen: (isOpen: boolean) => void;
-    files: File[];
-    onFileChange: (files: File[]) => void;
-    onExtractData: () => void;
-    globalStatus: Status;
+    // TCT
+    tctFiles: File[];
+    onTctFileChange: (files: File[]) => void;
+    onTctExtractData: () => void;
+    tctGlobalStatus: Status;
+    // Olymel
+    olymelFiles: File[];
+    onOlymelFileChange: (files: File[]) => void;
+    onOlymelExtractData: () => void;
+    olymelGlobalStatus: Status;
+    // Commun
     user?: User;
     onLogout?: () => void;
 }
@@ -20,13 +27,24 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
     isSidebarOpen,
     setIsSidebarOpen,
-    files,
-    onFileChange,
-    onExtractData,
-    globalStatus,
+    tctFiles,
+    onTctFileChange,
+    onTctExtractData,
+    tctGlobalStatus,
+    olymelFiles,
+    onOlymelFileChange,
+    onOlymelExtractData,
+    olymelGlobalStatus,
     user,
     onLogout
 }) => {
+    const [activeSection, setActiveSection] = React.useState<'tct' | 'olymel'>('tct');
+
+    const currentFiles = activeSection === 'tct' ? tctFiles : olymelFiles;
+    const currentOnFileChange = activeSection === 'tct' ? onTctFileChange : onOlymelFileChange;
+    const currentOnExtractData = activeSection === 'tct' ? onTctExtractData : onOlymelExtractData;
+    const currentGlobalStatus = activeSection === 'tct' ? tctGlobalStatus : olymelGlobalStatus;
+
     return (
         <aside className={`relative bg-slate-800 border-r border-slate-700 flex flex-col transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-96' : 'w-20'}`}>
             <div className="flex-grow p-4 overflow-y-auto flex flex-col">
@@ -39,22 +57,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <h1 className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
                                 ADT
                             </h1>
-                            <p className="text-sm text-slate-400">Extracteur de Données</p>
+                            <p className="text-sm text-slate-400">Taxi Coop Terrebonne</p>
                         </div>
                     )}
                 </header>
-                
+
                 {isSidebarOpen ? (
                     <>
-                        <FileUploader onFileChange={onFileChange} />
-                        {files.length > 0 && (
+                        {/* Section Tabs */}
+                        <div className="flex gap-2 mb-4">
+                            <button
+                                onClick={() => setActiveSection('tct')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${activeSection === 'tct'
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-slate-700/50 text-slate-400 hover:text-slate-300'
+                                    }`}
+                            >
+                                TCT
+                            </button>
+                            <button
+                                onClick={() => setActiveSection('olymel')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${activeSection === 'olymel'
+                                        ? 'bg-cyan-600 text-white'
+                                        : 'bg-slate-700/50 text-slate-400 hover:text-slate-300'
+                                    }`}
+                            >
+                                Olymel
+                            </button>
+                        </div>
+
+                        <FileUploader onFileChange={currentOnFileChange} />
+                        {currentFiles.length > 0 && (
                             <div className="mt-8">
                                 <Button
-                                    onClick={onExtractData}
-                                    disabled={globalStatus === Status.Processing}
+                                    onClick={currentOnExtractData}
+                                    disabled={currentGlobalStatus === Status.Processing}
                                     className="w-full bg-emerald-600 hover:bg-emerald-700"
                                 >
-                                    {globalStatus === Status.Processing ? (
+                                    {currentGlobalStatus === Status.Processing ? (
                                         <>
                                             <Icons.Loader className="animate-spin mr-2" />
                                             Traitement...
@@ -88,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     <p className="text-xs text-slate-400 truncate">ID: {user?.idEmploye}</p>
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 onClick={onLogout}
                                 className="w-full flex items-center justify-center px-3 py-2 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                             >
@@ -97,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </button>
                         </div>
                     ) : (
-                        <button 
+                        <button
                             onClick={onLogout}
                             className="w-full flex justify-center p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                             title="Se déconnecter"

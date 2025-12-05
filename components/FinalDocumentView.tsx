@@ -17,7 +17,7 @@ interface FinalDocumentViewProps {
 export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData, onPrint, onDownloadPdf, onTableUpdate, user }) => {
     const [tourneeFilter, setTourneeFilter] = useState('');
     const [vehiculeFilter, setVehiculeFilter] = useState('');
-    
+
     // État local pour les lignes
     const [rows, setRows] = useState<string[][]>([]);
 
@@ -78,14 +78,47 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         if (!rows || rows.length === 0) return [];
 
         let result = rows.filter(row => {
-            const tourneeMatch = tourneeIndex === -1 || !tourneeFilter || row[tourneeIndex]?.toLowerCase().includes(tourneeFilter.toLowerCase());
-            
+            let tourneeMatch = true;
+            if (tourneeIndex !== -1 && tourneeFilter) {
+                const cellValue = (row[tourneeIndex] || '');
+                const searchTerms = tourneeFilter.split('+').map(s => s.trim()).filter(s => s.length > 0);
+                if (searchTerms.length > 0) {
+                    tourneeMatch = searchTerms.some(term => {
+                        // Pour les tournées (format TCT0034), on cherche une correspondance exacte ou sur les chiffres finaux
+                        const lowerCell = cellValue.toLowerCase();
+                        const lowerTerm = term.toLowerCase();
+
+                        // Correspondance exacte
+                        if (lowerCell === lowerTerm) return true;
+
+                        // Si le terme est numérique, chercher TCT + terme avec padding de zéros
+                        if (/^\d+$/.test(term)) {
+                            // Essayer différents formats: TCT0034, TCT034, TCT34
+                            const patterns = [
+                                `tct${term.padStart(4, '0')}`,  // TCT0034
+                                `tct${term.padStart(3, '0')}`,  // TCT034
+                                `tct${term}`                     // TCT34
+                            ];
+                            return patterns.some(pattern => lowerCell === pattern);
+                        }
+
+                        // Sinon, correspondance partielle
+                        return lowerCell.includes(lowerTerm);
+                    });
+                }
+            }
+
             let vehiculeMatch = true;
             if (vehiculeIndex !== -1 && vehiculeFilter) {
-                const cellValue = (row[vehiculeIndex] || '').toLowerCase();
-                const searchTerms = vehiculeFilter.split('+').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
+                const cellValue = (row[vehiculeIndex] || '');
+                const searchTerms = vehiculeFilter.split('+').map(s => s.trim()).filter(s => s.length > 0);
                 if (searchTerms.length > 0) {
-                    vehiculeMatch = searchTerms.some(term => cellValue.includes(term));
+                    vehiculeMatch = searchTerms.some(term => {
+                        const lowerCell = cellValue.toLowerCase();
+                        const lowerTerm = term.toLowerCase();
+                        // Pour les véhicules, correspondance partielle suffit
+                        return lowerCell.includes(lowerTerm);
+                    });
                 }
             }
             return tourneeMatch && vehiculeMatch;
@@ -118,7 +151,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         if (newValue === focusedValue) return;
 
         const tourneeVal = tourneeIndex !== -1 ? rowRef[tourneeIndex] : 'Inconnue';
-        
+
         setPendingChange({
             row: rowRef,
             oldValue: focusedValue,
@@ -138,16 +171,16 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         if (tableData && pendingChange) {
             // Copie sécurisée pour l'état React
             const rowIndex = rows.indexOf(pendingChange.row);
-            
+
             if (rowIndex !== -1) {
                 const newRows = [...rows];
                 const newRow = [...newRows[rowIndex]];
-                
+
                 // 1. Mettre à jour la colonne Changement
                 if (changementIndex !== -1) {
                     newRow[changementIndex] = pendingChange.newValue;
                 }
-                
+
                 // 2. Mettre à jour la colonne Véhicule (Assignation)
                 if (vehiculeIndex !== -1) {
                     newRow[vehiculeIndex] = pendingChange.newValue;
@@ -158,10 +191,10 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                     // Instruction spécifique : "va être num dôme de l utilisateur"
                     newRow[changementParIndex] = user.numDome;
                 }
-                
+
                 newRows[rowIndex] = newRow;
                 setRows(newRows);
-                
+
                 // Persistance globale (Local Storage pour la journée)
                 const newTable = {
                     ...tableData,
@@ -191,7 +224,30 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     };
 
     if (!tableData) {
-        return <div className="p-8 text-center text-slate-400">Aucune donnée à afficher.</div>;
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                <Icons.UploadCloud className="w-20 h-20 text-slate-600 mb-6" />
+                <h2 className="text-3xl font-bold text-slate-300 mb-4">Aucune donnée disponible</h2>
+                <p className="text-slate-400 text-lg mb-6 max-w-md">
+                    Les données TCT n'ont pas encore été extraites et consolidées.
+                </p>
+                {user?.isAdmin ? (
+                    <p className="text-slate-500 text-sm">
+                        Utilisez le panneau de gauche pour téléverser et extraire des fichiers TCT.
+                    </p>
+                ) : (
+                    <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 max-w-md">
+                        <Icons.User className="w-10 h-10 text-cyan-400 mx-auto mb-3" />
+                        <p className="text-slate-400 text-sm">
+                            Vous êtes connecté en tant que <span className="text-cyan-400 font-semibold">{user?.numDome}</span>.
+                        </p>
+                        <p className="text-slate-500 text-sm mt-2">
+                            Veuillez contacter un administrateur pour extraire et charger les données TCT.
+                        </p>
+                    </div>
+                )}
+            </div>
+        );
     }
 
     return (
@@ -200,13 +256,13 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 <div className="space-y-4">
                     <p className="text-slate-300">
                         Vous êtes sur le point de modifier le véhicule pour la tournée <span className="font-bold text-white">{pendingChange?.tournee}</span>.
-                        <br/>
+                        <br />
                         <span className="text-sm text-amber-400 font-bold flex items-center mt-2">
-                            <Icons.CheckCircle className="w-4 h-4 mr-1"/>
+                            <Icons.CheckCircle className="w-4 h-4 mr-1" />
                             Le véhicule assigné sera automatiquement mis à jour.
                         </span>
                     </p>
-                    
+
                     <div className="grid grid-cols-2 gap-4 bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                         <div>
                             <p className="text-xs text-slate-500 uppercase font-bold mb-1">Ancienne valeur</p>
@@ -234,16 +290,16 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                     <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-semibold text-slate-400 block mb-1">Filtrer par Tournée</label>
+                            <label className="text-xs font-semibold text-slate-400 block mb-1">Filtrer par Tournée (Multi: 12345+67890)</label>
                             <input
                                 type="text"
-                                placeholder="ex: 12345"
+                                placeholder="ex: 12345+67890"
                                 value={tourneeFilter}
                                 onChange={(e) => setTourneeFilter(e.target.value)}
                                 className="w-full bg-slate-700 text-slate-200 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                             />
                         </div>
-                         <div>
+                        <div>
                             <label className="text-xs font-semibold text-slate-400 block mb-1">Filtrer par Véhicule (Multi: 220+409)</label>
                             <input
                                 type="text"
@@ -255,10 +311,10 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                         </div>
                     </div>
                     <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2">
-                         <Button onClick={resetFilters} className="bg-slate-600 hover:bg-slate-500 text-sm py-2 px-3">
+                        <Button onClick={resetFilters} className="bg-slate-600 hover:bg-slate-500 text-sm py-2 px-3">
                             Réinitialiser
                         </Button>
-                         <Button onClick={() => onDownloadPdf(tableData.headers, filteredRows)} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3">
+                        <Button onClick={() => onDownloadPdf(tableData.headers, filteredRows)} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3">
                             <Icons.FilePdf className="mr-2" /> PDF
                         </Button>
                         <Button onClick={() => onPrint(tableData.headers, filteredRows)} className="bg-slate-500 hover:bg-slate-600 text-sm py-2 px-3">
@@ -289,11 +345,12 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                     const rawRowId = vehiculeIndex !== -1 ? row[vehiculeIndex] : '';
                                     const normRowId = normalizeId(rawRowId);
                                     const normUserDome = normalizeId(user?.numDome);
-                                    
+
                                     // Permission basée sur la colonne Véhicule (Assignation)
                                     const isMyTour = normUserDome.length > 0 && normRowId === normUserDome;
-                                    
-                                    const canEdit = isMyTour;
+
+                                    // Les admins peuvent tout modifier, les autres seulement leurs propres tournées
+                                    const canEdit = user?.isAdmin || isMyTour;
 
                                     return (
                                         <tr key={rowIndex} className={`border-t border-slate-700 even:bg-slate-700/30 hover:bg-slate-700/50 ${isMyTour ? 'bg-emerald-900/10' : ''}`}>
@@ -302,8 +359,8 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                                     return (
                                                         <td key={cellIndex} className="p-1">
                                                             <div className="relative group">
-                                                                <input 
-                                                                    type="text" 
+                                                                <input
+                                                                    type="text"
                                                                     value={cell}
                                                                     disabled={!canEdit}
                                                                     onFocus={(e) => handleInputFocus(e.target.value)}
@@ -311,12 +368,12 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                                                     onBlur={(e) => handleInputBlur(row, e.target.value)}
                                                                     onKeyDown={(e) => handleKeyDown(e, row, (e.target as HTMLInputElement).value)}
                                                                     className={`w-full px-2 py-1 border rounded transition-all
-                                                                        ${canEdit 
-                                                                            ? 'bg-slate-900 text-emerald-400 border-slate-600 focus:ring-2 focus:ring-emerald-500 focus:outline-none cursor-text' 
+                                                                        ${canEdit
+                                                                            ? 'bg-slate-900 text-emerald-400 border-slate-600 focus:ring-2 focus:ring-emerald-500 focus:outline-none cursor-text'
                                                                             : 'bg-slate-800/50 text-slate-500 border-transparent cursor-not-allowed italic'
                                                                         }`}
-                                                                    title={canEdit 
-                                                                        ? 'Cliquez pour modifier le véhicule' 
+                                                                    title={canEdit
+                                                                        ? 'Cliquez pour modifier le véhicule'
                                                                         : `Verrouillé: Assigné au Dôme "${rawRowId}" (Vous êtes "${user?.numDome}")`}
                                                                 />
                                                                 {!canEdit && (
@@ -331,7 +388,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                                 // Style spécial pour "Changement par"
                                                 if (cellIndex === changementParIndex) {
                                                     return (
-                                                         <td key={cellIndex} className="p-2 text-sky-400 font-medium whitespace-nowrap text-xs">{cell}</td>
+                                                        <td key={cellIndex} className="p-2 text-sky-400 font-medium whitespace-nowrap text-xs">{cell}</td>
                                                     );
                                                 }
                                                 return (
@@ -352,7 +409,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                     </table>
                 </div>
             </div>
-             <div className="flex-shrink-0 p-2 bg-slate-800/50 border-t border-slate-700 text-right text-sm text-slate-400">
+            <div className="flex-shrink-0 p-2 bg-slate-800/50 border-t border-slate-700 text-right text-sm text-slate-400">
                 Affiche {filteredRows.length} sur {rows.length} lignes
             </div>
         </div>
