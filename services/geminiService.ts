@@ -1,8 +1,46 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { Type, Schema } from "@google/genai";
 import { ParsedContent } from '../types';
 
-// This is a hard requirement. The API key must be obtained from this environment variable.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// function callGemini refactored to use Serverless API
+async function callGemini(
+    base64Image: string,
+    mimeType: string,
+    promptText: string,
+    systemInstruction: string,
+    documentType: 'tct' | 'olymel' = 'tct',
+    temperature: number = 0.1
+): Promise<string> {
+
+    // Select correct schema
+    const schema = documentType === 'olymel' ? olymelResponseSchema : tctResponseSchema;
+
+    try {
+        const response = await fetch('/api/gemini', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: promptText,
+                image: base64Image,
+                mimeType: mimeType,
+                systemInstruction: systemInstruction,
+                temperature: temperature,
+                schema: schema
+            })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || `Server Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.text || "";
+
+    } catch (error) {
+        console.error("API Call Failed:", error);
+        throw error;
+    }
+}
 
 // ========== SCHÉMAS TCT ==========
 const TCT_TABLE_HEADERS = [
@@ -206,42 +244,6 @@ function observeData(entries: Record<string, string>[]): ValidationResult {
         hasCriticalErrors: criticalErrors > 0,
         issues
     };
-}
-
-// =========================================================
-// CORE LOGIC
-// =========================================================
-
-async function callGemini(
-    base64Image: string,
-    mimeType: string,
-    promptText: string,
-    systemInstruction: string,
-    documentType: 'tct' | 'olymel' = 'tct',
-    temperature: number = 0.1
-): Promise<string> {
-    const imagePart = {
-        inlineData: {
-            data: base64Image,
-            mimeType: mimeType,
-        },
-    };
-
-    // Sélectionner le schéma approprié
-    const schema = documentType === 'olymel' ? olymelResponseSchema : tctResponseSchema;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro', // Modèle "Thinking" performant
-        contents: { parts: [{ text: promptText }, imagePart] },
-        config: {
-            systemInstruction: systemInstruction,
-            responseMimeType: 'application/json',
-            responseSchema: schema,
-            temperature: temperature,
-        },
-    });
-
-    return response.text || "";
 }
 
 /**
