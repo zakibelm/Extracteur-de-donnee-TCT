@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // 1. CORS Configuration (Best Practice: Allow specific origins in prod, but keeping flexible for now)
+    // 1. CORS Configuration
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -23,18 +23,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { prompt, image, mimeType, systemInstruction, temperature, schema } = req.body;
+        const { prompt, image, mimeType, systemInstruction, temperature, schema, responseMimeType } = req.body;
 
         if (!prompt && !image) {
             return res.status(400).json({ error: 'Payload must contain prompt or image' });
         }
 
         // 3. Construct Google Gemini API Request
-        // We use the REST API directly to avoid Node SDK dependency issues in edge/serverless environments if not strictly needed,
-        // but here we are using standard fetch which is native.
+        // Using v1beta and gemini-2.0-flash-exp to support advanced features (System Instructions, JSON Schema)
 
         const modelParams = `?key=${apiKey}`;
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent${modelParams}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent${modelParams}`;
 
         const parts: any[] = [];
         if (prompt) parts.push({ text: prompt });
@@ -54,16 +53,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         };
 
+        // Advanced Features Support (v1beta / 2.0)
         if (systemInstruction) {
             payload.systemInstruction = {
                 parts: [{ text: systemInstruction }]
             };
         }
 
-        // Add Schema if provided (for strict JSON mode)
+        // JSON Support (Schema OR Explicit MimeType)
         if (schema) {
             payload.generationConfig.responseMimeType = "application/json";
             payload.generationConfig.responseSchema = schema;
+        } else if (responseMimeType) {
+            payload.generationConfig.responseMimeType = responseMimeType;
         }
 
         const response = await fetch(url, {
@@ -75,7 +77,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Gemini API Error:', response.status, errorText);
-            return res.status(response.status).json({ error: `Gemini API Error: ${response.statusText}`, details: errorText });
+            // Try to parse error as JSON for better reporting
+            try {
+                const errorJson = JSON.parse(errorText);
+                return res.status(response.status).json({
+                    error: errorJson.error?.message || response.statusText,
+                    details: errorJson
+                });
+            } catch (e) {
+                return res.status(response.status).json({ error: `Gemini API Error: ${response.statusText}`, details: errorText });
+            }
         }
 
         const data = await response.json();
@@ -84,8 +95,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         return res.status(200).json({ text: text || "" });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Serverless Function Error:', error);
-        return res.status(500).json({ error: 'Internal Server Error' });
+        return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
 }

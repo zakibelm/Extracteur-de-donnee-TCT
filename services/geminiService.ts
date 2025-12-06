@@ -24,7 +24,9 @@ async function callGemini(
 ): Promise<string> {
 
     // Select correct schema
-    const schema = documentType === 'olymel' ? olymelResponseSchema : tctResponseSchema;
+    // Disable Strict Schema for Olymel to avoid 400/500 errors if model struggles with specific constraints
+    // TCT continues to use strict schema as it works well.
+    const schema = documentType === 'olymel' ? undefined : tctResponseSchema;
 
     try {
         // Call our Secure Serverless Proxy
@@ -37,13 +39,15 @@ async function callGemini(
                 mimeType: mimeType,
                 systemInstruction: systemInstruction,
                 temperature: temperature,
-                schema: schema
+                schema: schema,
+                responseMimeType: "application/json" // ALWAYS force JSON mode, even if schema is loose
             })
         });
 
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error || `Server Error: ${response.status}`);
+            const detailedMsg = errData.details ? `${errData.error} : ${JSON.stringify(errData.details)}` : (errData.error || `Server Error: ${response.status}`);
+            throw new Error(detailedMsg);
         }
 
         const data = await response.json();
@@ -238,7 +242,7 @@ export async function extractDataFromImage(
         : `Tu es un extracteur de données expert pour un logiciel de logistique. Fidélité absolue des données requise.`;
 
     const basePrompt = isOlymel
-        ? `Analyse cette image et extrais le tableau "HORAIRE OLYMEL" en JSON valide.`
+        ? `Analyse cette image et extrais le tableau des horaires/transports (souvent titré "HORAIRE OLYMEL" ou similaire) en JSON valide.`
         : `Analyse cette image et extrais le tableau "Affectations des tournées" en JSON valide.`;
 
     try {

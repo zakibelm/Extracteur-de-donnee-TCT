@@ -138,6 +138,13 @@ export const App: React.FC = () => {
     // Section active (TCT ou Olymel)
     const [activeSection, setActiveSection] = useState<'tct' | 'olymel'>('tct');
 
+    // Accordion State (Hoisted from Sidebar for persistence)
+    const [isTctOpen, setIsTctOpen] = useState(true);
+    const [isOlymelOpen, setIsOlymelOpen] = useState(false);
+
+    // DEBUG: Event counters to track handler calls
+    const [olymelChangeEventCount, setOlymelChangeEventCount] = useState(0);
+
     // ========== ÉTATS TCT ==========
     const [tctFiles, setTctFiles] = useState<File[]>([]);
     const [tctExtractedData, setTctExtractedData] = useState<ExtractedData[]>([]);
@@ -350,6 +357,9 @@ export const App: React.FC = () => {
 
     // ========== HANDLERS OLYMEL ==========
     const handleOlymelFileChange = (selectedFiles: File[]) => {
+        setOlymelChangeEventCount(prev => prev + 1);
+        console.log('🔵 [OLYMEL] handleOlymelFileChange called with', selectedFiles.length, 'files:', selectedFiles.map(f => f.name));
+        console.log('🔵 [OLYMEL] Event count now:', olymelChangeEventCount + 1);
         setOlymelFiles(selectedFiles);
         setOlymelExtractedData([]);
         setOlymelError(null);
@@ -361,6 +371,7 @@ export const App: React.FC = () => {
     };
 
     const handleOlymelExtractData = async () => {
+        console.log('🟢 [OLYMEL] handleOlymelExtractData called. Files count:', olymelFiles.length);
         if (olymelFiles.length === 0) return;
 
         setOlymelGlobalStatus(Status.Processing);
@@ -571,56 +582,108 @@ export const App: React.FC = () => {
         return <AuthPage onLogin={handleLogin} />;
     }
 
+    // =========================================================
+    // ERROR BOUNDARY (CRITICAL FOR DEBUGGING BLACK SCREENS)
+    // =========================================================
+    class GlobalErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
+        constructor(props: { children: React.ReactNode }) {
+            super(props);
+            this.state = { hasError: false, error: null };
+        }
+
+        static getDerivedStateFromError(error: Error) {
+            return { hasError: true, error };
+        }
+
+        componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+            console.error("Uncaught Error:", error, errorInfo);
+        }
+
+        render() {
+            if (this.state.hasError) {
+                return (
+                    <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-red-500 p-8">
+                        <h1 className="text-3xl font-bold mb-4">Une erreur critique est survenue</h1>
+                        <div className="bg-slate-800 p-6 rounded-lg border border-red-500/50 max-w-2xl w-full">
+                            <p className="text-xl text-white mb-4">Message d'erreur :</p>
+                            <pre className="text-sm bg-black/50 p-4 rounded overflow-auto whitespace-pre-wrap font-mono">
+                                {this.state.error?.toString()}
+                            </pre>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="mt-6 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                            >
+                                Recharger l'application
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return this.props.children;
+        }
+    }
+
+    // ... existing component ...
+
     console.log('✅ User logged in, showing main app');
     return (
-        <div className="flex h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden">
-            {/* Sidebar visible uniquement pour les admins */}
-            {currentUser?.isAdmin && (
-                <Sidebar
-                    isSidebarOpen={isSidebarOpen}
-                    setIsSidebarOpen={setIsSidebarOpen}
+        <GlobalErrorBoundary>
+            <div className="flex h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden">
+                {/* Sidebar visible uniquement pour les admins */}
+                {currentUser?.isAdmin && (
+                    <Sidebar
+                        isSidebarOpen={isSidebarOpen}
+                        setIsSidebarOpen={setIsSidebarOpen}
+                        // TCT
+                        tctFiles={tctFiles}
+                        onTctFileChange={handleTctFileChange}
+                        onTctExtractData={handleTctExtractData}
+                        tctGlobalStatus={tctGlobalStatus}
+                        isTctOpen={isTctOpen}
+                        setIsTctOpen={setIsTctOpen}
+                        // Olymel
+                        olymelFiles={olymelFiles}
+                        onOlymelFileChange={handleOlymelFileChange}
+                        onOlymelExtractData={handleOlymelExtractData}
+                        olymelGlobalStatus={olymelGlobalStatus}
+                        isOlymelOpen={isOlymelOpen}
+                        setIsOlymelOpen={setIsOlymelOpen}
+                        olymelChangeEventCount={olymelChangeEventCount}
+                        // Commun
+                        user={currentUser}
+                        onLogout={handleLogout}
+                        onSectionChange={setActiveSection}
+                    />
+                )}
+                <MainContent
+                    activeSection={activeSection}
+                    setActiveSection={setActiveSection}
                     // TCT
-                    tctFiles={tctFiles}
-                    onTctFileChange={handleTctFileChange}
-                    onTctExtractData={handleTctExtractData}
-                    tctGlobalStatus={tctGlobalStatus}
+                    activeTctView={activeTctView}
+                    setActiveTctView={setActiveTctView}
+                    tctExtractedData={tctExtractedData}
+                    onTctGenerateResults={handleTctGenerateResults}
+                    tctError={tctError}
+                    tctUnifiedTable={tctUnifiedTable}
+                    onTctTableUpdate={handleTctTableUpdate}
+                    onTctDeleteResult={handleTctDeleteResult}
                     // Olymel
-                    olymelFiles={olymelFiles}
-                    onOlymelFileChange={handleOlymelFileChange}
-                    onOlymelExtractData={handleOlymelExtractData}
-                    olymelGlobalStatus={olymelGlobalStatus}
+                    activeOlymelView={activeOlymelView}
+                    setActiveOlymelView={setActiveOlymelView}
+                    olymelExtractedData={olymelExtractedData}
+                    onOlymelGenerateResults={handleOlymelGenerateResults}
+                    olymelError={olymelError}
+                    olymelUnifiedTable={olymelUnifiedTable}
+                    onOlymelTableUpdate={handleOlymelTableUpdate}
+                    onOlymelDeleteResult={handleOlymelDeleteResult}
                     // Commun
+                    onPrint={handlePrint}
+                    onDownloadPdf={handleDownloadPdf}
                     user={currentUser}
                     onLogout={handleLogout}
                 />
-            )}
-            <MainContent
-                activeSection={activeSection}
-                setActiveSection={setActiveSection}
-                // TCT
-                activeTctView={activeTctView}
-                setActiveTctView={setActiveTctView}
-                tctExtractedData={tctExtractedData}
-                onTctGenerateResults={handleTctGenerateResults}
-                tctError={tctError}
-                tctUnifiedTable={tctUnifiedTable}
-                onTctTableUpdate={handleTctTableUpdate}
-                onTctDeleteResult={handleTctDeleteResult}
-                // Olymel
-                activeOlymelView={activeOlymelView}
-                setActiveOlymelView={setActiveOlymelView}
-                olymelExtractedData={olymelExtractedData}
-                onOlymelGenerateResults={handleOlymelGenerateResults}
-                olymelError={olymelError}
-                olymelUnifiedTable={olymelUnifiedTable}
-                onOlymelTableUpdate={handleOlymelTableUpdate}
-                onOlymelDeleteResult={handleOlymelDeleteResult}
-                // Commun
-                onPrint={handlePrint}
-                onDownloadPdf={handleDownloadPdf}
-                user={currentUser}
-                onLogout={handleLogout}
-            />
-        </div>
+            </div>
+        </GlobalErrorBoundary>
     );
 };
