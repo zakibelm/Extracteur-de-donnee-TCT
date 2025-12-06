@@ -55,12 +55,54 @@
     }
   </style>
 
+  .chat-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1em;
+  margin-bottom: 1em;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  }
+
+  .chat-content th,
+  .chat-content td {
+  border: 1px solid #334155;
+  /* slate-700 */
+  padding: 0.75rem;
+  color: #e2e8f0;
+  /* slate-200 */
+  }
+
+  .chat-content th {
+  background-color: #0284c7;
+  /* sky-600 */
+  color: #ffffff;
+  font-weight: 600;
+  text-align: left;
+  }
+
+  .chat-content tr {
+  background-color: #334155;
+  /* slate-700 */
+  }
+
+  .chat-content tr:nth-child(even) {
+  background-color: #1e293b;
+  /* slate-800 */
+  }
+
+  .chat-content p:first-child {
+  margin-top: 0;
+  }
+
+  .chat-content p:last-child {
+  margin-bottom: 0;
+  }
+  </style>
+
 </head>
 
 <body style="margin: 0; padding: 0;">
-  <div id="debug-banner"
-    style="background: white; color: red; padding: 10px; font-weight: bold; z-index: 9999; position: absolute;">DEBUG:
-    HTML LOADED</div>
   <div id="root" style="width: 100vw; height: 100vh;"></div>
   <script type="module" src="/index.tsx"></script>
 </body>
