@@ -1,5 +1,13 @@
-import { Type, Schema } from "@google/genai";
 import { ParsedContent } from '../types';
+
+// Mocking Google GenAI types to avoid importing the node-only package in the browser
+const Type = {
+    OBJECT: "OBJECT",
+    ARRAY: "ARRAY",
+    STRING: "STRING"
+};
+
+type Schema = any;
 
 // function callGemini refactored to use Serverless API
 async function callGemini(
