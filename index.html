@@ -1,110 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ADT - Extracteur de Données Tabulaires</title>
-  <style>
-    body {
-      background-color: #0f172a;
-    }
-
-    .chat-content table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1em;
-      margin-bottom: 1em;
-      border-radius: 0.5rem;
-      overflow: hidden;
-    }
-
-    .chat-content th,
-    .chat-content td {
-      border: 1px solid #334155;
-      /* slate-700 */
-      padding: 0.75rem;
-      color: #e2e8f0;
-      /* slate-200 */
-    }
-
-    .chat-content th {
-      background-color: #0284c7;
-      /* sky-600 */
-      color: #ffffff;
-      font-weight: 600;
-      text-align: left;
-    }
-
-    .chat-content tr {
-      background-color: #334155;
-      /* slate-700 */
-    }
-
-    .chat-content tr:nth-child(even) {
-      background-color: #1e293b;
-      /* slate-800 */
-    }
-
-    .chat-content p:first-child {
-      margin-top: 0;
-    }
-
-    .chat-content p:last-child {
-      margin-bottom: 0;
-    }
-  </style>
-
-  .chat-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1em;
-  margin-bottom: 1em;
-  border-radius: 0.5rem;
-  overflow: hidden;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ADT - Extracteur de Données Tabulaires</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        background-color: #0f172a;
+      }
+      .chat-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1em;
+        margin-bottom: 1em;
+        border-radius: 0.5rem;
+        overflow: hidden;
+      }
+      .chat-content th, .chat-content td {
+        border: 1px solid #334155; /* slate-700 */
+        padding: 0.75rem;
+        color: #e2e8f0; /* slate-200 */
+      }
+      .chat-content th {
+        background-color: #0284c7; /* sky-600 */
+        color: #ffffff;
+        font-weight: 600;
+        text-align: left;
+      }
+      .chat-content tr {
+        background-color: #334155; /* slate-700 */
+      }
+      .chat-content tr:nth-child(even) {
+        background-color: #1e293b; /* slate-800 */
+      }
+      .chat-content p:first-child {
+        margin-top: 0;
+      }
+       .chat-content p:last-child {
+        margin-bottom: 0;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "pdfjs-dist": "https://aistudiocdn.com/pdfjs-dist@^5.4.394",
+    "react-markdown": "https://esm.sh/react-markdown@9",
+    "remark-gfm": "https://esm.sh/remark-gfm@4",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2"
   }
-
-  .chat-content th,
-  .chat-content td {
-  border: 1px solid #334155;
-  /* slate-700 */
-  padding: 0.75rem;
-  color: #e2e8f0;
-  /* slate-200 */
-  }
-
-  .chat-content th {
-  background-color: #0284c7;
-  /* sky-600 */
-  color: #ffffff;
-  font-weight: 600;
-  text-align: left;
-  }
-
-  .chat-content tr {
-  background-color: #334155;
-  /* slate-700 */
-  }
-
-  .chat-content tr:nth-child(even) {
-  background-color: #1e293b;
-  /* slate-800 */
-  }
-
-  .chat-content p:first-child {
-  margin-top: 0;
-  }
-
-  .chat-content p:last-child {
-  margin-bottom: 0;
-  }
-  </style>
-
+}
+</script>
 </head>
-
-<body style="margin: 0; padding: 0;">
-  <div id="root" style="width: 100vw; height: 100vh;"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
-
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
