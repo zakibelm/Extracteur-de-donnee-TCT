@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Icons } from './Icons';
 import { User } from '../types';
+import { api } from '../services/api';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 
@@ -17,6 +18,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   const [numDome, setNumDome] = useState('');
   const [idEmploye, setIdEmploye] = useState('');
   const [telephone, setTelephone] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -63,7 +65,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
 
   }, { scope: containerRef });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!numDome.trim() || !idEmploye.trim()) {
@@ -71,23 +73,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
       return;
     }
 
-    const user: User = {
-      numDome: numDome.trim(),
-      idEmploye: idEmploye.trim(),
-      telephone: telephone.trim() || undefined,
-      isAdmin: accountType === 'admin' || numDome === '999' || idEmploye === '090'
-    };
+    setIsLoading(true);
 
-    // Exit Animation
-    gsap.to(cardRef.current, {
-      scale: 0.95,
-      opacity: 0,
-      duration: 0.5,
-      onComplete: () => {
-        localStorage.setItem('edt_user', JSON.stringify(user));
-        onLogin(user);
-      }
-    });
+    try {
+      // Determine admin status based on mode/dome OR explicit choice
+      // Here we use the UI toggle primarily, but fallback to logic if needed
+      const isAdmin = accountType === 'admin';
+
+      // Call Backend
+      const user = await api.loginUser(numDome.trim(), idEmploye.trim(), telephone.trim() || undefined, isAdmin);
+
+      // Exit Animation
+      gsap.to(cardRef.current, {
+        scale: 0.95,
+        opacity: 0,
+        duration: 0.5,
+        onComplete: () => {
+          onLogin(user);
+        }
+      });
+
+    } catch (err) {
+      console.error(err);
+      alert("Erreur de connexion. Veuillez vérifier la base de données ou vos identifiants.");
+      setIsLoading(false);
+    }
   };
 
   const switchMode = (newMode: AuthMode) => {
@@ -259,11 +269,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
 
               <button
                 type="submit"
-                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all duration-200 mt-8 relative group border border-white/10"
+                disabled={isLoading}
+                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all duration-200 mt-8 relative group border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">
-                  {mode === 'login' ? 'Accéder à mon espace' : 'Créer mon compte'}
-                  <Icons.ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  {isLoading ? <Icons.Loader className="animate-spin w-5 h-5" /> : (
+                    <>
+                      {mode === 'login' ? 'Accéder à mon espace' : 'Créer mon compte'}
+                      <Icons.ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
                 </span>
               </button>
             </form>
@@ -271,7 +286,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
         </div>
 
         <p className="text-center text-slate-500 text-xs mt-6 opacity-60">
-          &copy; {new Date().getFullYear()} ADT v1.3 • Taxi Coop Terrebonne
+          &copy; {new Date().getFullYear()} ADT v1.4 (Neon Backend) • Taxi Coop Terrebonne
         </p>
       </div>
     </div>

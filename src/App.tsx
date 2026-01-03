@@ -1,7 +1,7 @@
 /**
  * <summary>
  * Architecture refactorisée avec séparation complète TCT et Olymel
- * Chaque section a ses propres états, handlers et localStorage
+ * Backend Integration via src/services/api.ts
  * </summary>
  */
 import React, { useState, useEffect } from 'react';
@@ -11,6 +11,7 @@ import { MainContent } from './components/MainContent';
 import { SettingsView, AppSettings, DEFAULT_SETTINGS } from './components/SettingsView';
 import { ExtractedData, Status, TableData, User } from './types';
 import { extractDataFromImage, ExtractionOptions } from './services/geminiService';
+import { api } from './services/api';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { AuthPage } from './components/AuthPage';
@@ -129,11 +130,11 @@ export const App: React.FC = () => {
     // Section active (TCT ou Olymel ou Settings)
     const [activeSection, setActiveSection] = useState<'tct' | 'olymel' | 'settings'>('tct');
 
-    // Accordion State (Hoisted from Sidebar for persistence)
+    // Accordion State
     const [isTctOpen, setIsTctOpen] = useState(true);
     const [isOlymelOpen, setIsOlymelOpen] = useState(false);
 
-    // DEBUG: Event counters to track handler calls
+    // DEBUG: Event counters
     const [olymelChangeEventCount, setOlymelChangeEventCount] = useState(0);
 
     // Settings State
@@ -151,20 +152,12 @@ export const App: React.FC = () => {
         localStorage.setItem('edt_settings', JSON.stringify(settings));
     }, [settings]);
 
-
     // ========== ÉTATS TCT ==========
     const [tctFiles, setTctFiles] = useState<File[]>([]);
     const [tctExtractedData, setTctExtractedData] = useState<ExtractedData[]>([]);
     const [tctGlobalStatus, setTctGlobalStatus] = useState<Status>(Status.Idle);
     const [tctError, setTctError] = useState<string | null>(null);
-    const [tctUnifiedTable, setTctUnifiedTable] = useState<TableData | null>(() => {
-        try {
-            const saved = localStorage.getItem('edt_tct_unified_table');
-            return saved ? JSON.parse(saved) : null;
-        } catch (e) {
-            return null;
-        }
-    });
+    const [tctUnifiedTable, setTctUnifiedTable] = useState<TableData | null>(null);
     const [activeTctView, setActiveTctView] = useState<'extract' | 'document' | 'report'>('extract');
 
     // ========== ÉTATS OLYMEL ==========
@@ -172,16 +165,32 @@ export const App: React.FC = () => {
     const [olymelExtractedData, setOlymelExtractedData] = useState<ExtractedData[]>([]);
     const [olymelGlobalStatus, setOlymelGlobalStatus] = useState<Status>(Status.Idle);
     const [olymelError, setOlymelError] = useState<string | null>(null);
-    const [olymelUnifiedTable, setOlymelUnifiedTable] = useState<TableData | null>(() => {
-        try {
-            const saved = localStorage.getItem('edt_olymel_unified_table');
-            return saved ? JSON.parse(saved) : null;
-        } catch (e) {
-            return null;
-        }
-    });
+    const [olymelUnifiedTable, setOlymelUnifiedTable] = useState<TableData | null>(null);
     const [activeOlymelView, setActiveOlymelView] = useState<'extract' | 'calendar' | 'report'>('extract');
 
+
+    // Initial Data Load
+    useEffect(() => {
+        const savedUser = localStorage.getItem('edt_user');
+        if (savedUser) {
+            const user = JSON.parse(savedUser);
+            setCurrentUser(user);
+            // Fetch backend data
+            loadHistory(user.numDome);
+        }
+    }, []);
+
+    const loadHistory = async (userId: string) => {
+        try {
+            const tctData = await api.fetchExtractions(userId, 'tct');
+            setTctExtractedData(tctData);
+
+            const olymelData = await api.fetchExtractions(userId, 'olymel');
+            setOlymelExtractedData(olymelData);
+        } catch (e) {
+            console.error("Failed to load history", e);
+        }
+    }
 
     // Effet pour basculer les non-admins vers la vue document
     useEffect(() => {
@@ -197,10 +206,13 @@ export const App: React.FC = () => {
     // Handlers Auth
     const handleLogin = (user: User) => {
         setCurrentUser(user);
+        loadHistory(user.numDome);
     };
 
     const handleLogout = () => {
         setCurrentUser(null);
+        localStorage.removeItem('edt_user');
+
         // Reset states
         setTctFiles([]);
         setTctExtractedData([]);
@@ -211,53 +223,41 @@ export const App: React.FC = () => {
         setOlymelExtractedData([]);
         setOlymelUnifiedTable(null);
         setOlymelGlobalStatus(Status.Idle);
-
-        localStorage.removeItem('edt_tct_unified_table');
-        localStorage.removeItem('edt_olymel_unified_table');
     };
 
     // ========== HANDLERS TCT ==========
     const handleTctFileChange = (selectedFiles: File[]) => {
         setTctFiles(selectedFiles);
-        setTctExtractedData([]);
+        setTctExtractedData((prev) => prev); // Don't clear immediately, just append new files in extract logic
         setTctError(null);
-        setTctUnifiedTable(null);
         setTctGlobalStatus(Status.Idle);
         setActiveTctView('extract');
         setActiveSection('tct');
-        localStorage.removeItem('edt_tct_unified_table');
     };
 
-    const handleDeleteResult = (id: string, section: 'tct' | 'olymel') => {
-        if (section === 'tct') {
-            const updatedData = tctExtractedData.filter(item => item.id !== id);
-            setTctExtractedData(updatedData);
+    const handleDeleteResult = async (id: string, section: 'tct' | 'olymel') => {
+        try {
+            await api.deleteExtraction(id);
+            if (section === 'tct') {
+                const updatedData = tctExtractedData.filter(item => item.id !== id);
+                setTctExtractedData(updatedData);
 
-            if (tctUnifiedTable || updatedData.length > 0) {
-                const newTable = buildUnifiedTable(updatedData);
-                if (newTable) {
+                if (tctUnifiedTable || updatedData.length > 0) {
+                    const newTable = buildUnifiedTable(updatedData);
                     setTctUnifiedTable(newTable);
-                    localStorage.setItem('edt_tct_unified_table', JSON.stringify(newTable));
-                } else {
-                    setTctUnifiedTable(null);
-                    localStorage.removeItem('edt_tct_unified_table');
                 }
-            }
-        } else {
-            // Olymel logic duplicate
-            const updatedData = olymelExtractedData.filter(item => item.id !== id);
-            setOlymelExtractedData(updatedData);
+            } else {
+                const updatedData = olymelExtractedData.filter(item => item.id !== id);
+                setOlymelExtractedData(updatedData);
 
-            if (olymelUnifiedTable || updatedData.length > 0) {
-                const newTable = buildUnifiedTable(updatedData);
-                if (newTable) {
+                if (olymelUnifiedTable || updatedData.length > 0) {
+                    const newTable = buildUnifiedTable(updatedData);
                     setOlymelUnifiedTable(newTable);
-                    localStorage.setItem('edt_olymel_unified_table', JSON.stringify(newTable));
-                } else {
-                    setOlymelUnifiedTable(null);
-                    localStorage.removeItem('edt_olymel_unified_table');
                 }
             }
+        } catch (e: any) {
+            console.error(e);
+            alert("Erreur lors de la suppression");
         }
     }
 
@@ -266,13 +266,8 @@ export const App: React.FC = () => {
         if (tctFiles.length === 0) return;
 
         setTctGlobalStatus(Status.Processing);
-        setTctExtractedData([]);
-        setTctError(null);
-        setTctUnifiedTable(null);
 
-        // Nettoyage préventif
-        localStorage.removeItem('edt_tct_unified_table');
-
+        let currentHistory = [...tctExtractedData]; // Persist history
         let processableFiles: ProcessableFile[] = [];
 
         try {
@@ -317,27 +312,23 @@ export const App: React.FC = () => {
 
         setTctGlobalStatus(Status.AiProcessing);
 
-        // Initialiser l'état avec des placeholders pour afficher le chargement
-        const initialDataState = processableFiles.map(f => ({
-            id: f.id,
+        // Initialiser l'état avec des placeholders
+        const placeholders = processableFiles.map(f => ({
+            id: f.id, // Temp ID
             fileName: f.originalFileName.includes(f.file.name) ? f.file.name : f.originalFileName + " (page)",
             imageSrc: `data:${f.mimeType};base64,${f.base64}`,
             content: null,
             status: Status.Processing
         }));
-        setTctExtractedData(initialDataState);
+
+        // Append new items to top
+        setTctExtractedData([...placeholders, ...currentHistory]);
 
         // Traitement parallèle
         const promises = processableFiles.map(async (pFile, index) => {
             try {
-                // Petite mise à jour pour dire que cette image spécifique est chez l'IA
-                setTctExtractedData(prev => {
-                    const newArr = [...prev];
-                    if (newArr[index]) newArr[index].status = Status.AiProcessing;
-                    return newArr;
-                });
+                setTctExtractedData(prev => prev.map(p => p.id === pFile.id ? { ...p, status: Status.AiProcessing } : p));
 
-                // Prepare Options with Settings
                 const options: ExtractionOptions = {
                     apiKey: settings.openRouterApiKey,
                     model: settings.aiModel,
@@ -345,28 +336,32 @@ export const App: React.FC = () => {
                 };
 
                 const content = await extractDataFromImage(pFile.base64, pFile.mimeType, 'tct', options);
-
                 const status = content.headers[0] === 'Erreur' ? Status.Error : Status.Success;
 
-                setTctExtractedData(prev => {
-                    const newArr = [...prev];
-                    if (newArr[index]) {
-                        newArr[index].content = content;
-                        newArr[index].status = status;
-                    }
-                    return newArr;
-                });
+                // SAVE TO BACKEND
+                const savedRecord = await api.saveExtraction({
+                    id: '', // DB assigned
+                    fileName: pFile.originalFileName,
+                    imageSrc: '',
+                    content,
+                    status,
+                    userId: currentUser!.numDome,
+                    section: 'tct'
+                }, currentUser!.numDome, 'tct');
+
+                // Update with real ID
+                setTctExtractedData(prev => prev.map(p => p.id === pFile.id ? {
+                    ...savedRecord,
+                    imageSrc: `data:${pFile.mimeType};base64,${pFile.base64}`
+                } : p));
 
                 return { status };
             } catch (e) {
-                setTctExtractedData(prev => {
-                    const newArr = [...prev];
-                    if (newArr[index]) {
-                        newArr[index].content = { headers: ['Erreur'], rows: [['Echec extraction']] };
-                        newArr[index].status = Status.Error;
-                    }
-                    return newArr;
-                });
+                setTctExtractedData(prev => prev.map(p => p.id === pFile.id ? {
+                    ...p,
+                    content: { headers: ['Erreur'], rows: [['Echec extraction']] },
+                    status: Status.Error
+                } : p));
                 return { status: Status.Error };
             }
         });
@@ -380,11 +375,6 @@ export const App: React.FC = () => {
         if (unified) {
             setTctUnifiedTable(unified);
             setActiveTctView('document');
-            try {
-                localStorage.setItem('edt_tct_unified_table', JSON.stringify(unified));
-            } catch (e) {
-                console.warn("Stockage local saturé, impossible de sauvegarder le document final.", e);
-            }
         } else {
             setTctError("Aucune donnée valide à afficher.");
         }
@@ -392,33 +382,25 @@ export const App: React.FC = () => {
 
     const handleTctTableUpdate = (newTable: TableData) => {
         setTctUnifiedTable(newTable);
-        localStorage.setItem('edt_tct_unified_table', JSON.stringify(newTable));
     }
 
 
     // ========== HANDLERS OLYMEL ==========
     const handleOlymelFileChange = (selectedFiles: File[]) => {
         setOlymelFiles(selectedFiles);
-        setOlymelExtractedData([]);
         setOlymelError(null);
-        setOlymelUnifiedTable(null);
         setOlymelGlobalStatus(Status.Idle);
         setActiveOlymelView('extract');
         setActiveSection('olymel');
-        localStorage.removeItem('edt_olymel_unified_table');
     };
 
     const handleOlymelExtractData = async () => {
         if (olymelFiles.length === 0) return;
 
         setOlymelGlobalStatus(Status.Processing);
-        setOlymelExtractedData([]);
-        setOlymelError(null);
-        setOlymelUnifiedTable(null);
-        localStorage.removeItem('edt_olymel_unified_table');
-
-        // Similar Pre-process...
+        let currentHistory = [...olymelExtractedData];
         let processableFiles: ProcessableFile[] = [];
+
         try {
             for (const file of olymelFiles) {
                 if (file.type === 'application/pdf') {
@@ -426,10 +408,7 @@ export const App: React.FC = () => {
                     for (const page of pageImages) {
                         const base64 = await new Promise<string>((resolve) => {
                             const reader = new FileReader();
-                            reader.onloadend = () => {
-                                const result = reader.result as string;
-                                resolve(result.split(',')[1]);
-                            };
+                            reader.onloadend = () => { resolve((reader.result as string).split(',')[1]); };
                             reader.readAsDataURL(page.file);
                         });
                         processableFiles.push({ ...page, base64, mimeType: 'image/jpeg' });
@@ -437,10 +416,7 @@ export const App: React.FC = () => {
                 } else {
                     const base64 = await new Promise<string>((resolve) => {
                         const reader = new FileReader();
-                        reader.onloadend = () => {
-                            const result = reader.result as string;
-                            resolve(result.split(',')[1]);
-                        };
+                        reader.onloadend = () => { resolve((reader.result as string).split(',')[1]); };
                         reader.readAsDataURL(file);
                     });
                     processableFiles.push({
@@ -460,23 +436,17 @@ export const App: React.FC = () => {
 
         setOlymelGlobalStatus(Status.AiProcessing);
 
-        const initialDataState = processableFiles.map(f => ({
+        const placeholders = processableFiles.map(f => ({
             id: f.id,
             fileName: f.originalFileName.includes(f.file.name) ? f.file.name : f.originalFileName + " (page)",
             imageSrc: `data:${f.mimeType};base64,${f.base64}`,
             content: null,
             status: Status.Processing
         }));
-        setOlymelExtractedData(initialDataState);
+        setOlymelExtractedData([...placeholders, ...currentHistory]);
 
         const promises = processableFiles.map(async (pFile, index) => {
-            // ... parallel logic for Olymel ...
-            // Update status to AI Processing
-            setOlymelExtractedData(prev => {
-                const newArr = [...prev];
-                if (newArr[index]) newArr[index].status = Status.AiProcessing;
-                return newArr;
-            });
+            setOlymelExtractedData(prev => prev.map(p => p.id === pFile.id ? { ...p, status: Status.AiProcessing } : p));
 
             try {
                 const options: ExtractionOptions = {
@@ -488,24 +458,27 @@ export const App: React.FC = () => {
                 const content = await extractDataFromImage(pFile.base64, pFile.mimeType, 'olymel', options);
                 const status = content.headers[0] === 'Erreur' ? Status.Error : Status.Success;
 
-                setOlymelExtractedData(prev => {
-                    const newArr = [...prev];
-                    if (newArr[index]) {
-                        newArr[index].content = content;
-                        newArr[index].status = status;
-                    }
-                    return newArr;
-                });
+                const savedRecord = await api.saveExtraction({
+                    id: '',
+                    fileName: pFile.originalFileName,
+                    imageSrc: '',
+                    content,
+                    status,
+                    userId: currentUser!.numDome,
+                    section: 'olymel'
+                }, currentUser!.numDome, 'olymel');
+
+                setOlymelExtractedData(prev => prev.map(p => p.id === pFile.id ? {
+                    ...savedRecord,
+                    imageSrc: `data:${pFile.mimeType};base64,${pFile.base64}`
+                } : p));
+
             } catch (e) {
-                // Error handling
-                setOlymelExtractedData(prev => {
-                    const newArr = [...prev];
-                    if (newArr[index]) {
-                        newArr[index].content = { headers: ['Erreur'], rows: [['Echec']] };;
-                        newArr[index].status = Status.Error;
-                    }
-                    return newArr;
-                });
+                setOlymelExtractedData(prev => prev.map(p => p.id === pFile.id ? {
+                    ...p,
+                    content: { headers: ['Erreur'], rows: [['Echec']] },
+                    status: Status.Error
+                } : p));
             }
         });
 
@@ -518,7 +491,6 @@ export const App: React.FC = () => {
         if (unified) {
             setOlymelUnifiedTable(unified);
             setActiveOlymelView('calendar');
-            localStorage.setItem('edt_olymel_unified_table', JSON.stringify(unified));
         } else {
             setOlymelError("Aucune donnée valide à afficher.");
         }
