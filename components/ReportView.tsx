@@ -54,12 +54,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button 
-                            onClick={() => onDownloadPdf(headers, filteredRows)} 
-                            className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3"
-                            disabled={filteredRows.length === 0}
-                        >
-                            <Icons.FilePdf className="mr-2" /> Exporter PDF
+                        <Button onClick={() => onDownloadPdf(headers, filteredRows)} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3" disabled={filteredRows.length === 0}>
+                             <Icons.FilePdf className="mr-2" /> PDF
                         </Button>
                         <Button 
                             onClick={() => onPrint(headers, filteredRows)} 
