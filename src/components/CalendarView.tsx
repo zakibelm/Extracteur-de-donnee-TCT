@@ -1,9 +1,7 @@
-
 import React, { useMemo, useState } from 'react';
-import { TableData } from '../types';
+import { TableData, User } from '../types';
 import { Button } from './Button';
 import { Icons } from './Icons';
-import { User } from './AuthPage';
 
 interface CalendarViewProps {
     tableData: TableData | null;
@@ -22,27 +20,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
     if (!tableData) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                <Icons.UploadCloud className="w-20 h-20 text-slate-600 mb-6" />
-                <h2 className="text-3xl font-bold text-slate-300 mb-4">Aucune donnée disponible</h2>
-                <p className="text-slate-400 text-lg mb-6 max-w-md">
-                    Les données Olymel n'ont pas encore été extraites et consolidées.
-                </p>
-                {user?.isAdmin ? (
-                    <p className="text-slate-500 text-sm">
-                        Utilisez le panneau de gauche pour téléverser et extraire des fichiers Olymel.
-                    </p>
-                ) : (
-                    <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 max-w-md">
-                        <Icons.User className="w-10 h-10 text-cyan-400 mx-auto mb-3" />
-                        <p className="text-slate-400 text-sm">
-                            Vous êtes connecté en tant que <span className="text-cyan-400 font-semibold">{user?.numDome}</span>.
-                        </p>
-                        <p className="text-slate-500 text-sm mt-2">
-                            Veuillez contacter un administrateur pour extraire et charger les données Olymel.
-                        </p>
-                    </div>
-                )}
+            <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                    <Icons.ClipboardList className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-slate-400">Aucune donnée Olymel</h2>
+                    <p className="text-slate-500 mt-2">Lancez l'extraction depuis la sidebar Olymel</p>
+                </div>
             </div>
         );
     }
@@ -158,8 +141,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             key={date}
                             onClick={() => setSelectedDate(date)}
                             className={`px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${selectedDate === date
-                                    ? 'bg-cyan-600 text-white'
-                                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                ? 'bg-cyan-600 text-white'
+                                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                                 }`}
                         >
                             {date}

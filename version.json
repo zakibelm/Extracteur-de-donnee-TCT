@@ -1,0 +1,28 @@
+{
+    "version": "0.1",
+    "name": "ADT - Extracteur de Données",
+    "description": "Application d'extraction de données TCT et Olymel",
+    "lastUpdate": "2025-12-06T21:46:00-05:00",
+    "backup": {
+        "v0": {
+            "date": "2025-12-06T21:46:00-05:00",
+            "location": "c:\\Users\\zakib\\Downloads\\ADT\\adt-v0",
+            "description": "Version baseline après optimisations responsive et suppression des éléments de debug"
+        }
+    },
+    "features": [
+        "Extraction TCT via Gemini AI",
+        "Extraction Olymel via Gemini AI",
+        "Authentification Admin/Conducteur",
+        "Vue Calendrier Olymel",
+        "Vue Document Final TCT",
+        "Génération PDF",
+        "Interface responsive optimisée"
+    ],
+    "tech": {
+        "frontend": "React + TypeScript",
+        "styling": "Tailwind CSS",
+        "ai": "Google Gemini API",
+        "deployment": "Vercel"
+    }
+}

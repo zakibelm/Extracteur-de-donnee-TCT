@@ -1,0 +1,40 @@
+import {
+    Loader2,
+    Sparkles,
+    LogOut,
+    ChevronLeft,
+    ChevronRight,
+    UploadCloud,
+    Eye,
+    ClipboardList,
+    User,
+    CheckCircle,
+    ScanText,
+    FileText,
+    Printer,
+    Truck,
+    Settings,
+    ChevronDown,
+    EyeOff
+} from 'lucide-react';
+
+export const Icons = {
+    Loader: Loader2,
+    Sparkles,
+    LogOut,
+    ChevronLeft,
+    ChevronRight,
+    ChevronDown,
+    UploadCloud,
+    Eye,
+    EyeOff,
+    ClipboardList,
+    User,
+    CheckCircle,
+    ScanText,
+    FileText,
+    FilePdf: FileText,
+    Print: Printer,
+    Truck,
+    Settings
+};

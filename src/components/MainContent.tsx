@@ -1,12 +1,10 @@
-
 import React from 'react';
 import { ResultCard } from './ResultCard';
 import { Button } from './Button';
 import { Icons } from './Icons';
-import { ExtractedData, Status, TableData } from '../types';
+import { ExtractedData, Status, TableData, User } from '../types';
 import { FinalDocumentView } from './FinalDocumentView';
 import { CalendarView } from './CalendarView';
-import { User } from './AuthPage';
 import { ReportView } from './ReportView';
 
 interface MainContentProps {
@@ -76,29 +74,47 @@ export const MainContent: React.FC<MainContentProps> = ({
     const renderTctExtractionView = () => (
         <>
             {tctExtractedData.length === 0 ? (
-                <div className="text-center h-full flex flex-col justify-center items-center">
-                    <Icons.UploadCloud className="w-16 h-16 text-slate-600 mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-400">Commencez par téléverser des fichiers TCT</h2>
-                    <p className="text-slate-500 mt-2">Utilisez le panneau de gauche (accordéon TCT) pour ajouter des images ou des PDFs.</p>
+                <div className="text-center h-full flex flex-col justify-center items-center p-8">
+                    <div className="glass-panel p-8 rounded-2xl flex flex-col items-center max-w-lg animate-fadeIn">
+                        <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mb-6 ring-1 ring-emerald-500/20">
+                            <Icons.UploadCloud className="w-10 h-10 text-emerald-400" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-white mb-3">Zone d'Extraction TCT</h2>
+                        <p className="text-slate-400">Utilisez le panneau de gauche pour importer vos fichiers (PDF ou Images).</p>
+                    </div>
                 </div>
             ) : (
-                <div>
+                <div className="animate-fadeIn">
                     {allTctProcessed && hasTctSuccessfulExtractions && (
-                        <div className="bg-slate-800 rounded-lg p-6 mb-8 border border-slate-700 flex items-center justify-between">
-                            <p className="text-slate-300">L'extraction TCT est terminée. Prêt à voir les résultats consolidés ?</p>
+                        <div className="glass-panel rounded-xl p-6 mb-8 flex items-center justify-between border-l-4 border-l-emerald-500">
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Extraction terminée</h3>
+                                <p className="text-slate-400 text-sm">Toutes les données TCT ont été traitées avec succès.</p>
+                            </div>
                             <Button
                                 onClick={onTctGenerateResults}
-                                className="bg-sky-600 hover:bg-sky-700"
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
                             >
                                 <Icons.Eye className="mr-2" />
-                                Ouvrir le Document Final
+                                Voir le Document Final
                             </Button>
                         </div>
                     )}
 
-                    {tctError && <p className="text-red-400 my-4 text-center p-4 bg-red-900/20 border border-red-500/30 rounded-md">{tctError}</p>}
+                    {tctError && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center text-red-200 mb-8 backdrop-blur-md">
+                            <Icons.AlertTriangle className="inline-block mr-2 w-5 h-5" />
+                            {tctError}
+                        </div>
+                    )}
 
-                    <h2 className="text-2xl font-bold text-center mb-8 text-slate-300">Extraction TCT par Fichier</h2>
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-2xl font-bold text-white">Fichiers Traités</h2>
+                        <span className="text-sm text-slate-400 bg-white/5 py-1 px-3 rounded-full border border-white/5">
+                            {tctExtractedData.length} fichier{tctExtractedData.length > 1 ? 's' : ''}
+                        </span>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {tctExtractedData.map((data) => (
                             <ResultCard
@@ -116,19 +132,26 @@ export const MainContent: React.FC<MainContentProps> = ({
     const renderOlymelExtractionView = () => (
         <>
             {olymelExtractedData.length === 0 ? (
-                <div className="text-center h-full flex flex-col justify-center items-center">
-                    <Icons.UploadCloud className="w-16 h-16 text-slate-600 mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-400">Commencez par téléverser des fichiers Olymel</h2>
-                    <p className="text-slate-500 mt-2">Utilisez le panneau de gauche (accordéon Olymel) pour ajouter des images ou des PDFs.</p>
+                <div className="text-center h-full flex flex-col justify-center items-center p-8">
+                    <div className="glass-panel p-8 rounded-2xl flex flex-col items-center max-w-lg animate-fadeIn">
+                        <div className="w-20 h-20 bg-cyan-500/10 rounded-full flex items-center justify-center mb-6 ring-1 ring-cyan-500/20">
+                            <Icons.Truck className="w-10 h-10 text-cyan-400" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-white mb-3">Zone d'Extraction Olymel</h2>
+                        <p className="text-slate-400">Utilisez le panneau de gauche pour importer vos manifestes Olymel.</p>
+                    </div>
                 </div>
             ) : (
-                <div>
+                <div className="animate-fadeIn">
                     {allOlymelProcessed && hasOlymelSuccessfulExtractions && (
-                        <div className="bg-slate-800 rounded-lg p-6 mb-8 border border-slate-700 flex items-center justify-between">
-                            <p className="text-slate-300">L'extraction Olymel est terminée. Prêt à voir le calendrier ?</p>
+                        <div className="glass-panel rounded-xl p-6 mb-8 flex items-center justify-between border-l-4 border-l-cyan-500">
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Extraction Olymel terminée</h3>
+                                <p className="text-slate-400 text-sm">Les manifestes ont été analysés.</p>
+                            </div>
                             <Button
                                 onClick={onOlymelGenerateResults}
-                                className="bg-cyan-600 hover:bg-cyan-700"
+                                className="bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
                             >
                                 <Icons.Eye className="mr-2" />
                                 Ouvrir le Calendrier
@@ -136,9 +159,20 @@ export const MainContent: React.FC<MainContentProps> = ({
                         </div>
                     )}
 
-                    {olymelError && <p className="text-red-400 my-4 text-center p-4 bg-red-900/20 border border-red-500/30 rounded-md">{olymelError}</p>}
+                    {olymelError && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center text-red-200 mb-8 backdrop-blur-md">
+                            <Icons.AlertTriangle className="inline-block mr-2 w-5 h-5" />
+                            {olymelError}
+                        </div>
+                    )}
 
-                    <h2 className="text-2xl font-bold text-center mb-8 text-slate-300">Extraction Olymel par Fichier</h2>
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-2xl font-bold text-white">Manifestes Olymel</h2>
+                        <span className="text-sm text-slate-400 bg-white/5 py-1 px-3 rounded-full border border-white/5">
+                            {olymelExtractedData.length} fichier{olymelExtractedData.length > 1 ? 's' : ''}
+                        </span>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {olymelExtractedData.map((data) => (
                             <ResultCard
@@ -172,29 +206,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                     </div>
                 )}
 
-                {/* Sélecteur de section (TCT / Olymel) */}
-                <div className="flex gap-4 mb-6">
-                    <button
-                        onClick={() => setActiveSection('tct')}
-                        className={`flex-1 px-6 py-4 rounded-lg font-bold text-lg transition-all ${activeSection === 'tct'
-                                ? 'bg-emerald-600 text-white shadow-lg'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                            }`}
-                    >
-                        <Icons.ScanText className="inline-block mr-2 w-6 h-6" />
-                        TCT
-                    </button>
-                    <button
-                        onClick={() => setActiveSection('olymel')}
-                        className={`flex-1 px-6 py-4 rounded-lg font-bold text-lg transition-all ${activeSection === 'olymel'
-                                ? 'bg-cyan-600 text-white shadow-lg'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                            }`}
-                    >
-                        <Icons.ScanText className="inline-block mr-2 w-6 h-6" />
-                        Olymel
-                    </button>
-                </div>
+                {/* Sélecteur de section (TCT / Olymel) - REMOVED (Handled by Sidebar) */}
 
                 {/* Onglets selon la section active */}
                 <div className="border-b border-slate-700 mb-4">
