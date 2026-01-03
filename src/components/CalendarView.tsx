@@ -94,14 +94,26 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         );
     };
 
-    // --- TIME PARSING HELPER ---
+    // --- TIME PARSING HELPER (AMÉLIORÉ POUR TRI CHRONOLOGIQUE) ---
     const getMinutes = (timeStr: string) => {
+        // Si pas d'heure valide, mettre à la fin (après 24h)
         if (!timeStr || timeStr === '-' || timeStr.trim() === '') return 24 * 60 + 100;
+
+        // Prendre la première heure si format "HH:MM / HH:MM"
         const firstTime = timeStr.split('/')[0].trim().replace('h', ':');
-        const parts = firstTime.match(/(\d{1,2})[:h]?(\d{2})?/);
-        if (!parts) return 24 * 60;
+
+        // Matcher différents formats: "HH:MM", "HH h MM", "HHMM", "HH"
+        const parts = firstTime.match(/(\d{1,2})[:h\s]?(\d{2})?/);
+        if (!parts) return 24 * 60; // Si format invalide, mettre à la fin
+
         let hours = parseInt(parts[1]);
         const minutes = parts[2] ? parseInt(parts[2]) : 0;
+
+        // Validation: heures entre 0-23, minutes entre 0-59
+        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+            return 24 * 60; // Invalide, mettre à la fin
+        }
+
         return hours * 60 + minutes;
     };
 
@@ -124,6 +136,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     // --- GROUPING FOR DAY VIEW ---
     const groupedDataDay = useMemo(() => {
         const dayData = filteredDataRaw.filter(item => item.date === selectedDate);
+        // TRI CHRONOLOGIQUE: Du plus tôt au plus tard (00:00 → 23:59)
         dayData.sort((a, b) => getMinutes(a.time) - getMinutes(b.time));
 
         const groups: { [key: string]: typeof RAW_DATA } = {};
@@ -162,6 +175,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         dates.forEach(date => {
             weekGroups[date] = filteredDataRaw
                 .filter(item => item.date === date)
+                // TRI CHRONOLOGIQUE: Du plus tôt au plus tard pour chaque jour
                 .sort((a, b) => getMinutes(a.time) - getMinutes(b.time));
         });
         return weekGroups;
@@ -412,8 +426,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                                         <div
                                                             key={item.id}
                                                             className={`p-2.5 rounded-lg border text-left transition-all group ${item.status === 'active'
-                                                                    ? 'bg-slate-800 border-slate-700 hover:border-slate-600 hover:shadow-md hover:bg-slate-750'
-                                                                    : 'bg-slate-800/20 border-slate-800/50 opacity-50 hover:opacity-80'
+                                                                ? 'bg-slate-800 border-slate-700 hover:border-slate-600 hover:shadow-md hover:bg-slate-750'
+                                                                : 'bg-slate-800/20 border-slate-800/50 opacity-50 hover:opacity-80'
                                                                 }`}
                                                         >
                                                             <div className="flex justify-between items-center mb-1.5">

@@ -8,10 +8,11 @@ import { FinalDocumentView } from './FinalDocumentView';
 import { CalendarView } from './CalendarView';
 import { User } from './AuthPage';
 import { ReportView } from './ReportView';
+import { SettingsPage } from './SettingsPage';
 
 interface MainContentProps {
-    activeSection: 'tct' | 'olymel';
-    setActiveSection: (section: 'tct' | 'olymel') => void;
+    activeSection: 'tct' | 'olymel' | 'settings';
+    setActiveSection: (section: 'tct' | 'olymel' | 'settings') => void;
 
     // TCT
     activeTctView: 'extract' | 'document' | 'report';
@@ -71,21 +72,21 @@ export const MainContent: React.FC<MainContentProps> = ({
 
     // Olymel
     const allOlymelProcessed = olymelExtractedData.length > 0 && olymelExtractedData.every(d => d.status === Status.Success || d.status === Status.Error);
-    const hasOlymelSuccessfulExtractions = olymelExtractedData.some(d => d.status === Status.Success && d.content && d.content.rows.length > 0);
+    const hasOlymelSuccessfulExtractions = olymelExtractedData.some(d => d.status === Status.Success);
 
     const renderTctExtractionView = () => (
         <>
             {tctExtractedData.length === 0 ? (
                 <div className="text-center h-full flex flex-col justify-center items-center">
-                    <Icons.UploadCloud className="w-16 h-16 text-slate-600 mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-400">Commencez par téléverser des fichiers TCT</h2>
-                    <p className="text-slate-500 mt-2">Utilisez le panneau de gauche (accordéon TCT) pour ajouter des images ou des PDFs.</p>
+                    <Icons.UploadCloud className="w-12 h-12 text-slate-600 mb-3" />
+                    <h2 className="text-lg font-bold text-slate-400">Commencez par téléverser des fichiers TCT</h2>
+                    <p className="text-slate-500 mt-1.5 text-sm">Utilisez le panneau de gauche (accordéon TCT) pour ajouter des images ou des PDFs.</p>
                 </div>
             ) : (
                 <div>
                     {allTctProcessed && hasTctSuccessfulExtractions && (
-                        <div className="bg-slate-800 rounded-lg p-6 mb-8 border border-slate-700 flex items-center justify-between">
-                            <p className="text-slate-300">L'extraction TCT est terminée. Prêt à voir les résultats consolidés ?</p>
+                        <div className="bg-slate-800 rounded-lg p-3 mb-4 border border-slate-700 flex items-center justify-between">
+                            <p className="text-slate-300 text-sm">L'extraction TCT est terminée. Prêt à voir les résultats consolidés ?</p>
                             <Button
                                 onClick={onTctGenerateResults}
                                 className="bg-sky-600 hover:bg-sky-700"
@@ -98,8 +99,8 @@ export const MainContent: React.FC<MainContentProps> = ({
 
                     {tctError && <p className="text-red-400 my-4 text-center p-4 bg-red-900/20 border border-red-500/30 rounded-md">{tctError}</p>}
 
-                    <h2 className="text-2xl font-bold text-center mb-8 text-slate-300">Extraction TCT par Fichier</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <h2 className="text-base font-bold text-center mb-4 text-slate-300">Extraction TCT par Fichier</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                         {tctExtractedData.map((data) => (
                             <ResultCard
                                 key={data.id}
@@ -117,15 +118,15 @@ export const MainContent: React.FC<MainContentProps> = ({
         <>
             {olymelExtractedData.length === 0 ? (
                 <div className="text-center h-full flex flex-col justify-center items-center">
-                    <Icons.UploadCloud className="w-16 h-16 text-slate-600 mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-400">Commencez par téléverser des fichiers Olymel</h2>
-                    <p className="text-slate-500 mt-2">Utilisez le panneau de gauche (accordéon Olymel) pour ajouter des images ou des PDFs.</p>
+                    <Icons.UploadCloud className="w-12 h-12 text-slate-600 mb-3" />
+                    <h2 className="text-lg font-bold text-slate-400">Commencez par téléverser des fichiers Olymel</h2>
+                    <p className="text-slate-500 mt-1.5 text-sm">Utilisez le panneau de gauche (accordéon Olymel) pour ajouter des images ou des PDFs.</p>
                 </div>
             ) : (
                 <div>
                     {allOlymelProcessed && hasOlymelSuccessfulExtractions && (
-                        <div className="bg-slate-800 rounded-lg p-6 mb-8 border border-slate-700 flex items-center justify-between">
-                            <p className="text-slate-300">L'extraction Olymel est terminée. Prêt à voir le calendrier ?</p>
+                        <div className="bg-slate-800 rounded-lg p-3 mb-4 border border-slate-700 flex items-center justify-between">
+                            <p className="text-slate-300 text-sm">L'extraction Olymel est terminée. Prêt à voir le calendrier ?</p>
                             <Button
                                 onClick={onOlymelGenerateResults}
                                 className="bg-cyan-600 hover:bg-cyan-700"
@@ -138,8 +139,8 @@ export const MainContent: React.FC<MainContentProps> = ({
 
                     {olymelError && <p className="text-red-400 my-4 text-center p-4 bg-red-900/20 border border-red-500/30 rounded-md">{olymelError}</p>}
 
-                    <h2 className="text-2xl font-bold text-center mb-8 text-slate-300">Extraction Olymel par Fichier</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <h2 className="text-base font-bold text-center mb-4 text-slate-300">Extraction Olymel par Fichier</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                         {olymelExtractedData.map((data) => (
                             <ResultCard
                                 key={data.id}
@@ -154,77 +155,89 @@ export const MainContent: React.FC<MainContentProps> = ({
     );
 
     return (
-        <main className="flex-grow p-4 md:p-8 overflow-y-auto flex flex-col">
-            <div className="max-w-7xl mx-auto w-full flex flex-col flex-grow">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden" style={{ transform: 'scale(0.85)', transformOrigin: 'top left', width: '117.65%', height: '117.65%' }}>
+            <div className="flex-1 flex flex-col p-3 md:p-4 overflow-hidden">
                 {/* Header avec info utilisateur et déconnexion pour les non-admins */}
                 {!user?.isAdmin && (
-                    <div className="flex justify-between items-center mb-4 p-4 bg-slate-800 rounded-lg border border-slate-700">
+                    <div className="flex-none flex justify-between items-center mb-3 p-3 bg-slate-800 rounded-lg border border-slate-700">
                         <div className="flex items-center">
-                            <Icons.User className="w-5 h-5 mr-2 text-slate-400" />
-                            <span className="text-slate-300">
+                            <Icons.User className="w-4 h-4 mr-2 text-slate-400" />
+                            <span className="text-slate-300 text-sm">
                                 <span className="font-semibold">{user?.numDome}</span> - {user?.idEmploye}
                             </span>
                         </div>
-                        <Button onClick={onLogout} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3">
-                            <Icons.LogOut className="mr-2" />
+                        <Button onClick={onLogout} className="bg-red-600 hover:bg-red-700 text-xs py-1.5 px-3">
+                            <Icons.LogOut className="mr-1.5 w-3.5 h-3.5" />
                             Déconnexion
                         </Button>
                     </div>
                 )}
 
-                {/* Sélecteur de section (TCT / Olymel) */}
-                <div className="flex gap-4 mb-6">
+                {/* Sélecteur de section (TCT / Olymel / Paramètres) */}
+                <div className="flex-none flex gap-3 mb-4">
                     <button
                         onClick={() => setActiveSection('tct')}
-                        className={`flex-1 px-6 py-4 rounded-lg font-bold text-lg transition-all ${activeSection === 'tct'
-                                ? 'bg-emerald-600 text-white shadow-lg'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${activeSection === 'tct'
+                            ? 'bg-emerald-600 text-white shadow-lg'
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                             }`}
                     >
-                        <Icons.ScanText className="inline-block mr-2 w-6 h-6" />
+                        <Icons.ScanText className="inline-block mr-2 w-4 h-4" />
                         TCT
                     </button>
                     <button
                         onClick={() => setActiveSection('olymel')}
-                        className={`flex-1 px-6 py-4 rounded-lg font-bold text-lg transition-all ${activeSection === 'olymel'
-                                ? 'bg-cyan-600 text-white shadow-lg'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${activeSection === 'olymel'
+                            ? 'bg-cyan-600 text-white shadow-lg'
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                             }`}
                     >
-                        <Icons.ScanText className="inline-block mr-2 w-6 h-6" />
+                        <Icons.ScanText className="inline-block mr-2 w-4 h-4" />
                         Olymel
                     </button>
+                    {user?.isAdmin && (
+                        <button
+                            onClick={() => setActiveSection('settings')}
+                            className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${activeSection === 'settings'
+                                ? 'bg-purple-600 text-white shadow-lg'
+                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                }`}
+                        >
+                            <Icons.Settings className="inline-block mr-2 w-4 h-4" />
+                            Paramètres
+                        </button>
+                    )}
                 </div>
 
                 {/* Onglets selon la section active */}
-                <div className="border-b border-slate-700 mb-4">
-                    <nav className="flex space-x-4" aria-label="Tabs">
-                        {activeSection === 'tct' ? (
+                <div className="flex-none border-b border-slate-700 mb-3">
+                    <nav className="flex space-x-3" aria-label="Tabs">
+                        {activeSection === 'settings' ? null : activeSection === 'tct' ? (
                             <>
                                 {/* Onglets TCT */}
                                 {user?.isAdmin && (
                                     <button
                                         onClick={() => setActiveTctView('extract')}
-                                        className={`px-3 py-2 font-medium text-sm rounded-t-md ${activeTctView === 'extract' ? 'border-b-2 border-emerald-400 text-emerald-400' : 'text-slate-400 hover:text-slate-200'}`}
+                                        className={`px-3 py-2 font-medium text-xs rounded-t-md ${activeTctView === 'extract' ? 'border-b-2 border-emerald-400 text-emerald-400' : 'text-slate-400 hover:text-slate-200'}`}
                                     >
-                                        <Icons.ScanText className="inline-block mr-2 w-5 h-5" />
+                                        <Icons.ScanText className="inline-block mr-1.5 w-4 h-4" />
                                         Extraction
                                     </button>
                                 )}
                                 <button
                                     onClick={() => setActiveTctView('document')}
                                     disabled={!tctUnifiedTable}
-                                    className={`px-3 py-2 font-medium text-sm rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeTctView === 'document' ? 'border-b-2 border-sky-400 text-sky-400' : 'text-slate-400 hover:text-slate-200'}`}
+                                    className={`px-3 py-2 font-medium text-xs rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeTctView === 'document' ? 'border-b-2 border-sky-400 text-sky-400' : 'text-slate-400 hover:text-slate-200'}`}
                                 >
-                                    <Icons.Eye className="inline-block mr-2 w-5 h-5" />
+                                    <Icons.Eye className="inline-block mr-1.5 w-4 h-4" />
                                     Document Final
                                 </button>
                                 <button
                                     onClick={() => setActiveTctView('report')}
                                     disabled={!tctUnifiedTable}
-                                    className={`px-3 py-2 font-medium text-sm rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeTctView === 'report' ? 'border-b-2 border-amber-400 text-amber-400' : 'text-slate-400 hover:text-slate-200'}`}
+                                    className={`px-3 py-2 font-medium text-xs rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeTctView === 'report' ? 'border-b-2 border-amber-400 text-amber-400' : 'text-slate-400 hover:text-slate-200'}`}
                                 >
-                                    <Icons.ClipboardList className="inline-block mr-2 w-5 h-5" />
+                                    <Icons.ClipboardList className="inline-block mr-1.5 w-4 h-4" />
                                     Rapport
                                 </button>
                             </>
@@ -234,26 +247,26 @@ export const MainContent: React.FC<MainContentProps> = ({
                                 {user?.isAdmin && (
                                     <button
                                         onClick={() => setActiveOlymelView('extract')}
-                                        className={`px-3 py-2 font-medium text-sm rounded-t-md ${activeOlymelView === 'extract' ? 'border-b-2 border-cyan-400 text-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
+                                        className={`px-3 py-2 font-medium text-xs rounded-t-md ${activeOlymelView === 'extract' ? 'border-b-2 border-cyan-400 text-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
                                     >
-                                        <Icons.ScanText className="inline-block mr-2 w-5 h-5" />
+                                        <Icons.ScanText className="inline-block mr-1.5 w-4 h-4" />
                                         Extraction
                                     </button>
                                 )}
                                 <button
                                     onClick={() => setActiveOlymelView('calendar')}
                                     disabled={!olymelUnifiedTable}
-                                    className={`px-3 py-2 font-medium text-sm rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeOlymelView === 'calendar' ? 'border-b-2 border-sky-400 text-sky-400' : 'text-slate-400 hover:text-slate-200'}`}
+                                    className={`px-3 py-2 font-medium text-xs rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeOlymelView === 'calendar' ? 'border-b-2 border-sky-400 text-sky-400' : 'text-slate-400 hover:text-slate-200'}`}
                                 >
-                                    <Icons.ClipboardList className="inline-block mr-2 w-5 h-5" />
+                                    <Icons.ClipboardList className="inline-block mr-1.5 w-4 h-4" />
                                     Calendrier
                                 </button>
                                 <button
                                     onClick={() => setActiveOlymelView('report')}
                                     disabled={!olymelUnifiedTable}
-                                    className={`px-3 py-2 font-medium text-sm rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeOlymelView === 'report' ? 'border-b-2 border-amber-400 text-amber-400' : 'text-slate-400 hover:text-slate-200'}`}
+                                    className={`px-3 py-2 font-medium text-xs rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeOlymelView === 'report' ? 'border-b-2 border-amber-400 text-amber-400' : 'text-slate-400 hover:text-slate-200'}`}
                                 >
-                                    <Icons.ClipboardList className="inline-block mr-2 w-5 h-5" />
+                                    <Icons.ClipboardList className="inline-block mr-1.5 w-4 h-4" />
                                     Rapport
                                 </button>
                             </>
@@ -261,9 +274,11 @@ export const MainContent: React.FC<MainContentProps> = ({
                     </nav>
                 </div>
 
-                {/* Contenu selon section et vue active */}
-                <div className="flex-grow">
-                    {activeSection === 'tct' ? (
+                {/* Contenu selon section et vue active - Scrollable */}
+                <div className="flex-1 overflow-y-auto min-h-0">
+                    {activeSection === 'settings' ? (
+                        <SettingsPage user={user} />
+                    ) : activeSection === 'tct' ? (
                         <>
                             {activeTctView === 'extract' && renderTctExtractionView()}
                             {activeTctView === 'document' && (
@@ -306,7 +321,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                 </div>
 
                 {activeSection === 'tct' && activeTctView === 'extract' && (
-                    <footer className="text-center p-4 mt-8 text-slate-500 text-sm">
+                    <footer className="flex-none text-center p-2 mt-3 text-slate-500 text-xs">
                         <p>Propulsé par Zakibelm</p>
                     </footer>
                 )}

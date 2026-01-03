@@ -1,5 +1,7 @@
 {
     "framework": "vite",
+    "buildCommand": "vite build",
+    "devCommand": "vite --port $PORT",
     "rewrites": [
         {
             "source": "/api/(.*)",

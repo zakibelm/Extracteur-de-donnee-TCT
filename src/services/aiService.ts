@@ -2,7 +2,7 @@
 import { ParsedContent } from '../types';
 
 // =========================================================
-// TYPE DEFINITIONS
+// MOCKED TYPES (Best Practice: Avoid importing @google/genai in frontend)
 // =========================================================
 const Type = {
     OBJECT: "OBJECT",
@@ -12,10 +12,10 @@ const Type = {
 type Schema = any;
 
 // =========================================================
-// API CLIENT - OpenRouter Only
+// API CLIENT (Optimized)
 // =========================================================
 
-async function callOpenRouter(
+async function callAI(
     base64Image: string,
     mimeType: string,
     promptText: string,
@@ -25,37 +25,31 @@ async function callOpenRouter(
 ): Promise<string> {
 
     // Select correct schema
+    // Disable Strict Schema for Olymel to avoid 400/500 errors if model struggles with specific constraints
+    // TCT continues to use strict schema as it works well.
     const schema = documentType === 'olymel' ? undefined : tctResponseSchema;
 
-    // Load settings from localStorage
-    let settings: any = {};
-    try {
-        const saved = localStorage.getItem('edt_settings');
-        if (saved) {
-            settings = JSON.parse(saved);
-        }
-    } catch (e) {
-        console.warn('Could not load settings, using defaults');
+    // Retrieve settings from localStorage
+    const storedApiKey = localStorage.getItem('adt_settings_apikey');
+    const storedModel = localStorage.getItem('adt_settings_model');
+    // RAG setting is stored but not currently used in the API call logic directly 
+    // const enableRag = localStorage.getItem('adt_settings_rag') === 'true';
+
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+    };
+
+    if (storedApiKey) {
+        headers['X-API-Key'] = storedApiKey;
     }
 
-    const apiKey = settings.openrouterApiKey;
-    const model = settings.openrouterModel || 'anthropic/claude-3.5-sonnet';
-    const userTemperature = settings.temperature !== undefined ? settings.temperature : temperature;
+    if (storedModel) {
+        headers['X-Model'] = storedModel;
+    }
 
     try {
-        // Build headers with configuration
-        const headers: any = {
-            'Content-Type': 'application/json',
-            'X-Model': model
-        };
-
-        // Only send API key if user has configured one
-        if (apiKey) {
-            headers['X-API-Key'] = apiKey;
-        }
-
-        // Call our Serverless Proxy (OpenRouter only)
-        const response = await fetch('/api/gemini', {
+        // Call our Secure Serverless Proxy
+        const response = await fetch('/api/extract', {
             method: 'POST',
             headers: headers,
             body: JSON.stringify({
@@ -63,9 +57,9 @@ async function callOpenRouter(
                 image: base64Image,
                 mimeType: mimeType,
                 systemInstruction: systemInstruction,
-                temperature: userTemperature,
+                temperature: temperature,
                 schema: schema,
-                responseMimeType: "application/json"
+                responseMimeType: "application/json" // ALWAYS force JSON mode, even if schema is loose
             })
         });
 
@@ -85,7 +79,7 @@ async function callOpenRouter(
 }
 
 // =========================================================
-// DATA SCHEMAS
+// DATA SCHEMAS (Defined locally for best performance)
 // =========================================================
 
 // TCT Schema
@@ -249,7 +243,7 @@ function observeData(entries: Record<string, string>[]): ValidationResult {
 }
 
 // =========================================================
-// MAIN FUNCTION: Data Extraction
+// MAIN FUNCTION: Observe-Execute Pattern
 // =========================================================
 
 export async function extractDataFromImage(
@@ -257,49 +251,63 @@ export async function extractDataFromImage(
     mimeType: string,
     documentType: 'tct' | 'olymel' = 'tct'
 ): Promise<ParsedContent> {
-    console.time('DataExtraction_Total');
+    console.time('ObserveExecute_Total');
 
     const isOlymel = documentType === 'olymel';
     const headers = isOlymel ? OLYMEL_TABLE_HEADERS : TCT_TABLE_HEADERS;
 
-    const systemInstruction = isOlymel
-        ? `Tu es un extracteur de données expert pour les horaires de transport Olymel. Fidélité absolue des données requise.`
-        : `Tu es un extracteur de données expert pour un logiciel de logistique. Fidélité absolue des données requise.`;
+    // Load custom prompts from localStorage if available
+    const storedTctPrompt = localStorage.getItem('adt_settings_prompt_tct');
+    const storedOlymelPrompt = localStorage.getItem('adt_settings_prompt_olymel');
 
+    let systemInstruction = "";
+
+    if (isOlymel) {
+        systemInstruction = storedOlymelPrompt && storedOlymelPrompt.trim() !== "" 
+            ? storedOlymelPrompt 
+            : `Tu es un extracteur de données expert pour les horaires de transport Olymel. Fidélité absolue des données requise.`;
+    } else {
+        systemInstruction = storedTctPrompt && storedTctPrompt.trim() !== ""
+            ? storedTctPrompt
+            : `Tu es un extracteur de données expert pour un logiciel de logistique. Fidélité absolue des données requise.`;
+    }
+
+    // CHANGED: Olymel Prompt now asks for PIPE-SEPARATED values (|)
+    // This is often more reliable for LLMs than CSV/JSON against confusing layouts
     const basePrompt = isOlymel
         ? `MODE TABLEAU TEXTE (Séparateur Pipe |).
            Analyse l'image. Extrais le tableau complet pour TOUS les jours visibles.
-
+           
            RÈGLES IMPORTANTES:
            1. Format: Date | Heure | Transport | Numéro | Chauffeur
            2. RÉPÈTE la Date sur CHAQUE LIGNE (ex: "Lundi 1er déc.").
            3. Si "AUCUN TRANSPORT", écris-le dans la colonne Transport.
            4. S'il y a 2 heures (ex: "14:15\n15:15"), écris "14:15 / 15:15" dans la colonne Heure.
            5. SORTIE BRUTE UNIQUEMENT. Pas de Markdown, pas de barres décoratives au début/fin si possible.
-
+           
            EXEMPLE:
            Lundi 1er déc. | 14:15 | CIRCUIT 10 | 204 | Jean Tremblay
-           Lundi 1er déc. | 16:30 | AUCUN TRANSPORT OLYMEL | |
+           Lundi 1er déc. | 16:30 | AUCUN TRANSPORT OLYMEL | | 
            Mardi 2 déc. | 04:00 | NAVETTE A | 305 | Pierre Paul`
         : `Analyse cette image et extrais le tableau "Affectations des tournées" en JSON valide.`;
 
     try {
-        // Execute API call
-        let initialRawText = await callOpenRouter(base64Image, mimeType, basePrompt, systemInstruction, documentType, isOlymel ? 0.1 : undefined);
+        // Step 1: Execute
+        let initialRawText = await callAI(base64Image, mimeType, basePrompt, systemInstruction, documentType, isOlymel ? 0.1 : undefined);
 
         let currentEntries: any[] = [];
 
         if (isOlymel) {
             console.log("OLYMEL RAW TEXT (Start):", initialRawText.substring(0, 500));
-            // Cleanup - Remove Code Blocks
+            // 1. CLEANUP (Remove Code Blocks)
             const cleanText = initialRawText.replace(/```(csv|json|markdown)?/gi, '').replace(/```/g, '').trim();
-            const lines = cleanText.split(/\r?\n/);
+            const lines = cleanText.split(/\r?\n/); // Handle various newlines
             let lastDate = "";
 
-            // Generic Line Parser (Pipe | Semicolon ; | Comma ,)
+            // 2. STRATEGY: GENERIC LINE PARSER (Pipe | Semicolon ; | Comma ,)
             lines.forEach(line => {
                 const trimmedLine = line.trim();
-                // Skip empty or separator lines
+                // Skip empty or separator lines like "---|---"
                 if (trimmedLine.length < 5 || trimmedLine.match(/^[-=|]+$/)) return;
 
                 let parts: string[] = [];
@@ -313,14 +321,18 @@ export async function extractDataFromImage(
                 if (separator) {
                     parts = trimmedLine.split(separator).map(p => p.trim());
                 } else {
+                    // Try to split by multiple spaces as last resort
                     parts = trimmedLine.split(/\s{2,}/);
                 }
 
-                // Clean boundary artifacts
+                // Filter out empty parts artifacts from splitting (e.g. "| value |" -> ["", "value", ""])
+                // But keep internal empty fields
+                // Actually, map(trim) keeps empty strings as "". We should just strip leading/trailing emptiness if it comes from the boundary.
                 if (parts.length > 0 && parts[0] === '') parts.shift();
                 if (parts.length > 0 && parts[parts.length - 1] === '') parts.pop();
 
-                // Mapping Logic [Date, Heure, Transport, Numéro, Chauffeur]
+                // Mapping Logic (Heuristic typically 5 columns)
+                // [Date, Heure, Transport, Numéro, Chauffeur]
                 if (parts.length >= 3) {
                     const entry: any = {};
 
@@ -331,19 +343,19 @@ export async function extractDataFromImage(
                     } else if (dateVal.length >= 3) {
                         lastDate = dateVal;
                     }
-                    if (dateVal.toLowerCase().includes('date') || dateVal.toLowerCase().includes('-----')) return;
+                    if (dateVal.toLowerCase().includes('date') || dateVal.toLowerCase().includes('-----')) return; // Header skip
 
                     entry["Date"] = dateVal;
                     entry["Heure"] = parts[1] || "-";
 
-                    // Flexible mapping
+                    // Flexible mapping for remaining cols
                     if (parts.length >= 5) {
                         entry["Transport"] = parts[2];
                         entry["Numéro"] = parts[3];
                         entry["Chauffeur"] = parts[4];
                     } else if (parts.length === 4) {
                         entry["Transport"] = parts[2];
-                        entry["Chauffeur"] = parts[3];
+                        entry["Chauffeur"] = parts[3]; // Numéro often skipped/merged
                     } else {
                         entry["Transport"] = parts[2];
                         entry["Chauffeur"] = "Inconnu";
@@ -359,10 +371,12 @@ export async function extractDataFromImage(
 
             console.log(`Olymel Parsed ${currentEntries.length} rows.`);
 
-            // Fallback: JSON
+            // 3. FALLBACK: JSON (If raw text was actually JSON)
+            // We relaxed the check to include '[' for arrays, and we try it if we have 0 entries regardless of start char
             if (currentEntries.length === 0) {
                 console.warn("Text Parse failed (0 entries). Attempting JSON parser as backup...");
                 try {
+                    // Try to find ANY JSON-like structure
                     const jsonMatch = initialRawText.match(/(\{|\[)[\s\S]*(\}|\])/);
                     if (jsonMatch) {
                         const parsedData = cleanAndParseJson(jsonMatch[0]);
@@ -373,7 +387,8 @@ export async function extractDataFromImage(
                 } catch (e) { console.error("Olymel JSON fallback failed", e); }
             }
 
-            // Debug fallback
+            // 4. ULTIMATE DEBUG FALLBACK
+            // If we STILL have 0 entries, inject a dummy row with the raw text so the user sees SOMETHING.
             if (currentEntries.length === 0) {
                 console.error("TOTAL FAILURE. Injecting Debug Row.");
                 currentEntries.push({
@@ -381,11 +396,11 @@ export async function extractDataFromImage(
                     "Heure": "00:00",
                     "Transport": "VOIR TEXTE BRUT CI-BAS",
                     "Numéro": "ERR",
-                    "Chauffeur": cleanText.substring(0, 200).replace(/\n/g, " ")
+                    "Chauffeur": cleanText.substring(0, 200).replace(/\n/g, " ") // Show first 200 chars
                 });
             }
         } else {
-            // TCT JSON PARSING
+            // TCT JSON PARSING LOGIC (UNCHANGED)
             try {
                 const parsedData = cleanAndParseJson(initialRawText);
                 if (Array.isArray(parsedData)) {
@@ -402,28 +417,32 @@ export async function extractDataFromImage(
             } catch (jsonError) {
                 console.warn("Broken JSON. Attempting repair...");
                 const repairPrompt = "Le JSON était invalide. Génère UNIQUEMENT le JSON valide maintenant au format { \"entries\": [...] }.";
-                const repairedText = await callOpenRouter(base64Image, mimeType, repairPrompt, systemInstruction, documentType, 0);
+                const repairedText = await callAI(base64Image, mimeType, repairPrompt, systemInstruction, documentType, 0);
                 const repairedData = cleanAndParseJson(repairedText);
                 currentEntries = repairedData.entries || (Array.isArray(repairedData) ? repairedData : []);
             }
         }
 
+        // Step 3: Observe (Content)
+        // [Old CSV Fallback block removed as new strategy covers it]
+
         const observation = observeData(currentEntries);
 
-        // Re-Execute (Correction) - Only for TCT with critical issues
+        // Step 4: Strategize & Re-Execute (Correction) - Only if critical
         if (!observation.isValid && observation.issues.length > 0 && !isOlymel) {
+            // Only retry TCT (JSON) for now, Olymel allows loose text
             console.warn(`Data Quality Issues: ${observation.issues.length}`);
             const repairDataPrompt = `Corrige ces erreurs:\n${observation.issues.join('\n')}\nRenvoie le JSON complet corrigé.`;
             try {
-                const correctedText = await callOpenRouter(base64Image, mimeType, repairDataPrompt, systemInstruction, documentType, 0.2);
+                const correctedText = await callAI(base64Image, mimeType, repairDataPrompt, systemInstruction, documentType, 0.2);
                 const correctedData = cleanAndParseJson(correctedText);
                 currentEntries = correctedData.entries || (Array.isArray(correctedData) ? correctedData : currentEntries);
             } catch (e) { console.error("Correction failed, using initial data."); }
         }
 
-        console.timeEnd('DataExtraction_Total');
+        console.timeEnd('ObserveExecute_Total');
 
-        // Safety check
+        // SAFETY CHECK
         if (!Array.isArray(currentEntries)) currentEntries = [];
 
         const rows: string[][] = currentEntries.map((entry: any) => {
@@ -441,15 +460,15 @@ export async function extractDataFromImage(
                 if (lowerHeader === 'date') foundKey = Object.keys(entry).find(k => k.match(/jour|quand/i));
 
                 if (foundKey) return entry[foundKey];
-                return '';
+                return ''; // Empty if not found
             });
         });
 
         return { headers, rows };
 
     } catch (error) {
-        console.timeEnd('DataExtraction_Total');
-        console.error("Data Extraction Fatal Error:", error);
+        console.timeEnd('ObserveExecute_Total');
+        console.error("Gemini Extraction Fatal Error:", error);
         return { headers: ["Erreur"], rows: [[error instanceof Error ? error.message : "Erreur inconnue"]] };
     }
 }

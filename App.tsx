@@ -16,7 +16,7 @@ import autoTable from "jspdf-autotable";
 import { AuthPage, User } from './components/AuthPage';
 
 // Set worker path for pdf.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://aistudiocdn.com/pdfjs-dist@5.4.394/build/pdf.worker.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs`;
 
 interface ProcessableFile {
     id: string;
@@ -135,8 +135,8 @@ export const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-    // Section active (TCT ou Olymel)
-    const [activeSection, setActiveSection] = useState<'tct' | 'olymel'>('tct');
+    // Section active (TCT, Olymel ou Settings)
+    const [activeSection, setActiveSection] = useState<'tct' | 'olymel' | 'settings'>('tct');
 
     // Accordion State (Hoisted from Sidebar for persistence)
     const [isTctOpen, setIsTctOpen] = useState(true);
@@ -629,7 +629,7 @@ export const App: React.FC = () => {
     console.log('✅ User logged in, showing main app');
     return (
         <GlobalErrorBoundary>
-            <div className="flex h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden">
+            <div className="fixed inset-0 flex bg-slate-900 text-slate-100 font-sans overflow-hidden">
                 {/* Sidebar visible uniquement pour les admins */}
                 {currentUser?.isAdmin && (
                     <Sidebar
