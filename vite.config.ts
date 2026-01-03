@@ -10,10 +10,13 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
     },
     plugins: [react()],
+    define: {
+      'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY)
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
       }
-    }
+    },
   };
 });
