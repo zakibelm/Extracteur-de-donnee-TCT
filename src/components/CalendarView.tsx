@@ -1,13 +1,3 @@
-<<<<<<< HEAD
-<<<<<<<< HEAD:src/components/CalendarView.tsx
-import React, { useMemo, useState } from 'react';
-import { TableData, User } from '../types';
-import { Button } from './Button';
-import { Icons } from './Icons';
-========
-=======
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { TableData } from '../types';
 import { Button } from './Button';
@@ -17,10 +7,7 @@ import {
     FileText, Printer, ScanLine, CalendarDays, Columns, GripVertical
 } from 'lucide-react';
 import { User as UserType } from './AuthPage';
-<<<<<<< HEAD
->>>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540:components/CalendarView.tsx
-=======
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
+import { Icons } from './Icons';
 
 interface CalendarViewProps {
     tableData: TableData | null;
@@ -35,24 +22,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     onDownloadPdf,
     user
 }) => {
-<<<<<<< HEAD
-<<<<<<<< HEAD:src/components/CalendarView.tsx
-    const [selectedDate, setSelectedDate] = useState<string>('');
-
-    if (!tableData) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                    <Icons.ClipboardList className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-400">Aucune donnée Olymel</h2>
-                    <p className="text-slate-500 mt-2">Lancez l'extraction depuis la sidebar Olymel</p>
-                </div>
-            </div>
-        );
-    }
-========
-=======
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
     // --- STATE ---
     const [activeStatusTab, setActiveStatusTab] = useState<'all' | 'active' | 'off'>('active');
     const [searchTerm, setSearchTerm] = useState('');
@@ -61,10 +30,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const [viewScope, setViewScope] = useState<'day' | 'week'>('week'); // Default to Week for "Full Screen" feel
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid'); // For Day View
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-<<<<<<< HEAD
->>>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540:components/CalendarView.tsx
-=======
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
 
     if (!tableData) return null;
     const { headers, rows } = tableData;
@@ -129,16 +94,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         );
     };
 
-<<<<<<< HEAD
-    // --- TIME PARSING HELPER ---
-    const getMinutes = (timeStr: string) => {
-        if (!timeStr || timeStr === '-' || timeStr.trim() === '') return 24 * 60 + 100;
-        const firstTime = timeStr.split('/')[0].trim().replace('h', ':');
-        const parts = firstTime.match(/(\d{1,2})[:h]?(\d{2})?/);
-        if (!parts) return 24 * 60;
-        let hours = parseInt(parts[1]);
-        const minutes = parts[2] ? parseInt(parts[2]) : 0;
-=======
     // --- TIME PARSING HELPER (AMÉLIORÉ POUR TRI CHRONOLOGIQUE) ---
     const getMinutes = (timeStr: string) => {
         // Si pas d'heure valide, mettre à la fin (après 24h)
@@ -159,7 +114,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             return 24 * 60; // Invalide, mettre à la fin
         }
 
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
         return hours * 60 + minutes;
     };
 
@@ -182,10 +136,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     // --- GROUPING FOR DAY VIEW ---
     const groupedDataDay = useMemo(() => {
         const dayData = filteredDataRaw.filter(item => item.date === selectedDate);
-<<<<<<< HEAD
-=======
         // TRI CHRONOLOGIQUE: Du plus tôt au plus tard (00:00 → 23:59)
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
         dayData.sort((a, b) => getMinutes(a.time) - getMinutes(b.time));
 
         const groups: { [key: string]: typeof RAW_DATA } = {};
@@ -224,10 +175,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         dates.forEach(date => {
             weekGroups[date] = filteredDataRaw
                 .filter(item => item.date === date)
-<<<<<<< HEAD
-=======
                 // TRI CHRONOLOGIQUE: Du plus tôt au plus tard pour chaque jour
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
                 .sort((a, b) => getMinutes(a.time) - getMinutes(b.time));
         });
         return weekGroups;
@@ -281,33 +229,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 </div>
             </nav>
 
-<<<<<<< HEAD
-<<<<<<<< HEAD:src/components/CalendarView.tsx
-                {/* Sélecteur de date */}
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                    {dates.map(date => (
-                        <button
-                            key={date}
-                            onClick={() => setSelectedDate(date)}
-                            className={`px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${selectedDate === date
-                                ? 'bg-cyan-600 text-white'
-                                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                                }`}
-                        >
-                            {date}
-                            <span className="ml-2 text-xs opacity-75">
-                                ({eventsByDate[date].length})
-                            </span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-========
             <div className="flex-1 flex overflow-hidden">
->>>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540:components/CalendarView.tsx
-=======
-            <div className="flex-1 flex overflow-hidden">
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
 
                 {/* SIDEBAR - Collapsible */}
                 <div className={`flex-shrink-0 bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col ${isSidebarOpen ? 'w-64' : 'w-0 opacity-0 overflow-hidden'}`}>
@@ -504,13 +426,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                                         <div
                                                             key={item.id}
                                                             className={`p-2.5 rounded-lg border text-left transition-all group ${item.status === 'active'
-<<<<<<< HEAD
-                                                                    ? 'bg-slate-800 border-slate-700 hover:border-slate-600 hover:shadow-md hover:bg-slate-750'
-                                                                    : 'bg-slate-800/20 border-slate-800/50 opacity-50 hover:opacity-80'
-=======
                                                                 ? 'bg-slate-800 border-slate-700 hover:border-slate-600 hover:shadow-md hover:bg-slate-750'
                                                                 : 'bg-slate-800/20 border-slate-800/50 opacity-50 hover:opacity-80'
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
                                                                 }`}
                                                         >
                                                             <div className="flex justify-between items-center mb-1.5">

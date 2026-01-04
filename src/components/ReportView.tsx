@@ -1,9 +1,4 @@
-<<<<<<< HEAD
-import React from 'react';
-=======
-
 import React, { useMemo } from 'react';
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
 import { TableData } from '../types';
 import { Button } from './Button';
 import { Icons } from './Icons';
@@ -14,40 +9,14 @@ interface ReportViewProps {
     onDownloadPdf: (headers: string[], rows: string[][]) => void;
 }
 
-<<<<<<< HEAD
-export const ReportView: React.FC<ReportViewProps> = ({
-    tableData,
-    onPrint,
-    onDownloadPdf
-}) => {
-    if (!tableData) return null;
-
-    return (
-        <div className="flex flex-col h-full bg-slate-900 justify-center items-center">
-            <div className="text-center p-8 bg-slate-800 rounded-lg border border-slate-700 max-w-lg">
-                <Icons.ClipboardList className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-white mb-2">Rapport Généré</h2>
-                <p className="text-slate-400 mb-6">
-                    Le rapport contient {tableData.rows.length} entrées prêtes à être exportées.
-                </p>
-                <div className="flex gap-4 justify-center">
-                    <Button onClick={() => onDownloadPdf(tableData.headers, tableData.rows)} className="bg-emerald-600 hover:bg-emerald-700">
-                        <Icons.FilePdf className="mr-2" /> Télécharger PDF
-                    </Button>
-                    <Button onClick={() => onPrint(tableData.headers, tableData.rows)} className="bg-slate-600 hover:bg-slate-700">
-                        <Icons.Print className="mr-2" /> Imprimer
-                    </Button>
-                </div>
-            </div>
-=======
 export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDownloadPdf }) => {
-    
+
     // Détermination des colonnes et filtrage
     const { headers, filteredRows, changementParIndex } = useMemo(() => {
         if (!tableData) return { headers: [], filteredRows: [], changementParIndex: -1 };
 
         const changementParIdx = tableData.headers.indexOf('Changement par');
-        
+
         // Si la colonne n'existe pas ou s'il n'y a pas de données
         if (changementParIdx === -1) {
             return { headers: tableData.headers, filteredRows: [], changementParIndex: -1 };
@@ -59,10 +28,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
             return val && val.trim() !== '';
         });
 
-        return { 
-            headers: tableData.headers, 
-            filteredRows: rows, 
-            changementParIndex: changementParIdx 
+        return {
+            headers: tableData.headers,
+            filteredRows: rows,
+            changementParIndex: changementParIdx
         };
     }, [tableData]);
 
@@ -84,15 +53,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button 
-                            onClick={() => onDownloadPdf(headers, filteredRows)} 
+                        <Button
+                            onClick={() => onDownloadPdf(headers, filteredRows)}
                             className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3"
                             disabled={filteredRows.length === 0}
                         >
                             <Icons.FilePdf className="mr-2" /> Exporter PDF
                         </Button>
-                        <Button 
-                            onClick={() => onPrint(headers, filteredRows)} 
+                        <Button
+                            onClick={() => onPrint(headers, filteredRows)}
                             className="bg-slate-500 hover:bg-slate-600 text-sm py-2 px-3"
                             disabled={filteredRows.length === 0}
                         >
@@ -149,10 +118,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                     </table>
                 </div>
             </div>
-             <div className="flex-shrink-0 p-2 bg-slate-800/50 border-t border-slate-700 text-right text-sm text-slate-400">
+            <div className="flex-shrink-0 p-2 bg-slate-800/50 border-t border-slate-700 text-right text-sm text-slate-400">
                 Total modifications : {filteredRows.length}
             </div>
->>>>>>> fe66bc4faa9c6a00720bfa753a56815eaab97540
         </div>
     );
 };
