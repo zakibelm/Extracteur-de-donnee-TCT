@@ -4,16 +4,26 @@ const API_BASE = '/api';
 
 export const api = {
     async loginUser(numDome: string, idEmploye: string, telephone?: string, isAdmin: boolean = false): Promise<User> {
-        const response = await fetch(`${API_BASE}/users`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ numDome, idEmploye, telephone, isAdmin })
-        });
+        try {
+            const response = await fetch(`${API_BASE}/users`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numDome, idEmploye, telephone, isAdmin })
+            });
 
-        if (!response.ok) {
-            throw new Error('Login failed');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                console.error('API Error Response:', errorData);
+                throw new Error(`Login failed (${response.status}): ${errorData.error || errorData.message || 'Unknown error'}`);
+            }
+
+            const data = await response.json();
+            console.log('Login successful:', data);
+            return data;
+        } catch (error: any) {
+            console.error('Login request failed:', error);
+            throw error;
         }
-        return response.json();
     },
 
     async fetchExtractions(userId: string, section?: string): Promise<ExtractedData[]> {

@@ -93,9 +93,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
         }
       });
 
-    } catch (err) {
-      console.error(err);
-      alert("Erreur de connexion. Veuillez vérifier la base de données ou vos identifiants.");
+    } catch (err: any) {
+      console.error('Login Error:', err);
+
+      // More detailed error messages
+      let errorMessage = "Erreur de connexion. Veuillez vérifier la base de données ou vos identifiants.";
+
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        errorMessage = "Impossible de se connecter au serveur. Vérifiez que l'API est démarrée.";
+      } else if (err.message.includes('429')) {
+        errorMessage = "Trop de tentatives de connexion. Veuillez patienter quelques instants.";
+      } else if (err.message.includes('400')) {
+        errorMessage = "Données invalides. Vérifiez le numéro de dôme et l'ID employé.";
+      } else if (err.message.includes('500')) {
+        errorMessage = "Erreur serveur. La base de données Neon pourrait être indisponible.";
+      }
+
+      alert(errorMessage);
       setIsLoading(false);
     }
   };
@@ -287,7 +301,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
         </div>
 
         <p className="text-center text-slate-500 text-xs mt-6 opacity-60">
-          &copy; {new Date().getFullYear()} ADT v1.4 (Neon Backend) • Taxi Coop Terrebonne
+          &copy; {new Date().getFullYear()} ADT v1.4 (Neon Backend) • Propulsé par Zakibelm
         </p>
       </div>
     </div>
