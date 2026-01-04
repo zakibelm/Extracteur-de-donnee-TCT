@@ -1,14 +1,17 @@
 /**
  * Modern App.tsx - Refactored with Custom Hooks and Modern Design
  * Clean architecture with separation of concerns
+ * v2.0 - With Security, Performance & Modern UI
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { ModernSidebar } from './components/ModernSidebar';
 import { MainContent } from './components/MainContent';
 import { SettingsView } from './components/SettingsView';
 import { AuthPage } from './components/AuthPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Footer } from './components/Footer';
+import { ToastContainer, toast } from './components/Toast';
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './hooks/useSettings';
 import { useResponsive } from './hooks/useResponsive';
@@ -58,36 +61,50 @@ export const App: React.FC = () => {
         }
     }, [currentUser, activeSection]);
 
-    // Handlers
-    const handleLogin = (user: any) => {
+    // Handlers with toast notifications
+    const handleLogin = useCallback((user: any) => {
         login(user);
         tctExtraction.loadHistory(user.numDome);
         olymelExtraction.loadHistory(user.numDome);
-    };
+        toast.success(`Bienvenue ${user.idEmploye} !`);
+    }, [login, tctExtraction, olymelExtraction]);
 
-    const handleLogout = () => {
+    const handleLogout = useCallback(() => {
         logout();
         tctExtraction.setExtractedData([]);
         olymelExtraction.setExtractedData([]);
-    };
+        toast.success('Déconnexion réussie');
+    }, [logout, tctExtraction, olymelExtraction]);
 
-    const handleTctExtract = () => {
-        const options = {
-            apiKey: settings.openRouterApiKey,
-            model: settings.aiModel,
-            systemPrompt: settings.systemPromptTct
-        };
-        tctExtraction.handleExtractData(options);
-    };
+    const handleTctExtract = useCallback(async () => {
+        const toastId = toast.loading('Extraction TCT en cours...');
+        try {
+            const options = {
+                apiKey: settings.openRouterApiKey,
+                model: settings.aiModel,
+                systemPrompt: settings.systemPromptTct
+            };
+            await tctExtraction.handleExtractData(options);
+            toast.success('Extraction TCT terminée !', { id: toastId });
+        } catch (error) {
+            toast.error('Échec de l\'extraction TCT', { id: toastId });
+        }
+    }, [settings, tctExtraction]);
 
-    const handleOlymelExtract = () => {
-        const options = {
-            apiKey: settings.openRouterApiKey,
-            model: settings.aiModel,
-            systemPrompt: settings.systemPromptOlymel
-        };
-        olymelExtraction.handleExtractData(options);
-    };
+    const handleOlymelExtract = useCallback(async () => {
+        const toastId = toast.loading('Extraction Olymel en cours...');
+        try {
+            const options = {
+                apiKey: settings.openRouterApiKey,
+                model: settings.aiModel,
+                systemPrompt: settings.systemPromptOlymel
+            };
+            await olymelExtraction.handleExtractData(options);
+            toast.success('Extraction Olymel terminée !', { id: toastId });
+        } catch (error) {
+            toast.error('Échec de l\'extraction Olymel', { id: toastId });
+        }
+    }, [settings, olymelExtraction]);
 
     const handlePrint = (headers: string[], rows: string[][]) => {
         const printWindow = window.open('', '', 'height=600,width=800');
@@ -123,25 +140,31 @@ export const App: React.FC = () => {
         }
     };
 
-    const handleDownloadPdf = (headers: string[], rows: string[][]) => {
-        const doc = new jsPDF({ orientation: 'landscape' });
+    const handleDownloadPdf = useCallback((headers: string[], rows: string[][]) => {
+        try {
+            toast.loading('Génération du PDF...');
+            const doc = new jsPDF({ orientation: 'landscape' });
 
-        doc.setFontSize(14);
-        doc.text("ADT - Rapport d'Extraction", 14, 15);
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Généré le : ${new Date().toLocaleString()} par ${currentUser?.numDome}`, 14, 22);
+            doc.setFontSize(14);
+            doc.text("ADT - Rapport d'Extraction", 14, 15);
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Généré le : ${new Date().toLocaleString()} par ${currentUser?.numDome}`, 14, 22);
 
-        autoTable(doc, {
-            head: [headers],
-            body: rows,
-            startY: 25,
-            styles: { fontSize: 7, cellPadding: 2 },
-            headStyles: { fillColor: [2, 132, 199] },
-        });
+            autoTable(doc, {
+                head: [headers],
+                body: rows,
+                startY: 25,
+                styles: { fontSize: 7, cellPadding: 2 },
+                headStyles: { fillColor: [2, 132, 199] },
+            });
 
-        doc.save(`ADT_Export_${new Date().toISOString().slice(0, 10)}.pdf`);
-    };
+            doc.save(`ADT_Export_${new Date().toISOString().slice(0, 10)}.pdf`);
+            toast.success('PDF généré avec succès !');
+        } catch (error) {
+            toast.error('Erreur lors de la génération du PDF');
+        }
+    }, [currentUser]);
 
     if (!isAuthenticated) {
         return <AuthPage onLogin={handleLogin} />;
@@ -149,7 +172,9 @@ export const App: React.FC = () => {
 
     return (
         <ErrorBoundary>
-            <div className="flex h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-sans overflow-hidden">
+            <ToastContainer />
+            <div className="flex flex-col h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-sans overflow-hidden">
+                <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar (Admin Only) */}
                 {isAdmin && (
                     <ModernSidebar
@@ -218,6 +243,8 @@ export const App: React.FC = () => {
                         onLogout={handleLogout}
                     />
                 )}
+                </div>
+                <Footer />
             </div>
         </ErrorBoundary>
     );
