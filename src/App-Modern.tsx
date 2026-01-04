@@ -173,7 +173,7 @@ export const App: React.FC = () => {
     return (
         <ErrorBoundary>
             <ToastContainer />
-            <div className="flex flex-col h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-sans overflow-hidden">
+            <div className="flex flex-col min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-sans">
                 <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar (Admin Only) */}
                 {isAdmin && (
