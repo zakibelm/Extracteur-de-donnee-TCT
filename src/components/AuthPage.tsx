@@ -120,24 +120,25 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   };
 
   return (
-    <div ref={containerRef} className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
-      {/* Ambient Background Blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="blob absolute top-0 left-0 w-[500px] h-[500px] bg-emerald-500/20 rounded-full blur-[100px] mix-blend-screen opacity-50 filter" />
-        <div className="blob absolute bottom-0 right-0 w-[500px] h-[500px] bg-cyan-500/20 rounded-full blur-[100px] mix-blend-screen opacity-50 filter" />
-        <div className="blob absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-indigo-500/20 rounded-full blur-[100px] mix-blend-screen opacity-30 filter" />
-      </div>
+    <div ref={containerRef} className="relative min-h-[100dvh] w-full bg-slate-950 flex flex-col overflow-y-auto overflow-x-hidden">
+      {/* Scrollable Content Wrapper */}
+      <div className="flex-1 flex items-center justify-center p-4 min-h-full">
 
-      <div ref={cardRef} className="w-full max-w-md z-10">
-        <div className="glass-panel rounded-2xl p-1 border border-white/10 shadow-2xl relative">
-          {/* Decorative Top Line */}
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-500 to-indigo-500 opacity-70" />
+        {/* Ambient Background Blobs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none fixed">
+          <div className="blob absolute top-0 left-0 w-[500px] h-[500px] bg-emerald-500/20 rounded-full blur-[100px] mix-blend-screen opacity-50 filter" />
+          <div className="blob absolute bottom-0 right-0 w-[500px] h-[500px] bg-cyan-500/20 rounded-full blur-[100px] mix-blend-screen opacity-50 filter" />
+        </div>
 
-          <div className="p-6 md:p-8">
+        <div ref={cardRef} className="w-full max-w-md z-10 relative my-8">
+          <div className="glass-panel rounded-2xl p-5 md:p-8 border border-white/10 shadow-2xl relative bg-slate-900/60 backdrop-blur-xl">
+            {/* Decorative Top Line */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-500 to-indigo-500 opacity-70" />
+
             {/* Header */}
-            <div className="text-center mb-6 md:mb-8">
-              <div className="auth-title inline-flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 mb-4 shadow-lg backdrop-blur-md">
-                <span className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-emerald-400 to-cyan-400">ADT</span>
+            <div className="text-center mb-5 md:mb-6">
+              <div className="auth-title inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 mb-3 shadow-lg backdrop-blur-md">
+                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-emerald-400 to-cyan-400">ADT</span>
               </div>
               <h1 className="auth-title text-3xl font-bold text-white mb-2 tracking-tight">
                 {mode === 'login' ? 'Bon retour' : 'Rejoignez-nous'}

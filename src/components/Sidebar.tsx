@@ -57,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     activeSection
 }) => {
     const sidebarRef = useRef<HTMLDivElement>(null);
-    const [isMobile, setIsMobile] = React.useState(false);
+    const [isMobile, setIsMobile] = React.useState(() => typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
 
     React.useEffect(() => {
         const checkMobile = () => {
