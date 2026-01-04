@@ -1,9 +1,16 @@
 export enum Status {
-    Idle = 'idle',
-    Processing = 'processing',
-    AiProcessing = 'ai_processing',
-    Success = 'success',
-    Error = 'error',
+  Idle = 'idle',
+  Processing = 'processing',
+  AiProcessing = 'ai_processing',
+  Success = 'success',
+  Error = 'error',
+}
+
+export interface User {
+  numDome: string; // "123"
+  idEmploye: string; // "EMP001"
+  isAdmin: boolean;
+  telephone?: string;
 }
 
 export interface TableData {
@@ -14,24 +21,24 @@ export interface TableData {
 export type ParsedContent = TableData;
 
 export interface ExtractedData {
-    id: string;
-    fileName: string;
-    imageSrc: string;
-    content: ParsedContent | null;
-    status: Status;
+  id: string;
+  fileName: string;
+  imageSrc: string;
+  content: ParsedContent | null;
+  status: Status;
 }
 
 export interface SummaryData {
-    totalRows: number;
-    uniqueChauffeurs: string[];
-    uniqueVehicules: string[];
-    uniqueAdressesDepart: string[];
-    uniqueAdressesArrivee: string[];
+  totalRows: number;
+  uniqueChauffeurs: string[];
+  uniqueVehicules: string[];
+  uniqueAdressesDepart: string[];
+  uniqueAdressesArrivee: string[];
 }
 
 export interface ChatMessage {
-    role: 'user' | 'model';
-    text: string;
+  role: 'user' | 'model';
+  text: string;
 }
 
 export const AGENT_ROLES = [

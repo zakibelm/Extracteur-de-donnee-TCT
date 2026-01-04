@@ -133,11 +133,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
           {/* Decorative Top Line */}
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-500 to-indigo-500 opacity-70" />
 
-          <div className="p-8">
+          <div className="p-6 md:p-8">
             {/* Header */}
-            <div className="text-center mb-8">
-              <div className="auth-title inline-flex items-center justify-center w-16 h-16 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 mb-4 shadow-lg backdrop-blur-md">
-                <span className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-emerald-400 to-cyan-400">ADT</span>
+            <div className="text-center mb-6 md:mb-8">
+              <div className="auth-title inline-flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 mb-4 shadow-lg backdrop-blur-md">
+                <span className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-emerald-400 to-cyan-400">ADT</span>
               </div>
               <h1 className="auth-title text-3xl font-bold text-white mb-2 tracking-tight">
                 {mode === 'login' ? 'Bon retour' : 'Rejoignez-nous'}

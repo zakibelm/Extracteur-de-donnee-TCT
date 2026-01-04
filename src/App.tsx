@@ -125,7 +125,23 @@ const buildUnifiedTable = (dataList: ExtractedData[]): TableData | null => {
 export const App: React.FC = () => {
     // Auth State
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 1024);
+
+    // Update on resize
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth < 1024) {
+                setIsSidebarOpen(false);
+            } else {
+                setIsSidebarOpen(true);
+            }
+        };
+        // Optionnel : ne pas attacher si on veut laisser l'utilisateur choisir, 
+        // mais pour une "app" feel, c'est mieux de s'adapter.
+        // window.addEventListener('resize', handleResize);
+        // return () => window.removeEventListener('resize', handleResize);
+        // NOTE: On laisse l'utilisateur gèrer après le load initial pour ne pas être intrusif.
+    }, []);
 
     // Section active (TCT ou Olymel ou Settings)
     const [activeSection, setActiveSection] = useState<'tct' | 'olymel' | 'settings'>('tct');
@@ -587,6 +603,17 @@ export const App: React.FC = () => {
                         onSectionChange={setActiveSection}
                         activeSection={activeSection}
                     />
+                )}
+                {/* Mobile Toggle Trigger (when sidebar is hidden or user closes it) */}
+                {currentUser?.isAdmin && !isSidebarOpen && (
+                    <div className="fixed top-4 left-4 z-40 lg:hidden">
+                        <button
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="p-2 bg-slate-800 text-white rounded-lg shadow-lg border border-slate-700"
+                        >
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                        </button>
+                    </div>
                 )}
 
                 {activeSection === 'settings' ? (
