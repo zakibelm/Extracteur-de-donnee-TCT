@@ -36,10 +36,22 @@ export const Card: React.FC<CardProps> = ({
     const hoverClasses = hover ? 'hover:scale-[1.02] hover:shadow-lg cursor-pointer' : '';
     const clickableClasses = onClick ? 'cursor-pointer' : '';
 
+    // Accessibility: handle keyboard events for clickable cards
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            onClick();
+        }
+    };
+
     return (
         <div
             className={`${baseClasses} ${variantClasses[variant]} ${paddingClasses[padding]} ${hoverClasses} ${clickableClasses} ${className}`}
             onClick={onClick}
+            role={onClick ? 'button' : undefined}
+            tabIndex={onClick ? 0 : undefined}
+            onKeyDown={onClick ? handleKeyDown : undefined}
+            aria-label={onClick ? 'Carte interactive' : undefined}
         >
             {children}
         </div>
