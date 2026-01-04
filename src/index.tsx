@@ -1,9 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import { App } from './App';
+import { App } from './App-Modern';
+import { ThemeProvider } from './theme/ThemeContext';
 
-console.log("🚀 APP STARTING...");
+console.log("🚀 APP STARTING (Modern Version)...");
 
 try {
   const rootElement = document.getElementById('root');
@@ -17,7 +18,9 @@ try {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <React.StrictMode>
-      <App />
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
     </React.StrictMode>
   );
 } catch (e) {

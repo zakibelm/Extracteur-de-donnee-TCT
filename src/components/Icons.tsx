@@ -4,6 +4,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   UploadCloud,
   Eye,
   ClipboardList,
@@ -14,7 +16,6 @@ import {
   Printer,
   Truck,
   Settings,
-  ChevronDown,
   EyeOff,
   Lock,
   Phone,
@@ -22,7 +23,16 @@ import {
   Send,
   Mic,
   XCircle,
-  Trash
+  Trash,
+  Calendar,
+  Clock,
+  AlertCircle,
+  Hash,
+  Grid3X3,
+  Table,
+  Sun,
+  Moon,
+  Download
 } from 'lucide-react';
 
 export const Icons = {
@@ -31,6 +41,7 @@ export const Icons = {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ChevronDown,
   UploadCloud,
   Eye,
@@ -50,5 +61,14 @@ export const Icons = {
   Send,
   Microphone: Mic,
   XCircle,
-  Trash
+  Trash,
+  Calendar,
+  Clock,
+  AlertCircle,
+  Hash,
+  Grid: Grid3X3,
+  Table,
+  Sun,
+  Moon,
+  Download
 };
