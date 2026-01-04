@@ -286,10 +286,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
           </div>
         </div>
 
-        <p className="text-center text-slate-500 text-xs mt-6 opacity-60">
-          &copy; {new Date().getFullYear()} ADT v1.4 (Neon Backend) • Taxi Coop Terrebonne
-        </p>
+      </div>
+
+      {/* Footer Pinned to Bottom */}
+      <div className="w-full text-center py-6 text-slate-500 text-xs opacity-60 relative z-20">
+        &copy; 2026 ADT v1.4 ptopulse par: Zakibelm
       </div>
     </div>
+    </div >
   );
 };

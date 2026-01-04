@@ -45,8 +45,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(201).json(newUser[0]);
 
         } catch (error) {
-            console.error('User Auth Error:', error);
-            return res.status(500).json({ error: 'Internal Server Error' });
+            console.error('CRITICAL: User Auth Error:', error);
+            if (error instanceof Error) {
+                console.error('Stack:', error.stack);
+                return res.status(500).json({ error: error.message, details: error.stack });
+            }
+            return res.status(500).json({ error: 'Internal Server Error', details: String(error) });
         }
     }
 
