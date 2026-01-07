@@ -40,63 +40,63 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
     }
 
     return (
-        <div className="flex flex-col h-full text-slate-200">
-            <div className="flex-shrink-0 p-4 bg-slate-800/50 border-b border-slate-700">
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex flex-col h-full text-slate-200 font-sans">
+            <div className="flex-shrink-0 p-4 md:p-6 bg-slate-900/40 border-b border-white/10 backdrop-blur-md">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
-                        <h2 className="text-lg font-bold text-emerald-400 flex items-center">
-                            <Icons.ClipboardList className="mr-2 h-5 w-5" />
-                            Rapport des Modifications (24h)
+                        <h2 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 flex items-center">
+                            <Icons.ClipboardList className="mr-3 h-5 w-5 md:h-6 md:w-6 text-emerald-400" />
+                            Rapport des Modifications
                         </h2>
-                        <p className="text-sm text-slate-400">
-                            Affiche uniquement les tournées dont le véhicule a été modifié manuellement.
+                        <p className="text-xs md:text-sm text-slate-400 mt-1 font-medium ml-1">
+                            Affiche uniquement les tours modifiés manuellement.
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         <Button
                             onClick={() => onDownloadPdf(headers, filteredRows)}
-                            className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3"
+                            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 hover:border-red-500/40 text-sm py-2 px-4 backdrop-blur-sm transition-all"
                             disabled={filteredRows.length === 0}
                         >
-                            <Icons.FilePdf className="mr-2" /> Exporter PDF
+                            <Icons.FilePdf className="mr-2 h-4 w-4" /> Exporter PDF
                         </Button>
                         <Button
                             onClick={() => onPrint(headers, filteredRows)}
-                            className="bg-slate-500 hover:bg-slate-600 text-sm py-2 px-3"
+                            className="bg-slate-700/30 hover:bg-slate-700/50 text-slate-300 border border-white/10 hover:border-white/20 text-sm py-2 px-4 backdrop-blur-sm transition-all"
                             disabled={filteredRows.length === 0}
                         >
-                            <Icons.Print className="mr-2" /> Imprimer
+                            <Icons.Print className="mr-2 h-4 w-4" /> Imprimer
                         </Button>
                     </div>
                 </div>
             </div>
 
-            <div className="flex-grow overflow-x-auto p-4">
-                <div className="border border-slate-700 rounded-md">
-                    <table className="w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-slate-800/80 backdrop-blur-sm z-10">
-                            <tr className="text-slate-300">
+            <div className="flex-grow overflow-x-auto p-3 md:p-6">
+                <div className="border border-white/10 rounded-xl overflow-hidden shadow-2xl bg-slate-900/20 backdrop-blur-sm min-w-[600px] md:min-w-0">
+                    <table className="w-full text-left text-sm">
+                        <thead className="sticky top-0 bg-slate-950/90 backdrop-blur-md z-10 border-b border-white/10">
+                            <tr className="text-emerald-500/90 text-xs uppercase tracking-wider">
                                 {headers.map((header, index) => (
-                                    <th key={index} className="p-2 font-semibold border-b border-slate-600 select-none">
+                                    <th key={index} className="p-4 font-bold select-none whitespace-nowrap">
                                         {header}
                                     </th>
                                 ))}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-white/5">
                             {filteredRows.length > 0 ? (
                                 filteredRows.map((row, rowIndex) => (
-                                    <tr key={rowIndex} className="border-t border-slate-700 hover:bg-slate-700/50 bg-slate-800/20">
+                                    <tr key={rowIndex} className="hover:bg-white/[0.02] transition-colors duration-150 group">
                                         {row.map((cell, cellIndex) => {
                                             if (cellIndex === changementParIndex) {
                                                 return (
-                                                    <td key={cellIndex} className="p-2 text-sky-400 font-bold whitespace-nowrap bg-sky-900/10">
+                                                    <td key={cellIndex} className="p-4 text-cyan-400 font-bold whitespace-nowrap bg-cyan-950/10 group-hover:bg-cyan-950/20 transition-colors">
                                                         {cell}
                                                     </td>
                                                 );
                                             }
                                             return (
-                                                <td key={cellIndex} className="p-2 text-slate-300 whitespace-nowrap">
+                                                <td key={cellIndex} className="p-4 text-slate-300 whitespace-nowrap group-hover:text-slate-100 transition-colors">
                                                     {cell}
                                                 </td>
                                             );
@@ -105,11 +105,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={headers.length} className="text-center p-12">
-                                        <div className="flex flex-col items-center justify-center text-slate-500">
-                                            <Icons.CheckCircle className="w-12 h-12 mb-3 text-slate-600" />
-                                            <p className="text-lg font-medium">Aucune modification détectée</p>
-                                            <p className="text-sm">Les changements effectués par les utilisateurs apparaîtront ici.</p>
+                                    <td colSpan={headers.length} className="text-center p-20">
+                                        <div className="flex flex-col items-center justify-center text-slate-600">
+                                            <div className="p-4 bg-slate-800/50 rounded-full mb-4 ring-1 ring-white/5">
+                                                <Icons.CheckCircle className="w-10 h-10 text-emerald-500/50" />
+                                            </div>
+                                            <p className="text-lg font-medium text-slate-400">Aucune modification détectée</p>
+                                            <p className="text-sm mt-1 text-slate-500">Les changements effectués par les utilisateurs apparaîtront ici.</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -118,8 +120,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                     </table>
                 </div>
             </div>
-            <div className="flex-shrink-0 p-2 bg-slate-800/50 border-t border-slate-700 text-right text-sm text-slate-400">
-                Total modifications : {filteredRows.length}
+            <div className="flex-shrink-0 p-3 bg-slate-950/30 border-t border-white/5 text-right text-xs text-slate-500 font-mono tracking-wide px-6">
+                TOTAL MODIFICATIONS: <span className="text-emerald-400 font-bold">{filteredRows.length}</span>
             </div>
         </div>
     );

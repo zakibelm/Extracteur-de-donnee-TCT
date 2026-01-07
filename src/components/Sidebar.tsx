@@ -161,12 +161,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <aside
                 ref={sidebarRef}
                 className={`
-                    fixed lg:relative z-50 h-full 
-                    bg-slate-900/90 backdrop-blur-2xl border-r border-white/5 
+                    fixed top-0 left-0 z-50 h-full 
+                    bg-slate-900/95 backdrop-blur-2xl border-r border-white/5 
                     flex flex-col transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
                     ${isMobile
                         ? (isSidebarOpen ? 'translate-x-0 w-[280px]' : '-translate-x-full w-[280px]')
-                        : (isSidebarOpen ? 'w-72' : 'w-20')
+                        : 'relative ' + (isSidebarOpen ? 'w-72' : 'w-20')
                     } 
                     shadow-2xl
                 `}
@@ -313,19 +313,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 </div>
 
-                {/* Toggle Button */}
-                {/* Toggle Button - Visible only on Desktop/Tablet or when closed on mobile */}
-                {(!isMobile || !isSidebarOpen) && (
+                {/* Toggle Button - Desktop Only (Mobile uses Hamburger in Header) */}
+                {!isMobile && (
                     <button
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                         className={`
                         absolute -right-3 top-20 
-                        ${isMobile ? 'fixed left-4 top-4 right-auto' : ''}
                         bg-slate-800/80 hover:bg-emerald-500 text-slate-300 hover:text-white 
                         rounded-full p-1.5 shadow-lg border border-white/10 
                         focus:outline-none backdrop-blur-sm transition-all duration-200 z-50 group hover:scale-110
                     `}
-                        style={isMobile && !isSidebarOpen ? { left: '1rem', top: '1rem', right: 'auto', position: 'fixed' } : {}}
                     >
                         {isSidebarOpen ? <Icons.ChevronLeft className="w-4 h-4" /> : <Icons.ChevronRight className="w-4 h-4" />}
                     </button>

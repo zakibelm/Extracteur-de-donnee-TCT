@@ -1,6 +1,6 @@
 import { User, ExtractedData, Status } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = 'http://localhost:3002/api';
 
 export const api = {
     async loginUser(numDome: string, idEmploye: string, telephone?: string, isAdmin: boolean = false): Promise<User> {

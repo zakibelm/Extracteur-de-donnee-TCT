@@ -67,6 +67,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("AuthPage: Submit triggered", { numDome, idEmploye, mode });
 
     if (!numDome.trim() || !idEmploye.trim()) {
       alert('Veuillez remplir tous les champs obligatoires');
@@ -130,7 +131,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
           <div className="blob absolute bottom-0 right-0 w-[500px] h-[500px] bg-cyan-500/20 rounded-full blur-[100px] mix-blend-screen opacity-50 filter" />
         </div>
 
-        <div ref={cardRef} className="w-full max-w-md z-10 relative my-8">
+        <div ref={cardRef} className="w-full max-w-[90%] md:max-w-md z-10 relative my-8 mx-auto">
           <div className="glass-panel rounded-2xl p-5 md:p-8 border border-white/10 shadow-2xl relative bg-slate-900/60 backdrop-blur-xl">
             {/* Decorative Top Line */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-500 to-indigo-500 opacity-70" />
@@ -293,6 +294,5 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
         &copy; 2026 ADT v1.4 ptopulse par: Zakibelm
       </div>
     </div>
-    </div >
   );
 };
