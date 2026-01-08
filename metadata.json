@@ -1,7 +1,8 @@
 {
   "name": "ADT - Extracteur de Données Tabulaires",
-  "description": "An application to extract, merge, clean, and structure tabular data from multiple images and PDFs using Gemini. Exports the final unified table to CSV and JSON formats.",
+  "description": "Application Super Admin pour l'extraction, la fusion et la consolidation de données tabulaires via Intelligence Artificielle et Google Sheets.",
   "requestFramePermissions": [
+    "camera",
     "microphone"
   ]
 }
