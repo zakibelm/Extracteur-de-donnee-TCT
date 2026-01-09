@@ -11,8 +11,8 @@
         }
     },
     "features": [
-        "Extraction TCT via Gemini AI",
-        "Extraction Olymel via Gemini AI",
+        "Extraction TCT via OpenRouter AI",
+        "Extraction Olymel via OpenRouter AI",
         "Authentification Admin/Conducteur",
         "Vue Calendrier Olymel",
         "Vue Document Final TCT",
@@ -22,7 +22,7 @@
     "tech": {
         "frontend": "React + TypeScript",
         "styling": "Tailwind CSS",
-        "ai": "Google Gemini API",
+        "ai": "OpenRouter API (Multi-Model)",
         "deployment": "Vercel"
     }
 }

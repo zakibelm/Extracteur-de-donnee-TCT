@@ -6,8 +6,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     server: {
-      port: 3001,
+      port: 3003,
       host: '0.0.0.0',
+      strictPort: true, // Fail if port is not available
       proxy: {
         '/api': {
           target: 'http://localhost:3002',

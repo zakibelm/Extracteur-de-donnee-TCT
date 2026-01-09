@@ -8,11 +8,10 @@
     "dev:vercel": "vercel dev",
     "build": "vite build",
     "preview": "vite preview",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:generate": "drizzle-kit generate:pg",
+    "db:migrate": "tsx ./src/db/migrate.ts"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
     "@gsap/react": "^2.1.2",
     "@neondatabase/serverless": "^0.9.0",
     "drizzle-orm": "^0.30.0",

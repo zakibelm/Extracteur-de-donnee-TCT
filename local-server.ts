@@ -23,13 +23,26 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 const app = express();
 const PORT = 3002;
 
-app.use(cors());
+app.use(cors({
+    origin: '*',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json({ limit: '50mb' }));
+
+// Chrome Private Network Access headers
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    next();
+});
 
 // Logging Middleware
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    console.log('Body:', JSON.stringify(req.body).slice(0, 100) + '...');
+    console.log(`\n[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    const bodyStr = req.body ? JSON.stringify(req.body) : 'No body';
+    console.log('Body:', bodyStr.slice(0, 200) + (bodyStr.length > 200 ? '...' : ''));
     next();
 });
 
@@ -78,14 +91,23 @@ const adapter = (handler: (req: VercelRequest, res: VercelResponse) => Promise<a
         }
 
         try {
+            console.log('[ADAPTER] Calling handler for:', req.url);
             await handler(req as unknown as VercelRequest, res as unknown as VercelResponse);
+            console.log('[ADAPTER] Handler completed successfully');
         } catch (e) {
-            console.error("Handler Error:", e);
+            console.error('[ADAPTER] Handler Error:', e);
+            console.error('[ADAPTER] Stack:', e instanceof Error ? e.stack : 'No stack');
             // Fallback just in case
-            if (!res.headersSent) res.status(500).json({ error: 'Internal Server Error' });
+            if (!res.headersSent) res.status(500).json({ error: 'Internal Server Error', details: String(e) });
         }
     };
 };
+
+// Simple test endpoint
+app.get('/api/test', (req, res) => {
+    console.log('✅ TEST ENDPOINT HIT!');
+    res.json({ status: 'ok', message: 'Server is working!' });
+});
 
 // Routes
 // We use 'all' to let the handler decide based on method, matching Vercel function behavior

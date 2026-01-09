@@ -12,7 +12,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
     openRouterApiKey: '',
-    aiModel: 'google-gemini-2.0-flash-free',
+    aiModel: 'openai/gpt-4o',
     enableRag: false,
     systemPromptTct: '',
     systemPromptOlymel: ''
@@ -94,10 +94,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSave }) 
                             onChange={(e) => handleChange('aiModel', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-700 rounded-lg py-3 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all appearance-none"
                         >
-                            <option value="google-gemini-2.0-flash-free">Google Gemini 2.0 Flash (Gratuit)</option>
-                            <option value="google-gemini-pro-1.5">Google Gemini Pro 1.5</option>
-                            <option value="openai-gpt-4o">OpenAI GPT-4o</option>
-                            <option value="anthropic-claude-3-5-sonnet">Anthropic Claude 3.5 Sonnet</option>
+                            <option value="openai/gpt-4o">OpenAI GPT-4o</option>
+                            <option value="openai/gpt-4o-mini">OpenAI GPT-4o Mini</option>
+                            <option value="anthropic/claude-3.5-sonnet">Anthropic Claude 3.5 Sonnet</option>
+                            <option value="anthropic/claude-3-haiku">Anthropic Claude 3 Haiku</option>
+                            <option value="mistral/mistral-large">Mistral Large</option>
+                            <option value="meta-llama/llama-3.1-70b-instruct">Meta Llama 3.1 70B</option>
                         </select>
                         <p className="mt-2 text-xs text-slate-500">
                             Le modèle choisi influencera la qualité et la vitesse de l'extraction.

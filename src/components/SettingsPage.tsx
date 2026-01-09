@@ -4,7 +4,7 @@ import { Button } from './Button';
 
 export const SettingsPage: React.FC = () => {
     const [apiKey, setApiKey] = useState('');
-    const [selectedModel, setSelectedModel] = useState('google/gemini-2.0-flash-exp:free');
+    const [selectedModel, setSelectedModel] = useState('openai/gpt-4o');
     const [tctPrompt, setTctPrompt] = useState('');
     const [olymelPrompt, setOlymelPrompt] = useState('');
     const [enableRag, setEnableRag] = useState(false);
@@ -12,7 +12,7 @@ export const SettingsPage: React.FC = () => {
 
     useEffect(() => {
         const storedApiKey = localStorage.getItem('adt_settings_apikey') || '';
-        const storedModel = localStorage.getItem('adt_settings_model') || 'google/gemini-2.0-flash-exp:free';
+        const storedModel = localStorage.getItem('adt_settings_model') || 'openai/gpt-4o';
         const storedTctPrompt = localStorage.getItem('adt_settings_prompt_tct') || '';
         const storedOlymelPrompt = localStorage.getItem('adt_settings_prompt_olymel') || '';
         const storedRag = localStorage.getItem('adt_settings_rag') === 'true';
@@ -30,11 +30,11 @@ export const SettingsPage: React.FC = () => {
         localStorage.setItem('adt_settings_prompt_tct', tctPrompt);
         localStorage.setItem('adt_settings_prompt_olymel', olymelPrompt);
         localStorage.setItem('adt_settings_rag', String(enableRag));
-        
+
         // Also update the env variable in memory if possible or reload
         // Since we can't easily update process.env in the browser for the running app without reload context
         // We will just rely on localStorage being read by the service
-        
+
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
     };
@@ -85,11 +85,12 @@ export const SettingsPage: React.FC = () => {
                             onChange={(e) => setSelectedModel(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm appearance-none"
                         >
-                            <option value="google/gemini-2.0-flash-exp:free">Google Gemini 2.0 Flash (Gratuit)</option>
-                            <option value="google/gemini-pro-1.5">Google Gemini Pro 1.5</option>
                             <option value="openai/gpt-4o">OpenAI GPT-4o</option>
+                            <option value="openai/gpt-4o-mini">OpenAI GPT-4o Mini</option>
                             <option value="anthropic/claude-3.5-sonnet">Anthropic Claude 3.5 Sonnet</option>
+                            <option value="anthropic/claude-3-haiku">Anthropic Claude 3 Haiku</option>
                             <option value="mistral/mistral-large">Mistral Large</option>
+                            <option value="meta-llama/llama-3.1-70b-instruct">Meta Llama 3.1 70B</option>
                         </select>
                         <p className="text-xs text-slate-500 mt-1.5">
                             Le modèle choisi influencera la qualité et la vitesse de l'extraction.
