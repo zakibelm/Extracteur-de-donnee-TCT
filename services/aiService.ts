@@ -1,11 +1,10 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { ParsedContent, TABLE_HEADERS, AISettings } from '../types';
 
 /**
  * Optimise une image pour l'envoi au moteur IA
  */
-export async function optimizeImage(file: File): Promise<{base64: string, mimeType: string}> {
+export async function optimizeImage(file: File): Promise<{ base64: string, mimeType: string }> {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -60,97 +59,57 @@ export async function validateOpenRouterKey(key: string): Promise<boolean> {
 }
 
 /**
- * Extrait les données via OpenRouter ou API Directe Gemini SDK
+ * Extrait les données via OpenRouter API
  */
 export async function extractDataFromImage(
-    base64Image: string, 
-    mimeType: string, 
+    base64Image: string,
+    mimeType: string,
     settings: AISettings
 ): Promise<ParsedContent> {
-    const isOpenRouter = !!settings.openRouterKey;
-
-    if (isOpenRouter) {
-        const url = 'https://openrouter.ai/api/v1/chat/completions';
-        
-        // Note: Certains modèles OpenRouter préfèrent le format JSON via le prompt plutôt que via response_format
-        const payload = {
-            model: settings.modelId,
-            messages: [
-                {
-                    role: "system",
-                    content: `${settings.systemPrompt}\n\nIMPORTANT: Réponds uniquement avec un objet JSON valide contenant une clé 'entries'.`
-                },
-                {
-                    role: "user",
-                    content: [
-                        { type: "text", text: "Analyse ce document logistique et extrait le tableau des tournées." },
-                        { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}` } }
-                    ]
-                }
-            ],
-            response_format: { type: "json_object" }
-        };
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${settings.openRouterKey}`,
-                'HTTP-Referer': window.location.origin,
-                'X-Title': 'ADT Logistics AI'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const errBody = await response.text();
-            throw new Error(`Erreur OpenRouter (${response.status}): ${errBody}`);
-        }
-
-        const result = await response.json();
-        const text = result.choices[0].message.content;
-        return parseAIResponse(text);
-    } else {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const modelName = settings.modelId.includes('/') ? settings.modelId.split('/')[1] : settings.modelId;
-        const actualModel = modelName.includes('gemini') ? modelName : 'gemini-3-flash-preview';
-
-        const extractHeaders = TABLE_HEADERS.slice(0, -2);
-
-        const response = await ai.models.generateContent({
-            model: actualModel,
-            contents: {
-                parts: [
-                    { text: settings.systemPrompt },
-                    { inlineData: { mimeType: mimeType, data: base64Image } }
-                ]
-            },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        entries: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: extractHeaders.reduce((acc, header) => {
-                                    acc[header] = { type: Type.STRING };
-                                    return acc;
-                                }, {} as Record<string, any>),
-                            }
-                        }
-                    },
-                    required: ["entries"]
-                }
-            },
-        });
-
-        const text = response.text;
-        if (!text) throw new Error("Réponse vide du moteur IA");
-        
-        return parseAIResponse(text);
+    if (!settings.openRouterKey) {
+        throw new Error("Clé API OpenRouter requise. Veuillez configurer votre clé dans les paramètres.");
     }
+
+    const url = 'https://openrouter.ai/api/v1/chat/completions';
+
+    // Note: Certains modèles OpenRouter préfèrent le format JSON via le prompt plutôt que via response_format
+    const payload = {
+        model: settings.modelId,
+        messages: [
+            {
+                role: "system",
+                content: `${settings.systemPrompt}\n\nIMPORTANT: Réponds uniquement avec un objet JSON valide contenant une clé 'entries'.`
+            },
+            {
+                role: "user",
+                content: [
+                    { type: "text", text: "Analyse ce document logistique et extrait le tableau des tournées." },
+                    { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}` } }
+                ]
+            }
+        ],
+        response_format: { type: "json_object" }
+    };
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${settings.openRouterKey}`,
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'ADT Logistics AI'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`Erreur OpenRouter (${response.status}): ${errBody}`);
+    }
+
+    const result = await response.json();
+    const text = result.choices[0].message.content;
+    return parseAIResponse(text);
 }
 
 /**
@@ -161,10 +120,10 @@ function parseAIResponse(text: string): ParsedContent {
         // Nettoyage du texte au cas où le modèle ajoute des balises ```json
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const parsedData = JSON.parse(jsonStr);
-        
+
         // Extraction intelligente des données selon la structure retournée
         let entries: any[] = [];
-        
+
         if (parsedData.entries && Array.isArray(parsedData.entries)) {
             entries = parsedData.entries;
         } else if (Array.isArray(parsedData)) {
@@ -176,8 +135,8 @@ function parseAIResponse(text: string): ParsedContent {
                 entries = firstArray;
             }
         }
-        
-        const rows: string[][] = entries.map((entry: any) => 
+
+        const rows: string[][] = entries.map((entry: any) =>
             TABLE_HEADERS.map(h => {
                 const val = entry[h] !== undefined ? entry[h] : entry[h.toLowerCase()];
                 return val !== undefined && val !== null ? String(val) : '';
