@@ -1,70 +1,50 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>ADT - Logistique & Extraction</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body { background-color: #050505; color: #f8fafc; margin: 0; }
+      .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #e11d48; }
+      
+      .bg-glow {
+        position: absolute;
+        width: 600px;
+        height: 600px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(225, 29, 72, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+        filter: blur(80px);
+        pointer-events: none;
+        z-index: 0;
+      }
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ADT - Extracteur de Données Tabulaires</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet">
-  <style>
-    body {
-      background-color: #0f172a;
-    }
-
-    .chat-content table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1em;
-      margin-bottom: 1em;
-      border-radius: 0.5rem;
-      overflow: hidden;
-    }
-
-    .chat-content th,
-    .chat-content td {
-      border: 1px solid #334155;
-      /* slate-700 */
-      padding: 0.75rem;
-      color: #e2e8f0;
-      /* slate-200 */
-    }
-
-    .chat-content th {
-      background-color: #0284c7;
-      /* sky-600 */
-      color: #ffffff;
-      font-weight: 600;
-      text-align: left;
-    }
-
-    .chat-content tr {
-      background-color: #334155;
-      /* slate-700 */
-    }
-
-    .chat-content tr:nth-child(even) {
-      background-color: #1e293b;
-      /* slate-800 */
-    }
-
-    .chat-content p:first-child {
-      margin-top: 0;
-    }
-
-    .chat-content p:last-child {
-      margin-bottom: 0;
-    }
-  </style>
-
-
-
+      .h-screen-fix {
+        height: 100vh;
+        height: -webkit-fill-available;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-markdown": "https://esm.sh/react-markdown@9",
+    "remark-gfm": "https://esm.sh/remark-gfm@4",
+    "gsap": "https://esm.sh/gsap@3.12.5",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+  }
+}
+</script>
 </head>
-
-<body style="margin: 0; padding: 0;">
-  <div id="root" style="width: 100vw; height: 100vh;"></div>
-  <script type="module" src="/src/index.tsx"></script>
-</body>
-
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
