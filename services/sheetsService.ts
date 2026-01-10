@@ -32,6 +32,7 @@ export const sheetsService = {
 
             const response = await fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
+                mode: 'no-cors', // ✅ CORRECTION CORS - Requis pour Google Apps Script
                 headers: {
                     'Content-Type': 'application/json',
                 },
