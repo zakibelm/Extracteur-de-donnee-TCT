@@ -5,6 +5,62 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykQd3fYsigmcEP
 
 export const sheetsService = {
     /**
+     * Récupère les données depuis Google Sheets
+     */
+    async fetchFromGoogleSheets(
+        numDome?: string
+    ): Promise<{ success: boolean; data: TableData | null; error?: string }> {
+        try {
+            const url = numDome
+                ? `${APPS_SCRIPT_URL}?numDome=${encodeURIComponent(numDome)}`
+                : APPS_SCRIPT_URL;
+
+            console.log('📥 Chargement depuis Google Sheets:', { url, numDome });
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ Données reçues de Google Sheets:', {
+                success: result.success,
+                totalRows: result.totalRows,
+                headersCount: result.headers?.length
+            });
+
+            if (!result.success) {
+                throw new Error(result.error || 'Erreur inconnue');
+            }
+
+            // Extraire les en-têtes de données (sans Timestamp, User, NumDome)
+            const dataHeaders = result.headers.slice(3);
+            const dataRows = result.rows.map((row: any[]) => row.slice(3));
+
+            return {
+                success: true,
+                data: {
+                    headers: dataHeaders,
+                    rows: dataRows
+                }
+            };
+        } catch (error) {
+            console.error('❌ Erreur chargement Google Sheets:', error);
+            return {
+                success: false,
+                data: null,
+                error: error instanceof Error ? error.message : 'Erreur inconnue'
+            };
+        }
+    },
+
+    /**
      * Exporte un tableau consolidé vers Google Sheets
      */
     async exportConsolidatedTable(
@@ -35,7 +91,7 @@ export const sheetsService = {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                      mode: 'no-cors',
+                mode: 'no-cors',
                 body: JSON.stringify(payload),
             });
 

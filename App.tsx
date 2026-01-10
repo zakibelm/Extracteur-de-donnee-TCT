@@ -167,8 +167,22 @@ export const App = () => {
                 consolidatedTable
               );
               console.log(result.success ? '✅ Export réussi' : '❌ Export échoué:', result.message);
+
+              // Import automatique depuis Google Sheets après export réussi
+              if (result.success) {
+                console.log('📥 Import automatique depuis Google Sheets...');
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Attendre 1s pour propagation
+
+                const fetchResult = await sheetsService.fetchFromGoogleSheets(user.numDome);
+                if (fetchResult.success && fetchResult.data) {
+                  setUnifiedTable(fetchResult.data);
+                  console.log('✅ Données chargées depuis Google Sheets:', fetchResult.data.rows.length, 'lignes');
+                } else {
+                  console.warn('⚠️ Échec import depuis Sheets, utilisation données locales');
+                }
+              }
             } catch (error) {
-              console.error('❌ Erreur export:', error);
+              console.error('❌ Erreur export/import:', error);
             }
 
             setActiveView('document');
