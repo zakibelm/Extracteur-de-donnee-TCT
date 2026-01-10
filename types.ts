@@ -1,9 +1,11 @@
 
 export interface User {
-  email: string;
-  name: string;
-  picture: string;
   numDome: string;
+  idEmploye: string;
+  telephone?: string;
+  email?: string;
+  isAdmin: boolean;
+  createdAt?: string;
 }
 
 export interface AISettings {
@@ -30,10 +32,10 @@ export interface SheetRow {
 }
 
 export const TABLE_HEADERS = [
-    "Tournée", "Nom", "Début tournée", "Fin tournée", "Classe véhicule", "Employé",
-    "Nom de l'employé", "Véhicule", "Classe véhicule affecté", "Stationnement",
-    "Approuvé", "Territoire début", "Adresse de début", "Adresse de fin",
-    "Changement", "Changement par"
+  "Tournée", "Nom", "Début tournée", "Fin tournée", "Classe véhicule", "Employé",
+  "Nom de l'employé", "Véhicule", "Classe véhicule affecté", "Stationnement",
+  "Approuvé", "Territoire début", "Adresse de début", "Adresse de fin",
+  "Changement", "Changement par"
 ];
 
 export const AGENT_ROLES = [
@@ -57,7 +59,7 @@ export interface TableData {
   rows: string[][];
 }
 
-export interface ParsedContent extends TableData {}
+export interface ParsedContent extends TableData { }
 
 export interface ExtractedData {
   id: string;
