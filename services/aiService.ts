@@ -72,24 +72,70 @@ export async function extractDataFromImage(
 
     const url = 'https://openrouter.ai/api/v1/chat/completions';
 
-    // Note: Certains modèles OpenRouter préfèrent le format JSON via le prompt plutôt que via response_format
+    // Prompt optimisé pour Claude Sonnet et autres VLLMs
+    const systemPrompt = `Tu es un expert en extraction de données de documents logistiques.
+
+TÂCHE: Extraire le tableau "Affectations des tournées" de l'image fournie.
+
+FORMAT DE SORTIE REQUIS:
+{
+  "entries": [
+    {
+      "Tournée": "valeur",
+      "Nom": "valeur",
+      "Début tournée": "valeur",
+      "Fin tournée": "valeur",
+      "Classe véhicule": "valeur",
+      "Employé": "valeur",
+      "Nom de l'employé": "valeur",
+      "Véhicule": "valeur",
+      "Classe véhicule affecté": "valeur",
+      "Stationnement": "valeur",
+      "Approuvé": "valeur",
+      "Territoire début": "valeur",
+      "Adresse de début": "valeur",
+      "Adresse de fin": "valeur"
+    }
+  ]
+}
+
+RÈGLES:
+- Réponds UNIQUEMENT avec du JSON valide
+- Chaque ligne du tableau = un objet dans "entries"
+- Si une colonne est vide, utilise une chaîne vide ""
+- Ne pas inventer de données
+- Respecter exactement les noms de colonnes ci-dessus`;
+
     const payload = {
         model: settings.modelId,
         messages: [
             {
                 role: "system",
-                content: `${settings.systemPrompt}\n\nIMPORTANT: Réponds uniquement avec un objet JSON valide contenant une clé 'entries'.`
+                content: systemPrompt
             },
             {
                 role: "user",
                 content: [
-                    { type: "text", text: "Analyse ce document logistique et extrait le tableau des tournées." },
-                    { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}` } }
+                    {
+                        type: "text",
+                        text: "Analyse ce document et extrait le tableau des tournées au format JSON demandé."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: { url: `data:${mimeType};base64,${base64Image}` }
+                    }
                 ]
             }
         ],
-        response_format: { type: "json_object" }
+        temperature: 0.1, // Bas pour plus de précision
+        max_tokens: 4000
     };
+
+    console.log('🔍 Envoi requête à OpenRouter:', {
+        model: settings.modelId,
+        imageSize: base64Image.length,
+        mimeType
+    });
 
     const response = await fetch(url, {
         method: 'POST',
@@ -104,11 +150,25 @@ export async function extractDataFromImage(
 
     if (!response.ok) {
         const errBody = await response.text();
+        console.error('❌ Erreur OpenRouter:', response.status, errBody);
         throw new Error(`Erreur OpenRouter (${response.status}): ${errBody}`);
     }
 
     const result = await response.json();
+    console.log('📥 Réponse OpenRouter:', result);
+
+    if (!result.choices || !result.choices[0] || !result.choices[0].message) {
+        console.error('❌ Format de réponse invalide:', result);
+        throw new Error('Format de réponse OpenRouter invalide');
+    }
+
     const text = result.choices[0].message.content;
+    console.log('📝 Contenu extrait:', text);
+
+    if (!text || text.trim() === '') {
+        throw new Error('Le modèle IA a retourné une réponse vide');
+    }
+
     return parseAIResponse(text);
 }
 
@@ -118,8 +178,21 @@ export async function extractDataFromImage(
 function parseAIResponse(text: string): ParsedContent {
     try {
         // Nettoyage du texte au cas où le modèle ajoute des balises ```json
-        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        let jsonStr = text.trim();
+
+        // Supprimer les balises markdown
+        if (jsonStr.startsWith('```json')) {
+            jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
+        } else if (jsonStr.startsWith('```')) {
+            jsonStr = jsonStr.replace(/```\n?/g, '');
+        }
+
+        jsonStr = jsonStr.trim();
+
+        console.log('🔍 JSON à parser:', jsonStr.substring(0, 200) + '...');
+
         const parsedData = JSON.parse(jsonStr);
+        console.log('✅ JSON parsé:', parsedData);
 
         // Extraction intelligente des données selon la structure retournée
         let entries: any[] = [];
@@ -136,6 +209,12 @@ function parseAIResponse(text: string): ParsedContent {
             }
         }
 
+        console.log(`📊 ${entries.length} entrées trouvées`);
+
+        if (entries.length === 0) {
+            throw new Error('Aucune donnée extraite du tableau');
+        }
+
         const rows: string[][] = entries.map((entry: any) =>
             TABLE_HEADERS.map(h => {
                 const val = entry[h] !== undefined ? entry[h] : entry[h.toLowerCase()];
@@ -143,9 +222,11 @@ function parseAIResponse(text: string): ParsedContent {
             })
         );
 
+        console.log('✅ Extraction réussie:', rows.length, 'lignes');
         return { headers: TABLE_HEADERS, rows };
     } catch (error) {
-        console.error("AI Parsing Error:", error, "Text was:", text);
-        throw new Error("Le modèle IA n'a pas retourné un format JSON compatible.");
+        console.error("❌ Erreur parsing AI:", error);
+        console.error("📝 Texte reçu:", text);
+        throw new Error(`Le modèle IA n'a pas retourné un format JSON compatible: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     }
 }
