@@ -59,7 +59,7 @@ export async function validateOpenRouterKey(key: string): Promise<boolean> {
 }
 
 /**
- * Extrait les données via OpenRouter API
+ * Extrait les données via OpenRouter API - FORMAT CSV SIMPLIFIÉ
  */
 export async function extractDataFromImage(
     base64Image: string,
@@ -72,39 +72,26 @@ export async function extractDataFromImage(
 
     const url = 'https://openrouter.ai/api/v1/chat/completions';
 
-    // Prompt optimisé pour Claude Sonnet et autres VLLMs
-    const systemPrompt = `Tu es un expert en extraction de données de documents logistiques.
+    // Prompt CSV simplifié - BEAUCOUP plus simple que JSON !
+    const systemPrompt = `Tu es un extracteur de données de tableaux logistiques.
 
-TÂCHE: Extraire le tableau "Affectations des tournées" de l'image fournie.
+TÂCHE: Extraire le tableau "Affectations des tournées" au format CSV.
 
-FORMAT DE SORTIE REQUIS:
-{
-  "entries": [
-    {
-      "Tournée": "valeur",
-      "Nom": "valeur",
-      "Début tournée": "valeur",
-      "Fin tournée": "valeur",
-      "Classe véhicule": "valeur",
-      "Employé": "valeur",
-      "Nom de l'employé": "valeur",
-      "Véhicule": "valeur",
-      "Classe véhicule affecté": "valeur",
-      "Stationnement": "valeur",
-      "Approuvé": "valeur",
-      "Territoire début": "valeur",
-      "Adresse de début": "valeur",
-      "Adresse de fin": "valeur"
-    }
-  ]
-}
+FORMAT DE SORTIE (CSV uniquement, pas de JSON):
+Tournée,Nom,Début tournée,Fin tournée,Classe véhicule,Employé,Nom de l'employé,Véhicule,Classe véhicule affecté,Stationnement,Approuvé,Territoire début,Adresse de début,Adresse de fin
+TCT0010,TAXI COOP TERREBONNE,6:30,7:25,TAXI,0458,Hammada Abdel Aziz,212,TAXI,,✓,104,3941 du Lias RUE,777 de Bois-de-Boulogne AV
+TCT0027,TAXI COOP TERREBONNE,6:30,7:28,TAXI,0503,Daher Youssef,214,MINIVAN,,✓,104,2960 des Hirondelles RUE,1415 de l'Avenir CH
 
-RÈGLES:
-- Réponds UNIQUEMENT avec du JSON valide
-- Chaque ligne du tableau = un objet dans "entries"
-- Si une colonne est vide, utilise une chaîne vide ""
-- Ne pas inventer de données
-- Respecter exactement les noms de colonnes ci-dessus`;
+RÈGLES IMPORTANTES:
+- Première ligne = en-têtes (exactement comme ci-dessus)
+- Lignes suivantes = données du tableau
+- Séparer les colonnes par des virgules
+- Si une cellule contient une virgule, l'entourer de guillemets "..."
+- Si une cellule est vide, laisser vide entre les virgules
+- Extraire TOUTES les lignes visibles dans le tableau
+- NE PAS ajouter de texte avant ou après le CSV
+- NE PAS ajouter de notes ou commentaires
+- Juste le CSV pur`;
 
     const payload = {
         model: settings.modelId,
@@ -118,7 +105,7 @@ RÈGLES:
                 content: [
                     {
                         type: "text",
-                        text: "Analyse ce document et extrait le tableau des tournées au format JSON demandé."
+                        text: "Extrait le tableau au format CSV comme demandé. Réponds UNIQUEMENT avec le CSV, sans aucun texte supplémentaire."
                     },
                     {
                         type: "image_url",
@@ -127,7 +114,7 @@ RÈGLES:
                 ]
             }
         ],
-        temperature: 0.1, // Bas pour plus de précision
+        temperature: 0.1,
         max_tokens: 4000
     };
 
@@ -163,70 +150,85 @@ RÈGLES:
     }
 
     const text = result.choices[0].message.content;
-    console.log('📝 Contenu extrait:', text);
+    console.log('📝 Contenu CSV extrait:', text);
 
     if (!text || text.trim() === '') {
         throw new Error('Le modèle IA a retourné une réponse vide');
     }
 
-    return parseAIResponse(text);
+    return parseCSVResponse(text);
 }
 
 /**
- * Helper polyvalent pour parser les réponses JSON des différents modèles
+ * Parser CSV - BEAUCOUP plus simple que JSON !
  */
-function parseAIResponse(text: string): ParsedContent {
+function parseCSVResponse(text: string): ParsedContent {
     try {
-        // Nettoyage du texte au cas où le modèle ajoute des balises ```json
-        let jsonStr = text.trim();
+        // Nettoyer le texte
+        let csvText = text.trim();
 
-        // Supprimer les balises markdown
-        if (jsonStr.startsWith('```json')) {
-            jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
-        } else if (jsonStr.startsWith('```')) {
-            jsonStr = jsonStr.replace(/```\n?/g, '');
+        // Supprimer les balises markdown si présentes
+        if (csvText.startsWith('```csv') || csvText.startsWith('```')) {
+            csvText = csvText.replace(/```csv\n?/g, '').replace(/```\n?/g, '').trim();
         }
 
-        jsonStr = jsonStr.trim();
+        console.log('🔍 CSV reçu (200 premiers caractères):', csvText.substring(0, 200) + '...');
 
-        console.log('🔍 JSON à parser:', jsonStr.substring(0, 200) + '...');
+        // Séparer en lignes
+        const lines = csvText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
 
-        const parsedData = JSON.parse(jsonStr);
-        console.log('✅ JSON parsé:', parsedData);
+        if (lines.length < 2) {
+            throw new Error('CSV invalide : moins de 2 lignes (en-têtes + données)');
+        }
 
-        // Extraction intelligente des données selon la structure retournée
-        let entries: any[] = [];
+        console.log(`📊 ${lines.length} lignes trouvées (1 en-tête + ${lines.length - 1} données)`);
 
-        if (parsedData.entries && Array.isArray(parsedData.entries)) {
-            entries = parsedData.entries;
-        } else if (Array.isArray(parsedData)) {
-            entries = parsedData;
-        } else {
-            // Cherche le premier tableau trouvé dans l'objet
-            const firstArray = Object.values(parsedData).find(v => Array.isArray(v));
-            if (Array.isArray(firstArray)) {
-                entries = firstArray;
+        // Parser chaque ligne CSV
+        const parseCSVLine = (line: string): string[] => {
+            const result: string[] = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
             }
+            result.push(current.trim());
+            return result;
+        };
+
+        // Extraire les données (ignorer la première ligne d'en-têtes)
+        const dataLines = lines.slice(1);
+        const rows: string[][] = dataLines.map(line => {
+            const parsed = parseCSVLine(line);
+
+            // S'assurer qu'on a le bon nombre de colonnes
+            while (parsed.length < TABLE_HEADERS.length) {
+                parsed.push('');
+            }
+
+            return parsed.slice(0, TABLE_HEADERS.length);
+        });
+
+        console.log('✅ Extraction CSV réussie:', rows.length, 'lignes');
+
+        // Afficher un aperçu
+        if (rows.length > 0) {
+            console.log('📋 Première ligne:', rows[0].slice(0, 5).join(' | '));
         }
 
-        console.log(`📊 ${entries.length} entrées trouvées`);
-
-        if (entries.length === 0) {
-            throw new Error('Aucune donnée extraite du tableau');
-        }
-
-        const rows: string[][] = entries.map((entry: any) =>
-            TABLE_HEADERS.map(h => {
-                const val = entry[h] !== undefined ? entry[h] : entry[h.toLowerCase()];
-                return val !== undefined && val !== null ? String(val) : '';
-            })
-        );
-
-        console.log('✅ Extraction réussie:', rows.length, 'lignes');
         return { headers: TABLE_HEADERS, rows };
     } catch (error) {
-        console.error("❌ Erreur parsing AI:", error);
+        console.error("❌ Erreur parsing CSV:", error);
         console.error("📝 Texte reçu:", text);
-        throw new Error(`Le modèle IA n'a pas retourné un format JSON compatible: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+        throw new Error(`Le modèle IA n'a pas retourné un format CSV compatible: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     }
 }
