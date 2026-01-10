@@ -39,18 +39,9 @@ export const sheetsService = {
                 body: JSON.stringify(payload),
             });
 
-            console.log('📥 Réponse Google Sheets:', {
-                status: response.status,
-                statusText: response.statusText,
-                ok: response.ok
-            });
-
-            const responseText = await response.text();
-            console.log('📝 Contenu réponse:', responseText);
-
-            if (!response.ok) {
-                throw new Error(`Erreur HTTP ${response.status}: ${responseText}`);
-            }
+            // Avec no-cors, la réponse est "opaque" - on ne peut pas la lire
+            // Si pas d'exception, on considère que c'est réussi
+            console.log('📥 Requête envoyée (mode no-cors - réponse opaque)');
 
             return {
                 success: true,
