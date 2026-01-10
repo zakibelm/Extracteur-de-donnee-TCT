@@ -149,12 +149,28 @@ export const App = () => {
         activeView={activeView}
         setActiveView={setActiveView}
         extractedData={extractedResults}
-        onGenerateResults={() => {
+        onGenerateResults={async () => {
           // Consolider toutes les données extraites avec succès
           const successfulResults = extractedResults.filter(r => r.status === Status.Success && r.content);
           if (successfulResults.length > 0) {
             const allRows = successfulResults.flatMap(r => r.content!.rows);
-            setUnifiedTable({ headers: TABLE_HEADERS, rows: allRows });
+            const consolidatedTable = { headers: TABLE_HEADERS, rows: allRows };
+            setUnifiedTable(consolidatedTable);
+
+            // Export automatique vers Google Sheets
+            console.log('🚀 Export automatique Google Sheets...');
+            try {
+              const { sheetsService } = await import('./services/sheetsService');
+              const result = await sheetsService.exportConsolidatedTable(
+                user.numDome,
+                user.email,
+                consolidatedTable
+              );
+              console.log(result.success ? '✅ Export réussi' : '❌ Export échoué:', result.message);
+            } catch (error) {
+              console.error('❌ Erreur export:', error);
+            }
+
             setActiveView('document');
           }
         }}
