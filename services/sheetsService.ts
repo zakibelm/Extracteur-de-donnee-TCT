@@ -32,20 +32,34 @@ export const sheetsService = {
 
             const response = await fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
-                mode: 'no-cors', // ✅ CORRECTION CORS - Requis pour Google Apps Script
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(payload),
             });
 
-            // Avec no-cors, la réponse est "opaque" - on ne peut pas la lire
-            // Si pas d'exception, on considère que c'est réussi
-            console.log('📥 Requête envoyée (mode no-cors - réponse opaque)');
+            console.log('📥 Réponse Google Sheets:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+
+            const responseText = await response.text();
+            console.log('📝 Contenu réponse:', responseText);
+
+            if (!response.ok) {
+                throw new Error(`Erreur HTTP ${response.status}: ${responseText}`);
+            }
+
+            // Parser la réponse JSON
+            const result = JSON.parse(responseText);
+            console.log('✅ Résultat parsé:', result);
 
             return {
-                success: true,
-                message: `${tableData.rows.length} lignes exportées vers Google Sheets`,
+                success: result.success || true,
+                message: result.rowsAdded
+                    ? `${result.rowsAdded} lignes exportées vers Google Sheets`
+                    : `${tableData.rows.length} lignes exportées vers Google Sheets`,
             };
         } catch (error) {
             console.error('❌ Erreur export Google Sheets:', error);
