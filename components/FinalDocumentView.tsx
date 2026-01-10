@@ -5,7 +5,6 @@ import { Button } from './Button';
 import { Icons } from './Icons';
 import { Modal } from './Modal';
 import { gasService } from '../services/gasService';
-import { sheetsService } from '../services/sheetsService';
 
 interface FinalDocumentViewProps {
     tableData: TableData | null;
@@ -21,7 +20,6 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     const [rows, setRows] = useState<string[][]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [pendingChange, setPendingChange] = useState<any>(null);
-    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         if (tableData) {
@@ -62,30 +60,6 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    };
-
-    const exportToGoogleSheets = async () => {
-        if (!tableData) return;
-
-        setIsExporting(true);
-        try {
-            const result = await sheetsService.exportConsolidatedTable(
-                user.numDome,
-                user.email,
-                { headers: tableData.headers, rows: filteredRows }
-            );
-
-            if (result.success) {
-                alert(`✅ ${result.message}`);
-            } else {
-                alert(`❌ Erreur: ${result.message}`);
-            }
-        } catch (error) {
-            console.error('Erreur export Google Sheets:', error);
-            alert('❌ Erreur lors de l\'export vers Google Sheets');
-        } finally {
-            setIsExporting(false);
-        }
     };
 
     const confirmChange = async () => {
@@ -151,14 +125,6 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                         </div>
                     </div>
                     <div className="flex gap-3 w-full lg:w-auto">
-                        <button
-                            onClick={exportToGoogleSheets}
-                            disabled={isExporting}
-                            className="flex-1 lg:flex-none justify-center bg-green-600 hover:bg-green-500 text-white px-4 md:px-6 py-3 rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
-                        >
-                            <Icons.Database className="w-3 h-3 md:w-4 md:h-4 mr-2 inline-block" />
-                            {isExporting ? 'Export...' : 'Google Sheets'}
-                        </button>
                         <button onClick={exportToCsv} className="flex-1 lg:flex-none justify-center bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 px-4 md:px-6 py-3 rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all">
                             <Icons.UploadCloud className="w-3 h-3 md:w-4 md:h-4 mr-2 inline-block rotate-180" /> CSV
                         </button>
