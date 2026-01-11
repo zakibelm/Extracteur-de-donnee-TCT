@@ -20,12 +20,45 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     const [rows, setRows] = useState<string[][]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [pendingChange, setPendingChange] = useState<any>(null);
+    const [isLoadingFromSheets, setIsLoadingFromSheets] = useState(false);
 
     useEffect(() => {
         if (tableData) {
             setRows(tableData.rows.map(row => [...row]));
         }
     }, [tableData]);
+
+    // Chargement automatique depuis Google Sheets si pas de données
+    useEffect(() => {
+        const loadDataFromSheets = async () => {
+            // Si pas de données ET pas déjà en train de charger
+            if ((!tableData || tableData.rows.length === 0) && !isLoadingFromSheets) {
+                console.log('📥 Chargement automatique depuis Google Sheets...');
+                await loadFromGoogleSheets();
+            }
+        };
+
+        loadDataFromSheets();
+    }, []); // Au montage du composant
+
+    const loadFromGoogleSheets = async () => {
+        setIsLoadingFromSheets(true);
+        try {
+            const { sheetsService } = await import('../services/sheetsService');
+            const result = await sheetsService.fetchFromGoogleSheets(user?.numDome);
+
+            if (result.success && result.data && result.data.rows.length > 0) {
+                onTableUpdate(result.data);
+                console.log('✅ Données chargées depuis Google Sheets:', result.data.rows.length, 'lignes');
+            } else {
+                console.log('ℹ️ Aucune donnée trouvée dans Google Sheets pour', user?.numDome);
+            }
+        } catch (error) {
+            console.error('❌ Erreur chargement Google Sheets:', error);
+        } finally {
+            setIsLoadingFromSheets(false);
+        }
+    };
 
     const indices = useMemo(() => {
         if (!tableData) return { tournee: -1, vehicule: -1, debut: -1, changement: -1, changementPar: -1 };
@@ -103,6 +136,27 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                     </div>
                 </div>
             </Modal>
+
+            {/* Header avec bouton de rechargement */}
+            <div className="flex justify-between items-center p-4 bg-gray-800/50 border-b border-gray-700">
+                <h2 className="text-2xl font-bold text-white">Document Final</h2>
+                <button
+                    onClick={loadFromGoogleSheets}
+                    disabled={isLoadingFromSheets}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                    {isLoadingFromSheets ? (
+                        <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Chargement...</span>
+                        </>
+                    ) : (
+                        <>
+                            <span>🔄</span>
+                            <span>Recharger depuis Google Sheets</span>
+                        </>
+                    )}
+                </button>
+            </div>
 
             <div className="p-4 md:p-8 bg-zinc-950/50 border-b border-zinc-900">
                 <div className="flex flex-col lg:flex-row justify-between items-center gap-4 md:gap-6">
