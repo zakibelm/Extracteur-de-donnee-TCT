@@ -1,7 +1,6 @@
 import { TableData } from '../types';
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykQd3fYsigmcEPHU7bZMGtWuJVJc7EWuxnOUZkwiG5S_8bcux1pltTqTCEYFoV-Q/exec';
-
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxItNlJRkSXj5YjAsnoroC PhdFUgb7lJ9B8BXMQEQhSiLvSE7KE3M7qOK2c8vIT7vQ/exec';
 
 export const sheetsService = {
     /**
