@@ -1,6 +1,6 @@
 import { TableData } from '../types';
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykQd3fYsigmcEPHU7bZMGtWuJVJc7EWuxnOUZkwiG5S_8bcux1pltTqTCEYFoV-Q/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEu_rh7mi1-w4PBpe4thBWtDdXVQlZgVKdhEXDvXl1j4-eX5W-n5Wno6Cy8iP-qdc/exec';
 
 
 export const sheetsService = {
@@ -11,9 +11,11 @@ export const sheetsService = {
         numDome?: string
     ): Promise<{ success: boolean; data: TableData | null; error?: string }> {
         try {
+            // Utilisation de l'action getHistory comme dans l'exemple fonctionnel
+            const baseUrl = `${APPS_SCRIPT_URL}?action=getHistory`;
             const url = numDome
-                ? `${APPS_SCRIPT_URL}?numDome=${encodeURIComponent(numDome)}`
-                : APPS_SCRIPT_URL;
+                ? `${baseUrl}&numDome=${encodeURIComponent(numDome)}`
+                : baseUrl;
 
             console.log('📥 Chargement depuis Google Sheets:', { url, numDome });
 
