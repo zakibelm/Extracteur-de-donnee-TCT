@@ -33,9 +33,9 @@ export interface SheetRow {
 
 export const TABLE_HEADERS = [
   "Tournée", "Nom", "Début tournée", "Fin tournée", "Classe véhicule", "Employé",
-  "Nom de l'employé", "Véhicule", "Classe véhicule affecté", "Stationnement",
-  "Approuvé", "Territoire début", "Adresse de début", "Adresse de fin",
-  "Changement", "Changement par"
+  "Nom de l'employé", "Véhicule", "Changement", "Changement par",
+  "Classe véhicule affecté", "Stationnement", "Approuvé", "Territoire début",
+  "Adresse de début", "Adresse de fin"
 ];
 
 export const AGENT_ROLES = [
