@@ -1,12 +1,7 @@
 import React, { useState } from 'react';
-import { User, Car, CheckCircle, Eye, UploadCloud } from 'lucide-react';
-
-export interface User {
-  numDome: string;
-  idEmploye: string;
-  telephone?: string;
-  isAdmin: boolean;
-}
+import { User as UserIcon, Car, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { authService } from '../services/authService';
+import { User } from '../types';
 
 interface AuthPageProps {
   onLogin: (user: User) => void;
@@ -22,24 +17,42 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   const [numDome, setNumDome] = useState('');
   const [idEmploye, setIdEmploye] = useState('');
   const [telephone, setTelephone] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
     if (!numDome.trim() || !idEmploye.trim()) {
-      alert('Veuillez remplir tous les champs obligatoires');
+      setError('Veuillez remplir tous les champs obligatoires');
       return;
     }
 
-    const user: User = {
-      numDome: numDome.trim(),
-      idEmploye: idEmploye.trim(),
-      telephone: telephone.trim() || undefined,
-      isAdmin: accountType === 'admin' || numDome === '999' || idEmploye === '090'
-    };
+    setIsLoading(true);
 
-    localStorage.setItem('edt_user', JSON.stringify(user));
-    onLogin(user);
+    try {
+      let user: User;
+      if (mode === 'login') {
+        user = await authService.login(numDome.trim(), idEmploye.trim());
+      } else {
+        user = await authService.signup(
+          numDome.trim(),
+          idEmploye.trim(),
+          accountType,
+          telephone.trim() || undefined
+        );
+      }
+
+      // Success
+      localStorage.setItem('edt_user', JSON.stringify(user));
+      onLogin(user);
+
+    } catch (err: any) {
+      setError(err.message || 'Une erreur est survenue');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -64,14 +77,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
           {/* Tabs - Compact */}
           <div className="flex border-b border-slate-800 bg-slate-900/50">
             <button
-              onClick={() => setMode('login')}
+              onClick={() => { setMode('login'); setError(null); }}
               className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors relative ${mode === 'login' ? 'text-emerald-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
             >
               Connexion
               {mode === 'login' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>}
             </button>
             <button
-              onClick={() => setMode('signup')}
+              onClick={() => { setMode('signup'); setError(null); }}
               className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors relative ${mode === 'signup' ? 'text-cyan-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
             >
               Inscription
@@ -82,18 +95,26 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
 
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-start gap-2 text-red-200 text-xs animate-in fade-in slide-in-from-top-2">
+                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
             {/* Account Type Selection - Very Compact */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setAccountType('admin')}
                 className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'admin'
-                    ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-100'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
+                  ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-100'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
                   }`}
               >
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'admin' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
-                  <User size={16} />
+                  <UserIcon size={16} />
                 </div>
                 <div className="text-left">
                   <div className={`text-xs font-bold ${accountType === 'admin' ? 'text-emerald-400' : 'text-slate-300'}`}>Répartition</div>
@@ -106,8 +127,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                 type="button"
                 onClick={() => setAccountType('driver')}
                 className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'driver'
-                    ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-100'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
+                  ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-100'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
                   }`}
               >
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'driver' ? 'bg-cyan-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
@@ -143,10 +164,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                   <div className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-mono group-focus-within:text-emerald-400 group-focus-within:bg-emerald-500/10 transition-colors">ID</div>
                 </div>
                 <input
-                  type="text"
+                  type="password"
                   value={idEmploye}
                   onChange={(e) => setIdEmploye(e.target.value)}
-                  placeholder="Identifiant Employé"
+                  placeholder="Mot de passe (ID Employé)"
                   className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm font-mono"
                   required
                 />
@@ -172,11 +193,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             <div className="pt-2">
               <button
                 type="submit"
-                className={`w-full py-2.5 text-sm font-bold uppercase tracking-wide text-white rounded-lg shadow-lg transition-all transform active:scale-95 ${mode === 'login'
-                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-900/20'
-                    : 'bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 shadow-cyan-900/20'
+                disabled={isLoading}
+                className={`w-full py-2.5 text-sm font-bold uppercase tracking-wide text-white rounded-lg shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''} ${mode === 'login'
+                  ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-900/20'
+                  : 'bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 shadow-cyan-900/20'
                   }`}
               >
+                {isLoading && <Loader size={16} className="animate-spin" />}
                 {mode === 'login' ? 'Se connecter' : "Créer un compte"}
               </button>
               <p className="text-center text-[10px] text-slate-600 mt-3">

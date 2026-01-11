@@ -1,9 +1,9 @@
 export enum Status {
-    Idle = 'idle',
-    Processing = 'processing',
-    AiProcessing = 'ai_processing',
-    Success = 'success',
-    Error = 'error',
+  Idle = 'idle',
+  Processing = 'processing',
+  AiProcessing = 'ai_processing',
+  Success = 'success',
+  Error = 'error',
 }
 
 export interface TableData {
@@ -14,24 +14,24 @@ export interface TableData {
 export type ParsedContent = TableData;
 
 export interface ExtractedData {
-    id: string;
-    fileName: string;
-    imageSrc: string;
-    content: ParsedContent | null;
-    status: Status;
+  id: string;
+  fileName: string;
+  imageSrc: string;
+  content: ParsedContent | null;
+  status: Status;
 }
 
 export interface SummaryData {
-    totalRows: number;
-    uniqueChauffeurs: string[];
-    uniqueVehicules: string[];
-    uniqueAdressesDepart: string[];
-    uniqueAdressesArrivee: string[];
+  totalRows: number;
+  uniqueChauffeurs: string[];
+  uniqueVehicules: string[];
+  uniqueAdressesDepart: string[];
+  uniqueAdressesArrivee: string[];
 }
 
 export interface ChatMessage {
-    role: 'user' | 'model';
-    text: string;
+  role: 'user' | 'model';
+  text: string;
 }
 
 export const AGENT_ROLES = [
@@ -58,3 +58,12 @@ export const AGENT_DETAILS: { [key: string]: { name: string; description: string
   'SupervisorAgent': { name: 'SupervisorAgent (Assurance Qualité)', description: 'S\'assure de la qualité et de la conformité de la réponse, supervise la collaboration.' },
   'FinanceAgent': { name: 'FinanceAgent (Stratégie)', description: 'Fournit une analyse stratégique de haut niveau et des recommandations.' },
 };
+
+export interface User {
+  id?: number;
+  numDome: string;
+  idEmploye: string;
+  telephone?: string;
+  isAdmin: boolean;
+  role?: string;
+}

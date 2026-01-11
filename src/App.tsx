@@ -9,11 +9,11 @@ import React, { useState, useCallback, useEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
-import { ExtractedData, Status, TableData } from './types';
+import { ExtractedData, Status, TableData, User } from './types';
 import { extractDataFromImage } from './services/aiService';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { AuthPage, User } from './components/AuthPage';
+import { AuthPage } from './components/AuthPage';
 
 // Set worker path for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs`;
