@@ -78,9 +78,9 @@ export async function extractDataFromImage(
 TÂCHE: Extraire le tableau "Affectations des tournées" au format CSV.
 
 FORMAT DE SORTIE (CSV uniquement, pas de JSON):
-Tournée,Nom,Début tournée,Fin tournée,Classe véhicule,Employé,Nom de l'employé,Véhicule,Classe véhicule affecté,Stationnement,Approuvé,Territoire début,Adresse de début,Adresse de fin
-TCT0010,TAXI COOP TERREBONNE,6:30,7:25,TAXI,0458,Hammada Abdel Aziz,212,TAXI,,✓,104,3941 du Lias RUE,777 de Bois-de-Boulogne AV
-TCT0027,TAXI COOP TERREBONNE,6:30,7:28,TAXI,0503,Daher Youssef,214,MINIVAN,,✓,104,2960 des Hirondelles RUE,1415 de l'Avenir CH
+Tournée,Nom,Début tournée,Fin tournée,Classe véhicule,Employé,Nom de l'employé,Véhicule,Changement,Changement par,Classe véhicule affecté,Stationnement,Approuvé,Territoire début,Adresse de début,Adresse de fin
+TCT0010,TAXI COOP TERREBONNE,6:30,7:25,TAXI,0458,Hammada Abdel Aziz,212,212,,TAXI,104,✓,104,3941 du Lias RUE,777 de Bois-de-Boulogne AV
+TCT0027,TAXI COOP TERREBONNE,6:30,7:28,TAXI,0503,Daher Youssef,214,214,,MINIVAN,104,✓,104,2960 des Hirondelles RUE,1415 de l'Avenir CH
 
 RÈGLES IMPORTANTES:
 - Première ligne = en-têtes (exactement comme ci-dessus)
@@ -91,7 +91,15 @@ RÈGLES IMPORTANTES:
 - Extraire TOUTES les lignes visibles dans le tableau
 - NE PAS ajouter de texte avant ou après le CSV
 - NE PAS ajouter de notes ou commentaires
-- Juste le CSV pur`;
+
+ATTENTION SPÉCIALE POUR LA COLONNE "Véhicule":
+- La colonne "Véhicule" doit contenir le NUMÉRO du véhicule (exemple: 212, 214, 409, 111)
+- PAS le nom de la personne ou du conducteur
+- Cherche le numéro du véhicule dans le tableau, généralement une colonne avec des chiffres
+- La colonne "Changement" doit contenir le MÊME numéro que "Véhicule"
+- Exemple: si Véhicule=212, alors Changement=212
+
+Juste le CSV pur`;
 
     const payload = {
         model: settings.modelId,
