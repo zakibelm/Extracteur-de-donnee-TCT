@@ -75,9 +75,9 @@ export const MainContent: React.FC<MainContentProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
                         {extractedData.map((data) => (
-                            <ResultCard 
-                                key={data.id} 
-                                data={data} 
+                            <ResultCard
+                                key={data.id}
+                                data={data}
                                 onDelete={onDeleteResult}
                             />
                         ))}
@@ -89,11 +89,11 @@ export const MainContent: React.FC<MainContentProps> = ({
 
     return (
         <main className="flex-grow overflow-hidden flex flex-col bg-black">
-             <div className="flex-grow flex flex-col h-full overflow-hidden">
+            <div className="flex-grow flex flex-col h-full overflow-hidden">
                 <header className="px-4 md:px-8 pt-6 md:pt-8 border-b border-zinc-900 flex flex-col md:flex-row gap-4 justify-between items-center bg-black sticky top-0 z-30">
                     <div className="flex items-center w-full md:w-auto gap-4">
                         {/* Mobile Toggle Button */}
-                        <button 
+                        <button
                             onClick={() => setIsSidebarOpen(true)}
                             className="lg:hidden p-2 bg-zinc-900 border border-zinc-800 text-white rounded-xl active:scale-95 transition-all"
                         >
@@ -112,22 +112,20 @@ export const MainContent: React.FC<MainContentProps> = ({
                             )}
                             <button
                                 onClick={() => setActiveView('document')}
-                                disabled={!unifiedTable}
-                                className={`whitespace-nowrap pb-1 md:pb-6 px-1 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all relative disabled:opacity-20 ${activeView === 'document' ? 'text-red-500' : 'text-zinc-600 hover:text-zinc-400'}`}
+                                className={`whitespace-nowrap pb-1 md:pb-6 px-1 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all relative ${activeView === 'document' ? 'text-red-500' : 'text-zinc-600 hover:text-zinc-400'}`}
                             >
                                 {activeView === 'document' && <span className="absolute bottom-[-4px] md:bottom-0 left-0 right-0 h-0.5 bg-red-600 rounded-full shadow-[0_0_10px_rgba(225,29,72,0.8)]"></span>}
                                 Document Final
                             </button>
                             <button
                                 onClick={() => setActiveView('report')}
-                                disabled={!unifiedTable}
-                                className={`whitespace-nowrap pb-1 md:pb-6 px-1 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all relative disabled:opacity-20 ${activeView === 'report' ? 'text-red-500' : 'text-zinc-600 hover:text-zinc-400'}`}
+                                className={`whitespace-nowrap pb-1 md:pb-6 px-1 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all relative ${activeView === 'report' ? 'text-red-500' : 'text-zinc-600 hover:text-zinc-400'}`}
                             >
                                 {activeView === 'report' && <span className="absolute bottom-[-4px] md:bottom-0 left-0 right-0 h-0.5 bg-red-600 rounded-full shadow-[0_0_10px_rgba(225,29,72,0.8)]"></span>}
                                 Historique
                             </button>
                         </nav>
-                        
+
                         <div className="hidden md:flex items-center gap-6 pb-6">
                             <button onClick={onLogout} className="p-3 bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-500 rounded-2xl transition-all">
                                 <Icons.LogOut className="w-4 h-4" />
@@ -137,12 +135,12 @@ export const MainContent: React.FC<MainContentProps> = ({
 
                     {/* Mobile only logout */}
                     <div className="md:hidden flex items-center justify-between w-full pb-4">
-                         <div className="text-[10px] font-black text-zinc-700 uppercase tracking-widest">
+                        <div className="text-[10px] font-black text-zinc-700 uppercase tracking-widest">
                             Vue: {activeView}
-                         </div>
-                         <button onClick={onLogout} className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-xl text-[9px] font-black uppercase tracking-widest">
+                        </div>
+                        <button onClick={onLogout} className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-xl text-[9px] font-black uppercase tracking-widest">
                             Quitter <Icons.LogOut className="w-3 h-3" />
-                         </button>
+                        </button>
                     </div>
                 </header>
 
@@ -156,7 +154,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                 <div className="flex-grow overflow-y-auto custom-scrollbar">
                     {activeView === 'extract' && isAdmin && renderExtractionView()}
                     {activeView === 'document' && (
-                         <FinalDocumentView
+                        <FinalDocumentView
                             tableData={unifiedTable}
                             onPrint={onPrint}
                             onDownloadPdf={onDownloadPdf}
