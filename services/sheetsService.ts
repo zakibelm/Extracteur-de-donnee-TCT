@@ -1,6 +1,6 @@
 import { TableData } from '../types';
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6NQloppvaiaBGojc773vgOwbRaQPLqajzulp8jCSdv0fh74u5kxK_uDje5FHlduPY/exec';    /**
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzpFc7qhUGs_tmExqoqpWlZDsW_LrcoVmWJfwHMCgZdWnqd1nRSaSEVjBgD/exec';
      * Récupère les données depuis Google Sheets
      */
     async fetchFromGoogleSheets(
