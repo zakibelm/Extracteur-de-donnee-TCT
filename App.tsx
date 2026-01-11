@@ -9,7 +9,12 @@ import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
 
 export const App = () => {
-  const [user, setUser] = useState<User | null>(null);
+  // Charger l'utilisateur depuis localStorage au démarrage
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem('adt_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'extract' | 'document' | 'report'>('extract');
@@ -25,6 +30,15 @@ export const App = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [extractedResults, setExtractedResults] = useState<ExtractedData[]>([]);
+
+  // Sauvegarder l'utilisateur dans localStorage à chaque changement
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('adt_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('adt_user');
+    }
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem('adt_ai_settings', JSON.stringify(aiSettings));

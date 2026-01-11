@@ -21,6 +21,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [pendingChange, setPendingChange] = useState<any>(null);
     const [isLoadingFromSheets, setIsLoadingFromSheets] = useState(false);
+    const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
 
     useEffect(() => {
         if (tableData) {
@@ -28,23 +29,13 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         }
     }, [tableData]);
 
-    // Chargement automatique depuis Google Sheets si pas de données
-    useEffect(() => {
-        const loadDataFromSheets = async () => {
-            // Si pas de données ET pas déjà en train de charger
-            if ((!tableData || tableData.rows.length === 0) && !isLoadingFromSheets) {
-                console.log('📥 Chargement automatique depuis Google Sheets...');
-                await loadFromGoogleSheets();
-            }
-        };
-
-        loadDataFromSheets();
-    }, []); // Au montage du composant
-
     const loadFromGoogleSheets = async () => {
+        if (isLoadingFromSheets) return; // Éviter les appels multiples
+
         setIsLoadingFromSheets(true);
         try {
             const { sheetsService } = await import('../services/sheetsService');
+            console.log('📥 Chargement depuis Google Sheets pour', user?.numDome);
             const result = await sheetsService.fetchFromGoogleSheets(user?.numDome);
 
             if (result.success && result.data && result.data.rows.length > 0) {
@@ -57,8 +48,17 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
             console.error('❌ Erreur chargement Google Sheets:', error);
         } finally {
             setIsLoadingFromSheets(false);
+            setHasAttemptedLoad(true);
         }
     };
+
+    // Chargement automatique au montage si pas de données
+    useEffect(() => {
+        if (!hasAttemptedLoad && (!tableData || tableData.rows.length === 0)) {
+            console.log('🔄 Tentative de chargement automatique...');
+            loadFromGoogleSheets();
+        }
+    }, [hasAttemptedLoad, tableData]); // Dépendances correctes
 
     const indices = useMemo(() => {
         if (!tableData) return { tournee: -1, vehicule: -1, debut: -1, changement: -1, changementPar: -1 };
