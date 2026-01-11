@@ -1,7 +1,8 @@
-import { Pool } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-});
-
-export default pool;
+export function getSql() {
+    if (!process.env.DATABASE_URL) {
+        throw new Error('DATABASE_URL is not defined');
+    }
+    return neon(process.env.DATABASE_URL);
+}
