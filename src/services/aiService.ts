@@ -143,7 +143,7 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
         if (storedTctPrompt && storedTctPrompt.trim() !== "" && !likelyJsonPrompt) {
             systemInstruction = storedTctPrompt;
         } else {
-            console.warn("Overriding prompt for strict 15-col alignment + Empty Adresses.");
+            console.warn("Overriding prompt for strict 15-col alignment (Restored Addresses).");
             systemInstruction = `Tu es un agent expert pour Taxi Coop Terrebonne.
 Extrais les données et retourne un tableau texte avec séparateur PIPE (|).
 
@@ -154,7 +154,7 @@ Tournée | Nom | Déb tour | Fin tour | Cl véh | Employé | Nom de l'employé |
 1. **Employé** (Col 6) : Chiffres (ID). S'il y a "TAXI", laisse VIDE.
 2. **Employé_Double** (Col 8) : Ignore, mais garde la colonne.
 3. **Approuvé** (Col 12) : Oui/Non.
-4. **ADRESSES (Col 14 et 15)** : **DOIVENT RESTER VIDES !** Ne mets rien dedans. (Ex: ...| Retour | | )
+4. **Adresses** : Copie complète.
 5. UNE LIGNE PAR TOURNÉE.
 
 Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
@@ -172,8 +172,7 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
            RÈGLES ANTI-DÉCALAGE:
            1. Col 5 (Classe véh) = "TAXI" ou "MINIVAN".
            2. Col 6 (Employé) = CHIFFRES UNIQUEMENT.
-           3. LES ADRESSES (COL 14 & 15) DOIVENT ÊTRE VIDES.
-           4. SORTIE BRUTE UNIQUEMENT.`;
+           3. SORTIE BRUTE UNIQUEMENT.`;
 
     try {
         let initialRawText = await callAI(base64Image, mimeType, basePrompt, systemInstruction, documentType, 0.1);
@@ -237,7 +236,9 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
                         entry.vehicule = parts[9];
                         entry.classe_vehicule_affecte = parts[10];
                         entry.approuve = (parts[12] || "").toLowerCase().includes('oui');
-                        // Addresses are forced empty below
+                        // RESTORE ADRESSES (Shifted indices)
+                        entry.adresse_debut = parts[14];
+                        entry.adresse_fin = parts[15] || parts[14];
 
                     } else {
                         // NORMAL PATH
@@ -259,15 +260,17 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
                         entry.classe_vehicule_affecte = parts[9];
                         const rawAppr = (parts[11] || "").toLowerCase();
                         entry.approuve = rawAppr.includes('oui') || rawAppr.includes('true') || rawAppr.includes('x') || rawAppr === 'o';
+
+                        // RESTORE ADRESSES (Normal indices)
+                        entry.adresse_debut = parts[13];
+                        entry.adresse_fin = parts[14];
                     }
                     // --- END ANTI-SHIFT ---
 
                     entry.stationnement = "";
                     entry.territoire_debut = "";
-                    // Forced Empty as per user request
-                    entry.adresse_debut = "";
-                    entry.adresse_fin = "";
 
+                    // CHANGEMENT & CHANGEMENT PAR - ALWAYS EMPTY
                     entry.changement = "";
                     entry.changement_par = "";
 
@@ -299,7 +302,7 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
             if (Array.isArray(entry)) return headers.map((_, i) => String(entry[i] || ''));
 
             return headers.map(header => {
-                // Standard mapping logic
+                // Standard Mapping
                 if (header === "Tournée" && entry.tournee) return entry.tournee;
                 if (header === "Nom" && entry.nom_compagnie) return entry.nom_compagnie;
                 if (header === "Début tournée" && entry.debut_tournee) return entry.debut_tournee;
