@@ -25,9 +25,8 @@ async function callAI(
 ): Promise<string> {
 
     // Select correct schema
-    // Disable Strict Schema for Olymel to avoid 400/500 errors if model struggles with specific constraints
-    // TCT continues to use strict schema as it works well.
-    const schema = documentType === 'olymel' ? undefined : tctResponseSchema;
+    // Disable Strict Schema for both to allow System Prompt to define structure (EVV / Custom)
+    const schema = undefined;
 
     // Retrieve settings from localStorage
     const storedApiKey = localStorage.getItem('adt_settings_apikey');
