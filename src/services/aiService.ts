@@ -89,12 +89,6 @@ const TCT_TABLE_HEADERS = [
     "Changement", "Changement par"
 ];
 
-// ... (in mapping logic)
-
-if (header === "Adresse de fin" && (entry.adresse_fin || entry.adresse_arrivee)) return entry.adresse_fin || entry.adresse_arrivee;
-if (header === "Changement" && entry.changement) return entry.changement;
-if (header === "Changement par" && entry.changement_par) return entry.changement_par;
-
 const tctResponseSchema: Schema = {
     type: Type.OBJECT,
     properties: {
@@ -483,6 +477,8 @@ export async function extractDataFromImage(
                 if (header === "Territoire début" && entry.territoire_debut) return entry.territoire_debut;
                 if (header === "Adresse de début" && (entry.adresse_debut || entry.adresse_depart)) return entry.adresse_debut || entry.adresse_depart;
                 if (header === "Adresse de fin" && (entry.adresse_fin || entry.adresse_arrivee)) return entry.adresse_fin || entry.adresse_arrivee;
+                if (header === "Changement" && entry.changement) return entry.changement;
+                if (header === "Changement par" && entry.changement_par) return entry.changement_par;
 
                 // 4. Fuzzy / Synonym Match (Legacy)
                 if (lowerHeader === 'transport') foundKey = Object.keys(entry).find(k => k.match(/circuit|tourn[ée]e|trajet|route/i));
