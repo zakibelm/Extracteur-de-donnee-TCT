@@ -80,7 +80,16 @@ export default async function handler(req: Request) {
                 });
             } catch (dbError: any) {
                 console.error('Database error:', dbError);
-                return new Response(JSON.stringify({ error: 'Erreur lors de la création de l\'utilisateur: ' + dbError.message }), {
+                const dbUrl = process.env.DATABASE_URL || '';
+                const maskedUrl = dbUrl.replace(/:[^:@]*@/, ':****@');
+                return new Response(JSON.stringify({
+                    error: 'Erreur lors de la création de l\'utilisateur: ' + dbError.message,
+                    debug: {
+                        maskedUrl,
+                        length: dbUrl.length,
+                        node_env: process.env.NODE_ENV
+                    }
+                }), {
                     status: 500,
                     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
                 });
@@ -130,7 +139,15 @@ export default async function handler(req: Request) {
 
     } catch (error: any) {
         console.error('API Error:', error);
-        return new Response(JSON.stringify({ error: 'Internal Server Error: ' + error.message }), {
+        const dbUrl = process.env.DATABASE_URL || '';
+        const maskedUrl = dbUrl.replace(/:[^:@]*@/, ':****@');
+        return new Response(JSON.stringify({
+            error: 'Internal Server Error: ' + error.message,
+            debug: {
+                maskedUrl,
+                length: dbUrl.length
+            }
+        }), {
             status: 500,
             headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
