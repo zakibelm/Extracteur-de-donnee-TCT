@@ -263,8 +263,8 @@ export async function extractDataFromImage(
     let systemInstruction = "";
 
     if (isOlymel) {
-        systemInstruction = storedOlymelPrompt && storedOlymelPrompt.trim() !== "" 
-            ? storedOlymelPrompt 
+        systemInstruction = storedOlymelPrompt && storedOlymelPrompt.trim() !== ""
+            ? storedOlymelPrompt
             : `Tu es un extracteur de données expert pour les horaires de transport Olymel. Fidélité absolue des données requise.`;
     } else {
         systemInstruction = storedTctPrompt && storedTctPrompt.trim() !== ""
@@ -447,19 +447,44 @@ export async function extractDataFromImage(
 
         const rows: string[][] = currentEntries.map((entry: any) => {
             if (Array.isArray(entry)) return headers.map((_, i) => String(entry[i] || ''));
+
             return headers.map(header => {
-                if (entry[header] !== undefined) return entry[header];
+                // 1. Direct Match
+                if (entry[header] !== undefined) return String(entry[header]);
+
+                // 2. Case Insensitive Match
                 const lowerHeader = header.toLowerCase();
                 let foundKey = Object.keys(entry).find(k => k.toLowerCase() === lowerHeader);
-                if (foundKey) return entry[foundKey];
+                if (foundKey) return String(entry[foundKey]);
 
-                // Synonyms
+                // 3. EVV Schema Mapping (Snake Case from new Prompt)
+                if (header === "Tournée" && entry.tournee) return entry.tournee;
+                if (header === "Nom" && entry.nom_compagnie) return entry.nom_compagnie;
+                if (header === "Début tournée" && entry.debut_tournee) return entry.debut_tournee;
+                if (header === "Fin tournée" && entry.fin_tournee) return entry.fin_tournee;
+                if (header === "Classe véhicule" && entry.classe_vehicule) return entry.classe_vehicule;
+                if (header === "Employé" && entry.id_employe) return entry.id_employe;
+                if (header === "Nom de l'employé") {
+                    if (entry.nom_employe && entry.prenom_employe) return `${entry.nom_employe}, ${entry.prenom_employe}`;
+                    if (entry.nom_employe) return entry.nom_employe;
+                }
+                if (header === "Véhicule" && entry.vehicule) return entry.vehicule;
+                if (header === "Classe véhicule affecté" && entry.classe_vehicule_affecte) return entry.classe_vehicule_affecte;
+                if (header === "Stationnement" && entry.stationnement) return entry.stationnement;
+                if (header === "Approuvé") {
+                    if (entry.approuve !== undefined) return entry.approuve === true || entry.approuve === 'true' ? 'Oui' : 'Non';
+                }
+                if (header === "Territoire début" && entry.territoire_debut) return entry.territoire_debut;
+                if (header === "Adresse de début" && (entry.adresse_debut || entry.adresse_depart)) return entry.adresse_debut || entry.adresse_depart;
+                if (header === "Adresse de fin" && (entry.adresse_fin || entry.adresse_arrivee)) return entry.adresse_fin || entry.adresse_arrivee;
+
+                // 4. Fuzzy / Synonym Match (Legacy)
                 if (lowerHeader === 'transport') foundKey = Object.keys(entry).find(k => k.match(/circuit|tourn[ée]e|trajet|route/i));
                 if (lowerHeader === 'numéro') foundKey = Object.keys(entry).find(k => k.match(/v[ée]hicule|bus|camion|#|no\./i));
                 if (lowerHeader === 'heure') foundKey = Object.keys(entry).find(k => k.match(/d[ée]but|d[ée]part|temps|h/i));
                 if (lowerHeader === 'date') foundKey = Object.keys(entry).find(k => k.match(/jour|quand/i));
 
-                if (foundKey) return entry[foundKey];
+                if (foundKey) return String(entry[foundKey]);
                 return ''; // Empty if not found
             });
         });
