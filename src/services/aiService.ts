@@ -224,42 +224,59 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
                     entry.classe_vehicule = parts[4];
                     entry.id_employe = parts[5];
 
-                    // Name Split
-                    const rawName = parts[6] || "";
-                    if (rawName.includes(',')) {
-                        const [nom, prenom] = rawName.split(',').map(s => s.trim());
-                        entry.nom_employe = nom;
-                        entry.prenom_employe = prenom;
-                    } else if (rawName.includes(' ')) {
-                        const nameParts = rawName.split(' ');
-                        entry.nom_employe = nameParts[0];
-                        entry.prenom_employe = nameParts.slice(1).join(' ');
+                    // --- ANTI-SHIFT AUTO-CORRECTION ---
+                    const valCol5 = (parts[5] || "").toUpperCase();
+                    const valCol6 = (parts[6] || "").trim();
+
+                    if ((valCol5 === 'TAXI' || valCol5 === 'MINIVAN') && /^\d+$/.test(valCol6)) {
+                        // SHIFT detected!
+                        entry.id_employe = parts[6];
+
+                        const rawNameShifted = parts[7] || "";
+                        if (rawNameShifted.includes(',')) {
+                            const [nom, prenom] = rawNameShifted.split(',').map(s => s.trim());
+                            entry.nom_employe = nom;
+                            entry.prenom_employe = prenom;
+                        } else {
+                            const nameParts = rawNameShifted.split(' ');
+                            entry.nom_employe = nameParts[0];
+                            entry.prenom_employe = nameParts.slice(1).join(' ');
+                        }
+
+                        entry.vehicule = parts[9];
+                        entry.classe_vehicule_affecte = parts[10];
+                        entry.approuve = (parts[12] || "").toLowerCase().includes('oui');
+                        entry.adresse_debut = parts[14];
+                        entry.adresse_fin = parts[15] || parts[14];
+
                     } else {
-                        entry.nom_employe = rawName;
-                        entry.prenom_employe = "";
+                        // NORMAL PATH
+                        const rawName = parts[6] || "";
+                        if (rawName.includes(',')) {
+                            const [nom, prenom] = rawName.split(',').map(s => s.trim());
+                            entry.nom_employe = nom;
+                            entry.prenom_employe = prenom;
+                        } else if (rawName.includes(' ')) {
+                            const nameParts = rawName.split(' ');
+                            entry.nom_employe = nameParts[0];
+                            entry.prenom_employe = nameParts.slice(1).join(' ');
+                        } else {
+                            entry.nom_employe = rawName;
+                            entry.prenom_employe = "";
+                        }
+
+                        entry.vehicule = parts[8];
+                        entry.classe_vehicule_affecte = parts[9];
+                        const rawAppr = (parts[11] || "").toLowerCase();
+                        entry.approuve = rawAppr.includes('oui') || rawAppr.includes('true') || rawAppr.includes('x') || rawAppr === 'o';
+
+                        entry.adresse_debut = parts[13];
+                        entry.adresse_fin = parts[14];
                     }
+                    // --- END ANTI-SHIFT ---
 
-                    // Col 7 is 'Employé (Double)' - IGNORE
-                    // entry.id_employe_double = parts[7];
-
-                    entry.vehicule = parts[8];
-                    entry.classe_vehicule_affecte = parts[9];
-
-                    // Col 10 is 'Autoris' -> Map to Stationnement? No, likely just check/empty.
-                    // Let's leave stationnement empty as it's not strictly 'Parking'.
                     entry.stationnement = "";
-
-                    // Col 11 is 'Approuvé'
-                    const rawAppr = (parts[11] || "").toLowerCase();
-                    entry.approuve = rawAppr.includes('oui') || rawAppr.includes('true') || rawAppr.includes('x') || rawAppr === 'o';
-
-                    // Col 12 is 'Retour' -> IGNORE
-
-                    // Addresses
-                    entry.adresse_debut = parts[13];
-                    entry.adresse_fin = parts[14];
-
-                    entry.territoire_debut = ""; // Not in 15 cols
+                    entry.territoire_debut = "";
                     entry.changement = "";
                     entry.changement_par = "";
 
