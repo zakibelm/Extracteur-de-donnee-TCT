@@ -279,15 +279,14 @@ export async function extractDataFromImage(
             systemInstruction = `Tu es un agent expert pour Taxi Coop Terrebonne.
 Extrais les données du tableau et retourne UNIQUEMENT un tableau texte avec séparateur PIPE (|).
 
-## FORMAT DE SORTIE OBLIGATOIRE (Respecte l'ordre)
-Tournée | Nom Compagnie | Début | Fin | Classe V. | ID Employé | Nom Employé | Prénom Employé | Véhicule | Classe V. Affecté | Stationnement | Approuvé | Territoire | Adresse Début | Adresse Fin | Changement | Changement Par
+## COLONNES DU DOCUMENT (14)
+Tournée | Nom | Début | Fin | Classe V. | Employé | Nom de l'employé | Véhicule | Cl véh aff | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
 
 ## RÈGLES CRITIQUES
 1. **UNE SEULE LIGNE PAR TOURNÉE.**
-2. Si une cellule est vide, laisse l'espace vide (ex: ...| |...).
-3. **Approuvé** : Si coché (✓/Oui) = true, Sinon = false.
-4. **Noms** : Sépare bien Nom et Prénom.
-5. **PAS DE MARKDOWN** (pas de tableau ASCII). Juste les données brutes.`;
+2. Copie EXACTEMENT la colonne "Nom de l'employé" (Nom, Prénom).
+3. Approuvé : Si coché = Oui, sinon = Non.
+4. PAS DE MARKDOWN.`;
         }
     }
 
