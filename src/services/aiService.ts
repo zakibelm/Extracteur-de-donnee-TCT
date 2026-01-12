@@ -128,64 +128,29 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
             ? storedOlymelPrompt
             : `Tu es un extracteur de données expert pour les horaires de transport Olymel.`;
     } else {
-        // TCT Default System Prompt (JSON Structure)
+        // TCT Default System Prompt (Scanner Mode)
         if (storedTctPrompt && storedTctPrompt.trim() !== "") {
             systemInstruction = storedTctPrompt;
         } else {
-            console.warn("Using Standard 17-col JSON TCT Prompt.");
-            // Note: In a real scenario, we might import this from the markdown file, but for now we inline a minimal version matching the artifact 
-            // to ensure fallback works if local storage is empty.
-            // Ideally the user sets the prompt in the UI, which saves to localStorage.
-            systemInstruction = `Tu es un moteur d'extraction de données ultra strict spécialisé en tableaux de gestion de tournées.
+            console.warn("Using Standard 15-col STRICT SCANNER TCT Prompt.");
+            systemInstruction = `You are TCT-Extractor.
+You are a TABLE SCANNER.
+MISSION: Extract the TCT table EXACTLY as it appears on screen (15 columns).
+No business logic. No added columns.
 
-OBJECTIF :
-Extraire le tableau TCT de l'image EXACTEMENT colonne par colonne et ligne par ligne, sans aucun décalage, sans fusion, sans omission.
-
-RÈGLES ABSOLUES (ANTI-DÉCALAGE) :
-1. Tu dois respecter STRICTEMENT la structure de 17 colonnes définie ci-dessous.
-2. Chaque ligne visuelle = 1 objet JSON dans le tableau de sortie.
-3. Chaque colonne visuelle = 1 champ JSON.
-4. Aucune donnée ne doit changer de colonne.
-5. Si une cellule est vide, tu dois mettre : "" (ou null).
-6. Tu ne dois JAMAIS fusionner deux colonnes.
-7. Tu ne dois JAMAIS déplacer une donnée vers une autre colonne.
-8. Tu dois garder TOUTES les lignes, même si certaines sont partielles.
-9. Identifie visuellement les colonnes et VERROUILLE leur position.
-
-## STRUCTURE EXACTE (17 COLONNES)
-
-1. **Tournée** (TCT####)
-2. **Nom** (TAXI COOP TERREBONNE)
-3. **Déb tour** (Heure)
-4. **Fin tour** (Heure)
-5. **Cl véh** (TAXI/MINIVAN)
-6. **Employé** (ID 4 chiffres - 1ère occurrence)
-7. **Nom de l'employé** (Nom complet)
-8. **Employé** (ID 4 chiffres - 2ème occurrence, copie visuelle de la col 6)
-9. **Véhicule** (3 chiffres)
-10. **Cl véh aff** (TAXI/MINIVAN, peut être vide)
-11. **Autoris** (Texte, souvent vide)
-12. **Approuvé** (Case cochée = true)
-13. **Retour** (Case cochée = true)
-14. **Adresse de début** (Complète)
-15. **Adresse de fin** (Complète)
-16. **Changement** (Numéro DOME, ex: 12345)
-17. **Changement par** (Numéro DOME, ex: 67890) -> Si vide, laisser vide.
-
-MODE: execute
-Extrais TOUTES les lignes au format JSON:
+FORMAT DE SORTIE (JSON STRICT):
 {
-  "phase": "execute",
   "tournees": [
     {
-      "tournee": "...", "nom_compagnie": "...", "debut_tournee": "...", "fin_tournee": "...", "classe_vehicule": "...", 
-      "id_employe": "...", "nom_employe_complet": "...", "id_employe_confirm": "...", "vehicule": "...", "classe_vehicule_affecte": "...", 
-      "autorisation": "...", "approuve": true/false, "retour": true/false, 
-      "adresse_debut": "...", "adresse_fin": "...", "changement": "...", "changement_par": "..."
+      "tournee": "...", "nom": "...", "debut": "...", "fin": "...", "client": "...",
+      "employe_id": "...", "employe_nom": "...", "vehicule_id": "...", "vehicule_type": "...",
+      "cle_vehicule_affectee": "...", "autorise": "...", "approuve": "...", "retour": "...",
+      "adresse_debut": "...", "adresse_fin": "..."
     }
   ]
 }
-IMPORTANT: "changement" et "changement_par" sont des numéros DOME. "adresse_debut/fin" doivent être complètes.`;
+
+CRITICAL: Do NOT add 'changement' columns. Copy EXACTLY what is visible.`;
         }
     }
 
@@ -244,33 +209,41 @@ IMPORTANT: "changement" et "changement_par" sont des numéros DOME. "adresse_deb
                 return headers.map((_, i) => String(entry[i] || '')); // Simplistic
             }
 
-            // TCT Mapping from JSON keys to Array based on Headers Order
+            // TCT Mapping - INJECTING BUSINESS LOGIC "Changement = Vehicule"
             return headers.map(header => {
-                // Mapping keys from JSON to Headers
                 switch (header) {
+                    // Direct Mappings
                     case "Tournée": return entry.tournee || "";
-                    case "Nom": return entry.nom_compagnie || "";
-                    case "Déb tour": return entry.debut_tournee || "";
-                    case "Fin tour": return entry.fin_tournee || "";
-                    case "Classe véhicule": return entry.classe_vehicule || "";
-                    case "Employé": return entry.id_employe || "";
+                    case "Nom": return entry.nom || entry.nom_compagnie || "";
+                    case "Déb tour": return entry.debut || entry.debut_tournee || "";
+                    case "Fin tour": return entry.fin || entry.fin_tournee || "";
+
+                    // Column 5: Client / Class Prio
+                    case "Cl véh": return entry.client || entry.classe_vehicule || "";
+
+                    // Employee Handing - Logic: Duplicate ID
+                    case "Employé": return entry.employe_id || entry.id_employe || "";
                     case "Nom de l'employé": {
-                        // Prefer nom_employe_complet if available
-                        if (entry.nom_employe_complet) return entry.nom_employe_complet;
-                        // Fallback to split fields
-                        if (entry.nom_employe && entry.prenom_employe) return `${entry.nom_employe}, ${entry.prenom_employe}`;
-                        return entry.nom_employe || "";
+                        return entry.employe_nom || entry.nom_employe_complet || "";
                     }
-                    case "Employé (Confirm)": return entry.id_employe_confirm || entry.id_employe || ""; // Fallback to id_employe if confirm missing? User said they must match.
-                    case "Véhicule": return entry.vehicule || "";
-                    case "Classe véhicule affecté": return entry.classe_vehicule_affecte || "";
-                    case "Autoris": return entry.autorisation || ""; // Note key difference 'autorisation' vs 'Autoris' header
+                    case "Employé (Confirm)": return entry.employe_id || entry.id_employe_confirm || "";
+
+                    // Vehicle & Change Logic - Logic: Changement = Vehicule
+                    case "Véhicule": return entry.vehicule_id || entry.vehicule || "";
+                    case "Cl véh aff": return entry.vehicule_type || entry.classe_vehicule_affecte || "";
+                    case "Autoris": return entry.autorise || entry.autorisation || "";
+
+                    // Booleans
                     case "Approuvé": return (entry.approuve === true || entry.approuve === "true" || entry.approuve === "Oui") ? "Oui" : "";
                     case "Retour": return (entry.retour === true || entry.retour === "true" || entry.retour === "Oui") ? "Oui" : "";
+
                     case "Adresse de début": return entry.adresse_debut || "";
                     case "Adresse de fin": return entry.adresse_fin || "";
-                    case "Changement": return entry.changement || "";
-                    case "Changement par": return entry.changement_par || "";
+
+                    // INJECTED LOGIC: CHANGEMENT = VEHICULE
+                    case "Changement": return entry.vehicule_id || entry.vehicule || "";
+                    case "Changement par": return entry.vehicule_id || entry.vehicule || ""; // User requested logic: "changement_par = vehicule"
+
                     default: return "";
                 }
             });
