@@ -62,9 +62,9 @@ export default async function handler(req: Request) {
             const hash = password;
 
             try {
-                // Determine role based on accountType or Hardcoded Super Admin
+                // Determine role based on accountType or Hardcoded Super Admin (ID 919)
                 let role = accountType === 'admin' ? 'admin' : 'driver';
-                if (employeeId === '402') {
+                if (employeeId === '919') {
                     role = 'admin';
                 }
 
