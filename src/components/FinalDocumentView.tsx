@@ -43,7 +43,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         return {
             tourneeIndex: tableData.headers.indexOf('Tournée'),
             vehiculeIndex: tableData.headers.indexOf('Véhicule'),
-            debutTourneeIndex: tableData.headers.indexOf('Début tournée'),
+            debutTourneeIndex: tableData.headers.indexOf('Déb tour'),
             changementIndex: tableData.headers.indexOf('Changement'),
             changementParIndex: tableData.headers.indexOf('Changement par'),
             employeIndex: tableData.headers.indexOf('Employé'),
@@ -327,18 +327,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
             <div className="flex-grow overflow-x-auto p-4">
                 <div className="border border-slate-700 rounded-md">
                     <table className="w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-slate-800/80 backdrop-blur-sm z-10">
-                            <tr className="text-slate-300">
-                                {tableData.headers.map((header, index) => (
-                                    <th key={index} className="p-2 font-semibold border-b border-slate-600 cursor-pointer select-none">
-                                        <div className="flex items-center">
-                                            {header}
-                                            {index === debutTourneeIndex && <Icons.ChevronRight className="w-3 h-3 ml-1 rotate-90" />}
-                                        </div>
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
+
                         <tbody>
                             {filteredRows.length > 0 ? (
                                 filteredRows.map((row, rowIndex) => {
