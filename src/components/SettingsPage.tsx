@@ -24,17 +24,55 @@ export const SettingsPage: React.FC = () => {
         setEnableRag(storedRag);
     }, []);
 
+    const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+    const [testMessage, setTestMessage] = useState('');
+
+    const handleTestKey = async () => {
+        if (!apiKey) {
+            setTestStatus('error');
+            setTestMessage('Veuillez entrer une clé API pour tester.');
+            return;
+        }
+
+        setTestStatus('testing');
+        setTestMessage('');
+
+        try {
+            const response = await fetch('/api/extract', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': apiKey,
+                    'X-Model': selectedModel
+                },
+                body: JSON.stringify({
+                    prompt: "Réponds seulement 'OK' si tu me reçois.",
+                    temperature: 0.1
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || data.details || 'Erreur inconnue');
+            }
+
+            setTestStatus('success');
+            setTestMessage('Connexion réussie ! L\'IA a répondu.');
+        } catch (error: any) {
+            console.error("Test Error:", error);
+            setTestStatus('error');
+            setTestMessage(error.message || 'Échec de la connexion.');
+        }
+    };
+
     const handleSave = () => {
         localStorage.setItem('adt_settings_apikey', apiKey);
         localStorage.setItem('adt_settings_model', selectedModel);
         localStorage.setItem('adt_settings_prompt_tct', tctPrompt);
         localStorage.setItem('adt_settings_prompt_olymel', olymelPrompt);
         localStorage.setItem('adt_settings_rag', String(enableRag));
-        
-        // Also update the env variable in memory if possible or reload
-        // Since we can't easily update process.env in the browser for the running app without reload context
-        // We will just rely on localStorage being read by the service
-        
+
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
     };
@@ -58,18 +96,41 @@ export const SettingsPage: React.FC = () => {
                         <label className="block text-sm font-medium text-slate-300 mb-2">
                             Clé API OpenRouter
                         </label>
-                        <div className="relative">
-                            <input
-                                type="password"
-                                value={apiKey}
-                                onChange={(e) => setApiKey(e.target.value)}
-                                placeholder="sk-or-..."
-                                className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-sm"
-                            />
-                            <div className="absolute right-3 top-2.5 text-slate-500">
-                                <Icons.Lock className="w-4 h-4" />
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <input
+                                    type="password"
+                                    value={apiKey}
+                                    onChange={(e) => setApiKey(e.target.value)}
+                                    placeholder="sk-or-..."
+                                    className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-sm"
+                                />
+                                <div className="absolute right-3 top-2.5 text-slate-500">
+                                    <Icons.Lock className="w-4 h-4" />
+                                </div>
                             </div>
+                            <Button
+                                onClick={handleTestKey}
+                                disabled={testStatus === 'testing' || !apiKey}
+                                className={`whitespace-nowrap ${testStatus === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : testStatus === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-700 hover:bg-slate-600'}`}
+                            >
+                                {testStatus === 'testing' ? (
+                                    <Icons.Loader className="w-4 h-4 animate-spin" />
+                                ) : testStatus === 'success' ? (
+                                    <Icons.CheckCircle className="w-4 h-4" />
+                                ) : testStatus === 'error' ? (
+                                    <Icons.XCircle className="w-4 h-4" />
+                                ) : (
+                                    <Icons.Zap className="w-4 h-4 mr-2" />
+                                )}
+                                {testStatus === 'testing' ? '' : 'Tester'}
+                            </Button>
                         </div>
+                        {testMessage && (
+                            <p className={`text-xs mt-2 ${testStatus === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {testMessage}
+                            </p>
+                        )}
                         <p className="text-xs text-slate-500 mt-1.5">
                             Cette clé est stockée localement dans votre navigateur et utilisée pour toutes les requêtes d'extraction.
                         </p>
