@@ -24,7 +24,10 @@ export const authService = {
             throw new Error('Données utilisateur invalides');
         }
 
-        return data.user;
+        return {
+            ...data.user,
+            isAdmin: data.user.role === 'admin'
+        };
     },
 
     async signup(numDome: string, employeeId: string, email: string, password: string, accountType: 'admin' | 'driver', telephone: string): Promise<User> {
@@ -57,7 +60,8 @@ export const authService = {
         return {
             ...data.user,
             email,
-            telephone
+            telephone,
+            isAdmin: data.user.role === 'admin'
         };
     }
 };
