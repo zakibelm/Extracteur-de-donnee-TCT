@@ -16,7 +16,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   const [accountType, setAccountType] = useState<AccountType>('admin');
 
   // Login fields
-  const [numDome, setNumDome] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
 
   // Signup fields
@@ -32,7 +32,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     setError(null);
 
     if (mode === 'login') {
-      if (!numDome.trim() || !password.trim()) {
+      if (!identifier.trim() || !password.trim()) {
         setError('Veuillez remplir tous les champs obligatoires');
         return;
       }
@@ -48,7 +48,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     try {
       let user: User;
       if (mode === 'login') {
-        user = await authService.login(numDome.trim(), password.trim());
+        user = await authService.login(identifier.trim(), password.trim());
       } else {
         user = await authService.signup(
           email.trim(),
@@ -161,16 +161,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             {/* LOGIN FORM */}
             {mode === 'login' && (
               <div className="space-y-3 pt-2">
-                {/* ID (Numéro de Dôme) */}
+                {/* Identifier (Numéro de Dôme or Email) */}
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Hash size={18} className="text-slate-400 group-focus-within:text-emerald-400 transition-colors" />
                   </div>
                   <input
                     type="text"
-                    value={numDome}
-                    onChange={(e) => setNumDome(e.target.value)}
-                    placeholder="ID (Numéro de Dôme)"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="Email ou ID (Numéro de Dôme)"
                     className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm font-mono"
                     required
                   />

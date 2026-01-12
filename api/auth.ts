@@ -19,24 +19,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { action, num_dome, password, email, accountType, telephone } = req.body || {};
-        console.log('Request body action:', action);
+        // Parse body - handle both string and already-parsed body
+        let body = req.body;
+        if (typeof body === 'string') {
+            try {
+                body = JSON.parse(body);
+            } catch (e) {
+                return res.status(400).json({ error: 'Format JSON invalide' });
+            }
+        }
+
+        const { action, identifier, num_dome, password, email, accountType, telephone } = body || {};
+        // Support backward compatibility (if num_dome is passed but not identifier)
+        const loginIdentifier = identifier || num_dome;
+
+        console.log('Request body action:', action, 'identifier:', loginIdentifier);
 
         const sql = getSql();
 
         // ========== LOGIN ==========
         if (action === 'login') {
-            if (!num_dome || !password) {
+            if (!loginIdentifier || !password) {
                 console.log('Missing login parameters');
-                return res.status(400).json({ error: 'ID et mot de passe requis' });
+                return res.status(400).json({ error: 'Email/ID et mot de passe requis' });
             }
 
-            console.log('Processing login for:', num_dome);
+            console.log('Processing login for:', loginIdentifier);
             const hash = crypto.createHash('sha256').update(password).digest('hex');
 
             const users = await sql`
                 SELECT * FROM users 
-                WHERE num_dome = ${num_dome} 
+                WHERE (num_dome = ${loginIdentifier} OR email = ${loginIdentifier})
                 AND password_hash = ${hash}
             `;
 

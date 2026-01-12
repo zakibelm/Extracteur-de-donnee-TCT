@@ -7,11 +7,11 @@ interface AuthResponse {
 }
 
 export const authService = {
-    async login(numDome: string, password: string): Promise<User> {
+    async login(identifier: string, password: string): Promise<User> {
         const response = await fetch('/api/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'login', num_dome: numDome, password })
+            body: JSON.stringify({ action: 'login', identifier, password })
         });
 
         const data: AuthResponse = await response.json();
