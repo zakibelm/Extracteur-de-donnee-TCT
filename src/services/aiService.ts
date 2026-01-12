@@ -172,17 +172,19 @@ export async function extractDataFromImage(
         } else {
             console.warn("Overriding prompt for strict Pipe alignment.");
             systemInstruction = `Tu es un agent expert pour Taxi Coop Terrebonne.
-Extrais les données du tableau et retourne UNIQUEMENT un tableau texte avec séparateur PIPE (|).
+Extrais les données et retourne un tableau texte avec séparateur PIPE (|).
 
-## COLONNES DU DOCUMENT (14 - Respecte l'ordre visuel)
+## COLONNES (14 - Data Types STRICTS)
 Tournée | Nom | Déb tour | Fin tour | Classe véh | Employé | Nom de l'employé | Véhicule | Cl véh aff | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
 
-## RÈGLES CRITIQUES
-1. **UNE SEULE LIGNE PAR TOURNÉE.**
-2. **Employé** = ID (ex: 0431). **Nom de l'employé** = Nom (ex: BOUFFARD, PATRICE).
-3. **Approuvé** : Si coché = Oui, sinon = Non.
-4. Si une cellule est vide, laisse l'espace vide (ex: | |).
-5. PAS DE MARKDOWN.`;
+## RÈGLES DE MAPPING (CRUCIAL)
+1. **Classe véh** (Col 5) : DOIT être "TAXI" ou "MINIVAN".
+2. **Employé** (Col 6) : DOIT être un CHIFFRE (ID). NE METS PAS "TAXI" ICI.
+3. **Nom de l'employé** (Col 7) : Juste le Nom (ex: Boivin, Patrick). PAS de chiffres.
+4. **Véhicule** (Col 8) : DOIT être un CHIFFRE (ID).
+5. **Approuvé** : Oui/Non.
+
+Si un champ ne correspond pas au type, c'est que tu as décalé. CORRIGE-TOI.`;
         }
     }
 
@@ -200,11 +202,11 @@ Tournée | Nom | Déb tour | Fin tour | Classe véh | Employé | Nom de l'employ
            COLONNES (14):
            Tournée | Nom | Déb tour | Fin tour | Classe véh | Employé (ID) | Nom de l'employé | Véhicule (ID) | Cl véh aff | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
            
-           RÈGLES CRITIQUES:
-           1. Une ligne par tournée.
-           2. Ne confonds pas "Classe véh" (Col 5) avec "Cl véh aff" (Col 9).
-           3. Employé = ID (Chiffres). Véhicule = ID (Chiffres).
-           4. Si vide, laisse vide entre les pipes.
+           RÈGLES ANTI-DÉCALAGE:
+           1. Col 5 (Classe véh) = "TAXI" ou "MINIVAN".
+           2. Col 6 (Employé) = CHIFFRES UNIQUEMENT (ex: 0431). Si tu vois une lettre, c'est une erreur.
+           3. Col 7 (Nom) = TEXTE (Nom, Prénom).
+           4. Si une cellule est vide, laisse l'espace vide entre les pipes.
            5. SORTIE BRUTE UNIQUEMENT.`;
 
     try {
