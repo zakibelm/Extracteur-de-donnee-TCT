@@ -1,7 +1,7 @@
 import { User } from '../types';
 
 interface AuthResponse {
-    user?: User;
+    user?: any;
     error?: string;
     message?: string;
 }
@@ -25,7 +25,12 @@ export const authService = {
         }
 
         return {
-            ...data.user,
+            id: data.user.id,
+            numDome: data.user.num_dome || '',
+            idEmploye: data.user.id_employe || '',
+            email: data.user.email,
+            telephone: data.user.telephone,
+            role: data.user.role,
             isAdmin: data.user.role === 'admin'
         };
     },
@@ -57,10 +62,17 @@ export const authService = {
             throw new Error('Données utilisateur invalides après inscription');
         }
 
+        // Since the API might return mixed casing depending on how strict we are, 
+        // let's ensure we map the response from the DB (if data.user has snake_case keys) 
+        // or adhere to the input values if data.user is sparse.
+
         return {
-            ...data.user,
-            email,
-            telephone,
+            id: data.user.id,
+            numDome: data.user.num_dome || numDome,
+            idEmploye: data.user.id_employe || employeeId,
+            email: data.user.email || email,
+            telephone: data.user.telephone || telephone,
+            role: data.user.role,
             isAdmin: data.user.role === 'admin'
         };
     }
