@@ -141,7 +141,7 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
         if (storedTctPrompt && storedTctPrompt.trim() !== "" && !likelyJsonPrompt) {
             systemInstruction = storedTctPrompt;
         } else {
-            console.warn("Overriding prompt for Robust 15-col alignment.");
+            console.warn("Overriding prompt for Robust 15-col alignment V2.");
             systemInstruction = `Tu es un agent expert pour Taxi Coop Terrebonne.
 Extrais les données et retourne un tableau texte avec séparateur PIPE (|).
 
@@ -251,18 +251,13 @@ Respecte scrupuleusement cet ordre de 15 colonnes.`;
                     entry.approuve = rawAppr.includes('oui') || rawAppr.includes('true') || rawAppr.includes('x') || rawAppr === 'o';
 
                     // SMART ADDRESS FETCHING (Grab from end of array)
-                    // If array is long (e.g. 17 parts), address is at [end-2] and [end-1]?
-                    // Assuming last part is empty or noise, we filter empty parts first? No parts are already trimmed.
-                    // If shift occurred, parts length might be 16 or 17.
-                    // If normal, parts length is 15.
-
                     const pLen = parts.length;
                     if (pLen >= 15) {
-                        entry.adresse_fin = parts[pLen - 1]; // Last column
-                        entry.adresse_debut = parts[pLen - 2]; // Second to last
+                        entry.adresse_fin = parts[pLen - 1] || ""; // Safe fallback
+                        entry.adresse_debut = parts[pLen - 2] || "";
                     } else {
-                        entry.adresse_debut = parts[13 + shiftIndex];
-                        entry.adresse_fin = parts[14 + shiftIndex];
+                        entry.adresse_debut = parts[13 + shiftIndex] || "";
+                        entry.adresse_fin = parts[14 + shiftIndex] || "";
                     }
 
                     entry.stationnement = "";
@@ -290,17 +285,23 @@ Respecte scrupuleusement cet ordre de 15 colonnes.`;
         }
 
         const observation = observeData(currentEntries);
-        // ... (Error handling omitted)
+        // ... err handling
 
         console.timeEnd('ObserveExecute_Total');
 
         if (!Array.isArray(currentEntries)) currentEntries = [];
 
         const rows: string[][] = currentEntries.map((entry: any) => {
-            if (Array.isArray(entry)) return headers.map((_, i) => String(entry[i] || ''));
+            if (Array.isArray(entry)) {
+                // ARRAY MODE: Strict mapping with Empty Changement Forced
+                return headers.map((header, i) => {
+                    if (header === "Changement" || header === "Changement par") return "";
+                    return String(entry[i] || '');
+                });
+            }
 
             return headers.map(header => {
-                // STRICT EMPTY RETURN FOR CHANGEMENT COLUMNS
+                // OBJECT MODE: Strict Empty Return
                 if (header === "Changement") return "";
                 if (header === "Changement par") return "";
 
