@@ -15,7 +15,7 @@ const OLYMEL_TABLE_HEADERS = [
 ];
 
 // TCT Columns (Display Headers)
-// Now aligned with the 14-column structure + hidden fields
+// 15 Columns Logic mapped to internal keys
 export const TCT_TABLE_HEADERS = [
     "Tournée",
     "Nom",
@@ -23,12 +23,14 @@ export const TCT_TABLE_HEADERS = [
     "Fin tournée",
     "Classe véhicule",
     "Employé",
-    "Nom de l'employé", // Will be composed of "Nom, Prénom"
+    "Nom de l'employé",
+    // "Employé (Double)" - Ignored in final display but processed for alignment
     "Véhicule",
     "Classe véhicule affecté",
-    "Stationnement",
+    "Stationnement", // Will be mapped from 'Autoris' or left empty if not present
     "Approuvé",
-    "Territoire début",
+    // "Retour" - Ignored
+    "Territoire début", // Missing in new image? Will try to map or leave empty
     "Adresse de début",
     "Adresse de fin",
     "Changement",
@@ -44,12 +46,6 @@ async function callAI(base64Image: string, mimeType: string, prompt: string, sys
         throw new Error("Clé API manquante (VITE_OPENROUTER_API_KEY). Vérifiez votre configuration.");
     }
 
-    // Use Gemini 1.5 Flash via OpenRouter equivalent or direct
-    // For this environment, we use google-generative-ai directly if key works, 
-    // OR fetch via OpenRouter if configured as such.
-    // The previous implementation used fetch to OpenRouter. Let's stick to that for consistency if that's what works.
-
-    // Fallback to fetch implementation as per original file structure
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -59,7 +55,7 @@ async function callAI(base64Image: string, mimeType: string, prompt: string, sys
             "X-Title": "Extracteur TCT"
         },
         body: JSON.stringify({
-            "model": "google/gemini-flash-1.5-8b", // Fast and efficient for Pipe text
+            "model": "google/gemini-flash-1.5-8b",
             "messages": [
                 {
                     "role": "system",
@@ -97,10 +93,7 @@ async function callAI(base64Image: string, mimeType: string, prompt: string, sys
 
 function cleanAndParseJson(text: string): any {
     try {
-        // 1. Remove Markdown code blocks
         let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-
-        // 2. Locate JSON object or array
         const firstBrace = clean.indexOf('{');
         const firstBracket = clean.indexOf('[');
 
@@ -116,12 +109,8 @@ function cleanAndParseJson(text: string): any {
             const end = Math.max(lastBrace, lastBracket);
             if (end !== -1) clean = clean.substring(0, end + 1);
         }
-
         return JSON.parse(clean);
-
     } catch (e) {
-        console.warn("Initial JSON parse failed, trying relaxed parsing...", e);
-        // Relaxed parser logic could go here if needed, but text mode is preferred now.
         throw new Error("NO_JSON_FOUND");
     }
 }
@@ -129,29 +118,17 @@ function cleanAndParseJson(text: string): any {
 function observeData(data: any[]): { isValid: boolean; issues: string[] } {
     const issues: string[] = [];
     if (!Array.isArray(data) || data.length === 0) return { isValid: false, issues: ["Aucune donnée extraite."] };
-
-    // Basic heuristics
     const nullCount = data.filter(r => Object.values(r).every(v => !v)).length;
     if (nullCount > data.length / 2) issues.push("Plus de 50% des lignes sont vides.");
-
-    return {
-        isValid: issues.length === 0,
-        issues
-    };
+    return { isValid: issues.length === 0, issues };
 }
 
-export async function extractDataFromImage(
-    base64Image: string,
-    mimeType: string,
-    documentType: 'olymel' | 'tct'
-): Promise<ExtractedData> {
-
+export async function extractDataFromImage(base64Image: string, mimeType: string, documentType: 'olymel' | 'tct'): Promise<ExtractedData> {
     console.time('ObserveExecute_Total');
 
     const isOlymel = documentType === 'olymel';
     const headers = isOlymel ? OLYMEL_TABLE_HEADERS : TCT_TABLE_HEADERS;
 
-    // Load custom prompts from localStorage
     const storedTctPrompt = localStorage.getItem('adt_settings_prompt_tct');
     const storedOlymelPrompt = localStorage.getItem('adt_settings_prompt_olymel');
 
@@ -160,89 +137,69 @@ export async function extractDataFromImage(
     if (isOlymel) {
         systemInstruction = storedOlymelPrompt && storedOlymelPrompt.trim() !== ""
             ? storedOlymelPrompt
-            : `Tu es un extracteur de données expert pour les horaires de transport Olymel. Fidélité absolue des données requise.`;
+            : `Tu es un extracteur de données expert pour les horaires de transport Olymel.`;
     } else {
-        // TCT LOGIC: Force Pipe Mode compatibility
-        // If the user has an old "JSON" prompt stored, it will BREAK the new Pipe strategy.
-        // We detect this and override it with the correct Pipe prompt.
         const likelyJsonPrompt = storedTctPrompt && (storedTctPrompt.toLowerCase().includes('json') || storedTctPrompt.includes('{'));
 
         if (storedTctPrompt && storedTctPrompt.trim() !== "" && !likelyJsonPrompt) {
             systemInstruction = storedTctPrompt;
         } else {
-            console.warn("Overriding prompt for strict Pipe alignment.");
+            console.warn("Overriding prompt for strict 15-col alignment.");
             systemInstruction = `Tu es un agent expert pour Taxi Coop Terrebonne.
 Extrais les données et retourne un tableau texte avec séparateur PIPE (|).
 
-## COLONNES (14 - Data Types STRICTS)
-Tournée | Nom | Déb tour | Fin tour | Classe véh | Employé | Nom de l'employé | Véhicule | Cl véh aff | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
+## COLONNES DU DOCUMENT (15 - STRUCTURE EXACTE)
+Tournée | Nom | Déb tour | Fin tour | Cl véh | Employé | Nom de l'employé | Employé_Double | Véhicule | Cl véh aff | Autoris | Approuvé | Retour | Adresse de début | Adresse de fin
 
 ## RÈGLES DE MAPPING (CRUCIAL)
-1. **Classe véh** (Col 5) : DOIT être "TAXI" ou "MINIVAN".
-2. **Employé** (Col 6) : DOIT être un CHIFFRE (ID). NE METS PAS "TAXI" ICI.
-3. **Nom de l'employé** (Col 7) : Juste le Nom (ex: Boivin, Patrick). PAS de chiffres.
-4. **Véhicule** (Col 8) : DOIT être un CHIFFRE (ID).
-5. **Approuvé** : Oui/Non.
+1. **Ignorer les doublons** : Il y a deux colonnes "Employé". Extrais les deux, mais JE SUIS AU COURANT.
+2. **Employé** (Col 6) : Chiffres (ID).
+3. **Employé_Double** (Col 8) : Chiffres (ID) - Copie de la Col 6.
+4. **Approuvé** (Col 12) : Oui/Non.
+5. **Autoris / Retour** : Si vide, laisse vide.
+6. UNE LIGNE PAR TOURNÉE.
 
-Si un champ ne correspond pas au type, c'est que tu as décalé. CORRIGE-TOI.`;
+Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
         }
     }
 
-    // CHANGED: BOTH Olymel AND TCT now use PIPE-SEPARATED values (|) for robustness
     const basePrompt = isOlymel
         ? `MODE TABLEAU TEXTE (Séparateur Pipe |).
-           Analyse l'image. Extrais le tableau complet pour TOUS les jours visibles.
-           RÈGLES:
-           1. Format: Date | Heure | Transport | Numéro | Chauffeur
-           2. RÉPÈTE la Date sur CHAQUE LIGNE.
-           3. SORTIE BRUTE UNIQUEMENT.`
+           Analyse l'image. Extrais le tableau complet pour TOUS les jours visibles.`
         : `MODE TABLEAU TEXTE (Séparateur Pipe |).
            Analyse l'image. aligne les données EXACTEMENT sous ces entêtes:
            
-           COLONNES (14):
-           Tournée | Nom | Déb tour | Fin tour | Classe véh | Employé (ID) | Nom de l'employé | Véhicule (ID) | Cl véh aff | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
+           COLONNES (15):
+           Tournée | Nom | Déb tour | Fin tour | Cl véh | Employé (ID) | Nom de l'employé | Employé (Double) | Véhicule (ID) | Cl véh aff | Autoris | Approuvé | Retour | Adresse de début | Adresse de fin
            
            RÈGLES ANTI-DÉCALAGE:
-           1. Col 5 (Classe véh) = "TAXI" ou "MINIVAN".
-           2. Col 6 (Employé) = CHIFFRES UNIQUEMENT (ex: 0431). Si tu vois une lettre, c'est une erreur.
-           3. Col 7 (Nom) = TEXTE (Nom, Prénom).
-           4. Si une cellule est vide, laisse l'espace vide entre les pipes.
-           5. SORTIE BRUTE UNIQUEMENT.`;
+           1. Attention à la colonne DOUBLE "Employé" (Col 6 et Col 8).
+           2. Attention aux colonnes vides "Autoris" (Col 11) et "Retour" (Col 13).
+           3. SORTIE BRUTE UNIQUEMENT.`;
 
     try {
-        // Step 1: Execute
-        let initialRawText = await callAI(base64Image, mimeType, basePrompt, systemInstruction, documentType, 0.1); // Low temp for precision
-
-        let currentEntries: any[] = [];
-
-        // UNIFIED PARSING LOGIC (Text/Pipe First)
+        let initialRawText = await callAI(base64Image, mimeType, basePrompt, systemInstruction, documentType, 0.1);
         console.log(`${documentType} RAW TEXT:`, initialRawText.substring(0, 500));
 
+        let currentEntries: any[] = [];
         const cleanText = initialRawText.replace(/```(csv|json|markdown)?/gi, '').replace(/```/g, '').trim();
         const lines = cleanText.split(/\r?\n/);
-        let lastDate = ""; // Only used for Olymel
-
-        // Detect if we have mostly JSON or Text
+        let lastDate = "";
         const isJsonLike = cleanText.startsWith('{') || cleanText.startsWith('[');
 
         if (!isJsonLike) {
             lines.forEach(line => {
                 const trimmedLine = line.trim();
-                // Skip separating lines or empty lines
                 if (trimmedLine.length < 5 || trimmedLine.match(/^[-=|]+$/)) return;
-
-                // Heuristic: Must have at least a few separators to be a valid row
                 if (!trimmedLine.includes('|')) return;
 
                 const parts = trimmedLine.split('|').map(p => p.trim());
-                // Remove edge empty parts if they exist (e.g. "| col1 | ... |")
                 if (parts.length > 0 && parts[0] === '') parts.shift();
                 if (parts.length > 0 && parts[parts.length - 1] === '') parts.pop();
 
                 const entry: any = {};
 
                 if (isOlymel) {
-                    // Existing Olymel Logic
                     if (parts.length >= 3) {
                         let dateVal = parts[0];
                         if (dateVal.length < 3 && lastDate.length > 3) dateVal = lastDate;
@@ -257,23 +214,8 @@ Si un champ ne correspond pas au type, c'est que tu as décalé. CORRIGE-TOI.`;
                         currentEntries.push(entry);
                     }
                 } else {
-                    // TCT MAPPING (Based on IMAGE HEADERS - 14 Cols)
-                    // 0: Tournée
-                    // 1: Nom (Nom Compagnie)
-                    // 2: Déb tour
-                    // 3: Fin tour
-                    // 4: Classe véh
-                    // 5: Employé (ID)
-                    // 6: Nom de l'employé (Nom, Prénom)
-                    // 7: Véhicule
-                    // 8: Cl véh aff
-                    // 9: Stationnement
-                    // 10: Approuvé (Check)
-                    // 11: Terr début
-                    // 12: Adresse de début
-                    // 13: Adresse de fin
-
-                    if (parts[0].toLowerCase().includes('tourn')) return; // Header skip
+                    // TCT MAPPING (15 COLUMNS from Image)
+                    if (parts[0].toLowerCase().includes('tourn')) return;
 
                     entry.tournee = parts[0];
                     entry.nom_compagnie = parts[1];
@@ -282,14 +224,13 @@ Si un champ ne correspond pas au type, c'est que tu as décalé. CORRIGE-TOI.`;
                     entry.classe_vehicule = parts[4];
                     entry.id_employe = parts[5];
 
-                    // Smart Name Splitting logic for single column
+                    // Name Split
                     const rawName = parts[6] || "";
                     if (rawName.includes(',')) {
                         const [nom, prenom] = rawName.split(',').map(s => s.trim());
                         entry.nom_employe = nom;
                         entry.prenom_employe = prenom;
                     } else if (rawName.includes(' ')) {
-                        // Fallback attempt to split by space if comma is missing
                         const nameParts = rawName.split(' ');
                         entry.nom_employe = nameParts[0];
                         entry.prenom_employe = nameParts.slice(1).join(' ');
@@ -298,23 +239,30 @@ Si un champ ne correspond pas au type, c'est que tu as décalé. CORRIGE-TOI.`;
                         entry.prenom_employe = "";
                     }
 
-                    entry.vehicule = parts[7];
-                    entry.classe_vehicule_affecte = parts[8];
-                    entry.stationnement = parts[9];
+                    // Col 7 is 'Employé (Double)' - IGNORE
+                    // entry.id_employe_double = parts[7];
 
-                    // Handle Boolean
-                    const rawAppr = (parts[10] || "").toLowerCase();
+                    entry.vehicule = parts[8];
+                    entry.classe_vehicule_affecte = parts[9];
+
+                    // Col 10 is 'Autoris' -> Map to Stationnement? No, likely just check/empty.
+                    // Let's leave stationnement empty as it's not strictly 'Parking'.
+                    entry.stationnement = "";
+
+                    // Col 11 is 'Approuvé'
+                    const rawAppr = (parts[11] || "").toLowerCase();
                     entry.approuve = rawAppr.includes('oui') || rawAppr.includes('true') || rawAppr.includes('x') || rawAppr === 'o';
 
-                    entry.territoire_debut = parts[11];
-                    entry.adresse_debut = parts[12];
-                    entry.adresse_fin = parts[13];
+                    // Col 12 is 'Retour' -> IGNORE
 
-                    // Not in Image, leave empty
+                    // Addresses
+                    entry.adresse_debut = parts[13];
+                    entry.adresse_fin = parts[14];
+
+                    entry.territoire_debut = ""; // Not in 15 cols
                     entry.changement = "";
                     entry.changement_par = "";
 
-                    // Check if mostly empty (invalid row)
                     if (Object.values(entry).filter(v => v !== "").length > 2) {
                         currentEntries.push(entry);
                     }
@@ -323,9 +271,7 @@ Si un champ ne correspond pas au type, c'est que tu as décalé. CORRIGE-TOI.`;
             console.log(`Parsed ${currentEntries.length} rows (Pipe Mode).`);
         }
 
-        // Fallback or JSON Logic
         if (isJsonLike || currentEntries.length === 0) {
-            // Keep existing JSON logic as fallback
             try {
                 const parsedData = cleanAndParseJson(initialRawText);
                 if (Array.isArray(parsedData)) currentEntries = parsedData;
@@ -334,33 +280,24 @@ Si un champ ne correspond pas au type, c'est que tu as décalé. CORRIGE-TOI.`;
             } catch (e) { console.error("JSON Fallback failed", e); }
         }
 
-        // Step 3: Observe (Content)
         const observation = observeData(currentEntries);
-
-        // Step 4: Strategize & Re-Execute (Correction) - Only if critical
         if (!observation.isValid && observation.issues.length > 0 && !isOlymel) {
             console.warn(`Data Quality Issues: ${observation.issues.length}`);
-            // Retry logic could go here
         }
 
         console.timeEnd('ObserveExecute_Total');
 
-        // SAFETY CHECK
         if (!Array.isArray(currentEntries)) currentEntries = [];
 
         const rows: string[][] = currentEntries.map((entry: any) => {
             if (Array.isArray(entry)) return headers.map((_, i) => String(entry[i] || ''));
 
             return headers.map(header => {
-                // 1. Direct Match
-                if (entry[header] !== undefined) return String(entry[header]);
-
-                // 2. Case Insensitive Match
                 const lowerHeader = header.toLowerCase();
                 let foundKey = Object.keys(entry).find(k => k.toLowerCase() === lowerHeader);
+                if (entry[header] !== undefined) return String(entry[header]);
                 if (foundKey) return String(entry[foundKey]);
 
-                // 3. EVV Schema Mapping (Snake Case from new Prompt)
                 if (header === "Tournée" && entry.tournee) return entry.tournee;
                 if (header === "Nom" && entry.nom_compagnie) return entry.nom_compagnie;
                 if (header === "Début tournée" && entry.debut_tournee) return entry.debut_tournee;
@@ -386,11 +323,7 @@ Si un champ ne correspond pas au type, c'est que tu as décalé. CORRIGE-TOI.`;
             });
         });
 
-        // Add Headers if not present
-        return {
-            entries: rows,
-            raw_text: initialRawText
-        };
+        return { entries: rows, raw_text: initialRawText };
 
     } catch (error: any) {
         console.error("AI Error:", error);
