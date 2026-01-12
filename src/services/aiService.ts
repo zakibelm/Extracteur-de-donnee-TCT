@@ -170,23 +170,23 @@ export async function extractDataFromImage(
         if (storedTctPrompt && storedTctPrompt.trim() !== "" && !likelyJsonPrompt) {
             systemInstruction = storedTctPrompt;
         } else {
-            if (likelyJsonPrompt) console.warn("Overriding user's JSON Prompt to enforce Pipe Strategy.");
+            console.warn("Overriding prompt for strict Pipe alignment.");
             systemInstruction = `Tu es un agent expert pour Taxi Coop Terrebonne.
 Extrais les données du tableau et retourne UNIQUEMENT un tableau texte avec séparateur PIPE (|).
 
-## COLONNES DU DOCUMENT (14)
-Tournée | Nom | Début | Fin | Classe V. | Employé | Nom de l'employé | Véhicule | Cl véh aff | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
+## COLONNES DU DOCUMENT (14 - Respecte l'ordre visuel)
+Tournée | Nom | Déb tour | Fin tour | Classe véh | Employé | Nom de l'employé | Véhicule | Cl véh aff | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
 
 ## RÈGLES CRITIQUES
 1. **UNE SEULE LIGNE PAR TOURNÉE.**
-2. Copie EXACTEMENT la colonne "Nom de l'employé" (Nom, Prénom).
-3. Approuvé : Si coché = Oui, sinon = Non.
-4. PAS DE MARKDOWN.`;
+2. **Employé** = ID (ex: 0431). **Nom de l'employé** = Nom (ex: BOUFFARD, PATRICE).
+3. **Approuvé** : Si coché = Oui, sinon = Non.
+4. Si une cellule est vide, laisse l'espace vide (ex: | |).
+5. PAS DE MARKDOWN.`;
         }
     }
 
     // CHANGED: BOTH Olymel AND TCT now use PIPE-SEPARATED values (|) for robustness
-    // This solves "JSON Limits" (truncation) and "Shifted Columns" (misalignment)
     const basePrompt = isOlymel
         ? `MODE TABLEAU TEXTE (Séparateur Pipe |).
            Analyse l'image. Extrais le tableau complet pour TOUS les jours visibles.
@@ -195,16 +195,16 @@ Tournée | Nom | Début | Fin | Classe V. | Employé | Nom de l'employé | Véhi
            2. RÉPÈTE la Date sur CHAQUE LIGNE.
            3. SORTIE BRUTE UNIQUEMENT.`
         : `MODE TABLEAU TEXTE (Séparateur Pipe |).
-           Analyse l'image. Extrais le tableau "Affectations des tournées" complet.
+           Analyse l'image. aligne les données EXACTEMENT sous ces entêtes:
            
-           COLONNES VISIBLES (14):
-           Tournée | Nom | Début | Fin | Classe V. | Employé | Nom de l'employé | Véhicule | Cl véh aff | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
+           COLONNES (14):
+           Tournée | Nom | Déb tour | Fin tour | Classe véh | Employé (ID) | Nom de l'employé | Véhicule (ID) | Cl véh aff | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
            
            RÈGLES CRITIQUES:
            1. Une ligne par tournée.
-           2. Approuvé: Si coché = "Oui", Sinon = "Non".
-           3. Nom de l'employé: Extrais EXACTEMENT comme sur l'image (ex: "Nom, Prénom").
-           4. Si une cellule est vide, laisse l'espace vide entre les pipes.
+           2. Ne confonds pas "Classe véh" (Col 5) avec "Cl véh aff" (Col 9).
+           3. Employé = ID (Chiffres). Véhicule = ID (Chiffres).
+           4. Si vide, laisse vide entre les pipes.
            5. SORTIE BRUTE UNIQUEMENT.`;
 
     try {
