@@ -128,36 +128,38 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
             ? storedOlymelPrompt
             : `Tu es un extracteur de données expert pour les horaires de transport Olymel.`;
     } else {
-        // TCT Default System Prompt (Scanner Mode)
+        // TCT Default System Prompt (CSV Scanner Mode)
         if (storedTctPrompt && storedTctPrompt.trim() !== "") {
             systemInstruction = storedTctPrompt;
         } else {
-            console.warn("Using Standard 15-col STRICT SCANNER TCT Prompt.");
-            systemInstruction = `You are TCT-Extractor.
+            console.warn("Using Standard CSV SCANNER TCT Prompt.");
+            systemInstruction = `SYSTEM PROMPT — TCT Extractor (RAW Scanner Mode)
 You are a TABLE SCANNER.
-MISSION: Extract the TCT table EXACTLY as it appears on screen (15 columns).
-No business logic. No added columns.
+MISSION: Extract TCT table EXACTLY as visible. NO business logic.
 
-FORMAT DE SORTIE (JSON STRICT):
-{
-  "tournees": [
-    {
-      "tournee": "...", "nom": "...", "debut": "...", "fin": "...", "client": "...",
-      "employe_id": "...", "employe_nom": "...", "vehicule_id": "...", "vehicule_type": "...",
-      "cle_vehicule_affectee": "...", "autorise": "...", "approuve": "...", "retour": "...",
-      "adresse_debut": "...", "adresse_fin": "..."
-    }
-  ]
-}
+MANDATORY METHOD:
+1) Read headers EXACTLY.
+2) Read rows cell by cell.
+3) Output CSV with semicolon ; separator.
 
-CRITICAL: Do NOT add 'changement' columns. Copy EXACTLY what is visible.`;
+OUTPUT FORMAT:
+CSV with semicolon ; separator
+First row = EXACT headers
+
+CRITICAL RULES:
+- If unsure -> leave empty
+- NEVER shift data
+- 15 columns expected (approx)
+- NO Added columns
+- NO Markdown blocks (just raw text)
+`;
         }
     }
 
+    // UPDATED BASE PROMPT FOR CSV
     const basePrompt = isOlymel
         ? `MODE TABLEAU TEXTE (Séparateur Pipe |).`
-        : `MODE: execute
-           Analayse l'image et extrais les données des tournées au format JSON structuré comme défini dans le prompt système.`;
+        : `Expected Output: CSV with semicolon separator. STRICT RAW SCAN.`;
 
     try {
         let initialRawText = await callAI(base64Image, mimeType, basePrompt, systemInstruction, documentType, 0.1);
@@ -165,84 +167,80 @@ CRITICAL: Do NOT add 'changement' columns. Copy EXACTLY what is visible.`;
 
         let currentEntries: any[] = [];
 
-        if (isOlymel) {
-            // Keep legacy Olymel parsing for now or update it later if needed. Olymel was working with pipes?
-            // Assuming Olymel acts differently. For now, let's leave Olymel logic as "legacy pipe" if it was working, 
-            // BUT the user didn't ask to break Olymel.
-            // To be safe, let's use the old pipe logic ONLY for Olymel.
-            const cleanText = initialRawText.replace(/```(csv|json|markdown)?/gi, '').replace(/```/g, '').trim();
-            const lines = cleanText.split(/\r?\n/);
-            lines.forEach(line => {
-                const parts = line.split('|').map(p => p.trim());
-                if (parts.length >= 3) { // Minimal validation
+        // RAW CSV PARSING
+        const cleanText = initialRawText.replace(/```(csv|ma?rkdown)?/gi, '').replace(/```/g, '').trim();
+        const lines = cleanText.split(/\r?\n/).filter(line => line.trim() !== '');
+
+        if (lines.length > 1) {
+            const separator = isOlymel ? '|' : ';';
+
+            // Extract Headers from First Line
+            const detectedHeaders = lines[0].split(separator).map(h => h.trim().replace(/^"|"$/g, ''));
+            console.log("Detected Headers:", detectedHeaders);
+
+            // Parse Rows
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                const parts = line.split(separator).map(p => p.trim().replace(/^"|"$/g, ''));
+
+                // Basic validation
+                if (parts.length >= Math.max(2, detectedHeaders.length - 2)) {
                     const entry: any = {};
-                    headers.forEach((h, i) => entry[h] = parts[i] || "");
+                    detectedHeaders.forEach((h, index) => {
+                        entry[h] = parts[index] || "";
+                        entry[`_col_${index}`] = parts[index] || "";
+                    });
                     currentEntries.push(entry);
                 }
-            });
+            }
         } else {
-            // TCT JSON PARSING logic
+            // Fallback JSON parsing
             try {
                 const parsedData = cleanAndParseJson(initialRawText);
-                if (parsedData.tournees && Array.isArray(parsedData.tournees)) {
-                    currentEntries = parsedData.tournees;
-                } else if (Array.isArray(parsedData)) {
-                    currentEntries = parsedData;
-                } else if (parsedData.entries) {
-                    currentEntries = parsedData.entries;
-                }
-                console.log(`Parsed ${currentEntries.length} rows from JSON.`);
+                if (parsedData.tournees) currentEntries = parsedData.tournees;
+                else if (parsedData.entries) currentEntries = parsedData.entries;
             } catch (e) {
-                console.error("JSON Parsing failed for TCT:", e);
-                // Fallback or error handling
+                console.warn("Failed to parse as CSV or JSON");
             }
         }
 
+        console.log(`Parsed ${currentEntries.length} rows.`);
         console.timeEnd('ObserveExecute_Total');
 
         const rows: string[][] = currentEntries.map((entry: any) => {
             if (isOlymel) {
-                return headers.map(h => entry[h] || ""); // Access by header name key if we did that, or if entry is array... 
-                // Olymel logic above pushed objects with header keys? No, wait, I need to check how Olymel pushed.
-                // Actually, let's fix the Olymel part to be safe.
                 if (Array.isArray(entry)) return entry.map(String);
-                return headers.map((_, i) => String(entry[i] || '')); // Simplistic
+                return OLYMEL_TABLE_HEADERS.map((_, i) => entry[`_col_${i}`] || "");
             }
 
-            // TCT Mapping - INJECTING BUSINESS LOGIC "Changement = Vehicule"
-            return headers.map(header => {
-                switch (header) {
-                    // Direct Mappings
-                    case "Tournée": return entry.tournee || "";
-                    case "Nom": return entry.nom || entry.nom_compagnie || "";
-                    case "Déb tour": return entry.debut || entry.debut_tournee || "";
-                    case "Fin tour": return entry.fin || entry.fin_tournee || "";
+            // TCT MAPPING + LOGIC INJECTION
+            return TCT_TABLE_HEADERS.map(targetHeader => {
+                const val = (idx: number) => entry[`_col_${idx}`] || "";
 
-                    // Column 5: Client / Class Prio
-                    case "Cl véh": return entry.client || entry.classe_vehicule || "";
+                switch (targetHeader) {
+                    case "Tournée": return val(0);
+                    case "Nom": return val(1);
+                    case "Déb tour": return val(2);
+                    case "Fin tour": return val(3);
+                    case "Cl véh": return val(4);
 
-                    // Employee Handing - Logic: Duplicate ID
-                    case "Employé": return entry.employe_id || entry.id_employe || "";
-                    case "Nom de l'employé": {
-                        return entry.employe_nom || entry.nom_employe_complet || "";
-                    }
-                    case "Employé (Confirm)": return entry.employe_id || entry.id_employe_confirm || "";
+                    case "Employé": return val(5);
+                    case "Nom de l'employé": return val(6);
+                    case "Employé (Confirm)": return val(7);
 
-                    // Vehicle & Change Logic - Logic: Changement = Vehicule
-                    case "Véhicule": return entry.vehicule_id || entry.vehicule || "";
-                    case "Cl véh aff": return entry.vehicule_type || entry.classe_vehicule_affecte || "";
-                    case "Autoris": return entry.autorise || entry.autorisation || "";
+                    case "Véhicule": return val(8);
+                    case "Cl véh aff": return val(9);
 
-                    // Booleans
-                    case "Approuvé": return (entry.approuve === true || entry.approuve === "true" || entry.approuve === "Oui") ? "Oui" : "";
-                    case "Retour": return (entry.retour === true || entry.retour === "true" || entry.retour === "Oui") ? "Oui" : "";
+                    case "Autoris": return val(10);
+                    case "Approuvé": return (val(11).toLowerCase().includes('true') || val(11).includes('✓') || val(11) === "Oui") ? "Oui" : "";
+                    case "Retour": return (val(12).toLowerCase().includes('true') || val(12).includes('✓') || val(12) === "Oui") ? "Oui" : "";
 
-                    case "Adresse de début": return entry.adresse_debut || "";
-                    case "Adresse de fin": return entry.adresse_fin || "";
+                    case "Adresse de début": return val(13);
+                    case "Adresse de fin": return val(14);
 
-                    // INJECTED LOGIC: CHANGEMENT = VEHICULE
-                    case "Changement": return entry.vehicule_id || entry.vehicule || "";
-                    case "Changement par": return entry.vehicule_id || entry.vehicule || ""; // User requested logic: "changement_par = vehicule"
+                    // LOGIC INJECTION: CHANGEMENT = VEHICULE
+                    case "Changement": return val(8);
+                    case "Changement par": return val(8);
 
                     default: return "";
                 }
