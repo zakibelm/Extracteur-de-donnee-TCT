@@ -13,7 +13,7 @@ const OLYMEL_TABLE_HEADERS = [
     "Date", "Heure", "Transport", "Numéro", "Chauffeur"
 ];
 
-// TCT Columns (17 Columns - Structure Réelle)
+// TCT Columns (15 Columns - Strict Extraction)
 export const TCT_TABLE_HEADERS = [
     "Tournée",
     "Nom",
@@ -29,9 +29,7 @@ export const TCT_TABLE_HEADERS = [
     "Approuvé",
     "Retour",
     "Adresse de début",
-    "Adresse de fin",
-    "Changement",
-    "Changement par"
+    "Adresse de fin"
 ];
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -213,7 +211,7 @@ CRITICAL RULES:
                 return OLYMEL_TABLE_HEADERS.map((_, i) => entry[`_col_${i}`] || "");
             }
 
-            // TCT MAPPING + LOGIC INJECTION
+            // TCT MAPPING (15 COLUMNS - NO INJECTION)
             return TCT_TABLE_HEADERS.map(targetHeader => {
                 const val = (idx: number) => entry[`_col_${idx}`] || "";
 
@@ -237,10 +235,6 @@ CRITICAL RULES:
 
                     case "Adresse de début": return val(13);
                     case "Adresse de fin": return val(14);
-
-                    // LOGIC INJECTION: CHANGEMENT = VEHICULE
-                    case "Changement": return val(8);
-                    case "Changement par": return val(8);
 
                     default: return "";
                 }
