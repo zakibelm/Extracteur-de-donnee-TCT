@@ -44,7 +44,7 @@ export default async function handler(req: Request) {
             try {
                 const existingUser = await sql`
                     SELECT * FROM users 
-                    WHERE email = ${email} OR employee_id = ${employeeId}
+                    WHERE email = ${email} OR id_employe = ${employeeId}
                 `;
 
                 if (existingUser.length > 0) {
@@ -66,9 +66,9 @@ export default async function handler(req: Request) {
                 const role = accountType === 'admin' ? 'admin' : 'driver';
 
                 const result = await sql`
-                    INSERT INTO users (num_dome, employee_id, email, password_hash, role, telephone)
+                    INSERT INTO users (num_dome, id_employe, email, password_hash, role, telephone)
                     VALUES (${numDome}, ${employeeId}, ${email}, ${hash}, ${role}, ${telephone})
-                    RETURNING id, num_dome, email, role, employee_id, created_at
+                    RETURNING id, num_dome, email, role, id_employe, created_at
                 `;
 
                 return new Response(JSON.stringify({
@@ -105,10 +105,10 @@ export default async function handler(req: Request) {
                 });
             }
 
-            // Query by employee_id
+            // Query by id_employe
             const users = await sql`
                 SELECT * FROM users 
-                WHERE employee_id = ${employeeId} 
+                WHERE id_employe = ${employeeId} 
                 AND password_hash = ${password}
             `;
 
