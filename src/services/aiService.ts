@@ -303,10 +303,10 @@ Tournée | Nom | Début | Fin | Classe V. | Employé | Nom de l'employé | Véhi
            Analyse l'image. Extrais le tableau "Affectations des tournées" complet.
            
            RÈGLES CRITIQUES:
-           1. FORMAT LIGNE: Tournée | Nom Compagnie | Début | Fin | Classe V. | ID Employé | Nom Employé | Prénom Employé | Véhicule | Classe V. Affecté | Stationnement | Approuvé (Oui/Non) | Territoire | Adresse Début | Adresse Fin | Changement | Changement Par
+           1. FORMAT LIGNE COLONNES (14): Tournée | Nom Compagnie | Début | Fin | Classe V. | Employé | Nom de l'employé (Nom, Prénom) | Véhicule | Classe V. Affecté | Stationnement | Approuvé | Terr début | Adresse de début | Adresse de fin
            2. Une ligne par tournée.
            3. Si une cellule est vide, laisse l'espace vide entre les pipes (ex: | |).
-           4. Sépare bien Nom et Prénom.
+           4. Copie le Nom textuellement.
            5. SORTIE BRUTE UNIQUEMENT.`;
 
     try {
