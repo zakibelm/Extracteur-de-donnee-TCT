@@ -23,12 +23,10 @@ export const TCT_TABLE_HEADERS = [
     "Classe véhicule",
     "Employé",
     "Nom de l'employé",
-    // "Employé (Double)" - Ignored
     "Véhicule",
     "Classe véhicule affecté",
     "Stationnement",
     "Approuvé",
-    // "Retour" - Ignored
     "Territoire début",
     "Adresse de début",
     "Adresse de fin",
@@ -143,7 +141,7 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
         if (storedTctPrompt && storedTctPrompt.trim() !== "" && !likelyJsonPrompt) {
             systemInstruction = storedTctPrompt;
         } else {
-            console.warn("Overriding prompt for strict 15-col alignment (Restored Addresses).");
+            console.warn("Overriding prompt for Robust 15-col alignment.");
             systemInstruction = `Tu es un agent expert pour Taxi Coop Terrebonne.
 Extrais les données et retourne un tableau texte avec séparateur PIPE (|).
 
@@ -155,9 +153,10 @@ Tournée | Nom | Déb tour | Fin tour | Cl véh | Employé | Nom de l'employé |
 2. **Employé_Double** (Col 8) : Ignore, mais garde la colonne.
 3. **Approuvé** (Col 12) : Oui/Non.
 4. **Adresses** : Copie complète.
-5. UNE LIGNE PAR TOURNÉE.
+5. **CHANGEMENT** : STOP. Ne rien extraire après Adresses.
+6. UNE LIGNE PAR TOURNÉE.
 
-Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
+Respecte scrupuleusement cet ordre de 15 colonnes.`;
         }
     }
 
@@ -172,7 +171,8 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
            RÈGLES ANTI-DÉCALAGE:
            1. Col 5 (Classe véh) = "TAXI" ou "MINIVAN".
            2. Col 6 (Employé) = CHIFFRES UNIQUEMENT.
-           3. SORTIE BRUTE UNIQUEMENT.`;
+           3. RECUPERE les 2 dernieres colonnes non vides comme ADRESSES.
+           4. SORTIE BRUTE UNIQUEMENT.`;
 
     try {
         let initialRawText = await callAI(base64Image, mimeType, basePrompt, systemInstruction, documentType, 0.1);
@@ -217,60 +217,58 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
                     // --- ANTI-SHIFT AUTO-CORRECTION ---
                     const valCol5 = (parts[5] || "").toUpperCase();
                     const valCol6 = (parts[6] || "").trim();
+                    let shiftIndex = 0;
 
                     if ((valCol5 === 'TAXI' || valCol5 === 'MINIVAN') && /^\d+$/.test(valCol6)) {
-                        // SHIFT detected!
+                        shiftIndex = 1; // Major Shift Detected
                         entry.id_employe = parts[6];
-
-                        const rawNameShifted = parts[7] || "";
-                        if (rawNameShifted.includes(',')) {
-                            const [nom, prenom] = rawNameShifted.split(',').map(s => s.trim());
-                            entry.nom_employe = nom;
-                            entry.prenom_employe = prenom;
-                        } else {
-                            const nameParts = rawNameShifted.split(' ');
-                            entry.nom_employe = nameParts[0];
-                            entry.prenom_employe = nameParts.slice(1).join(' ');
-                        }
-
-                        entry.vehicule = parts[9];
-                        entry.classe_vehicule_affecte = parts[10];
-                        entry.approuve = (parts[12] || "").toLowerCase().includes('oui');
-                        // RESTORE ADRESSES (Shifted indices)
-                        entry.adresse_debut = parts[14];
-                        entry.adresse_fin = parts[15] || parts[14];
-
-                    } else {
-                        // NORMAL PATH
-                        const rawName = parts[6] || "";
-                        if (rawName.includes(',')) {
-                            const [nom, prenom] = rawName.split(',').map(s => s.trim());
-                            entry.nom_employe = nom;
-                            entry.prenom_employe = prenom;
-                        } else if (rawName.includes(' ')) {
-                            const nameParts = rawName.split(' ');
-                            entry.nom_employe = nameParts[0];
-                            entry.prenom_employe = nameParts.slice(1).join(' ');
-                        } else {
-                            entry.nom_employe = rawName;
-                            entry.prenom_employe = "";
-                        }
-
-                        entry.vehicule = parts[8];
-                        entry.classe_vehicule_affecte = parts[9];
-                        const rawAppr = (parts[11] || "").toLowerCase();
-                        entry.approuve = rawAppr.includes('oui') || rawAppr.includes('true') || rawAppr.includes('x') || rawAppr === 'o';
-
-                        // RESTORE ADRESSES (Normal indices)
-                        entry.adresse_debut = parts[13];
-                        entry.adresse_fin = parts[14];
                     }
-                    // --- END ANTI-SHIFT ---
+
+                    // Map fields based on shift
+                    const rawNameIndex = 6 + shiftIndex;
+                    const rawName = parts[rawNameIndex] || "";
+
+                    if (rawName.includes(',')) {
+                        const [nom, prenom] = rawName.split(',').map(s => s.trim());
+                        entry.nom_employe = nom;
+                        entry.prenom_employe = prenom;
+                    } else if (rawName.includes(' ')) {
+                        const nameParts = rawName.split(' ');
+                        entry.nom_employe = nameParts[0];
+                        entry.prenom_employe = nameParts.slice(1).join(' ');
+                    } else {
+                        entry.nom_employe = rawName;
+                        entry.prenom_employe = "";
+                    }
+
+                    const vehiculeIndex = 8 + shiftIndex;
+                    entry.vehicule = parts[vehiculeIndex];
+                    entry.classe_vehicule_affecte = parts[vehiculeIndex + 1];
+
+                    // Approuve logic
+                    const approuveIndex = vehiculeIndex + 3; // +3 skips ClVehAff, Autoris
+                    const rawAppr = (parts[approuveIndex] || "").toLowerCase();
+                    entry.approuve = rawAppr.includes('oui') || rawAppr.includes('true') || rawAppr.includes('x') || rawAppr === 'o';
+
+                    // SMART ADDRESS FETCHING (Grab from end of array)
+                    // If array is long (e.g. 17 parts), address is at [end-2] and [end-1]?
+                    // Assuming last part is empty or noise, we filter empty parts first? No parts are already trimmed.
+                    // If shift occurred, parts length might be 16 or 17.
+                    // If normal, parts length is 15.
+
+                    const pLen = parts.length;
+                    if (pLen >= 15) {
+                        entry.adresse_fin = parts[pLen - 1]; // Last column
+                        entry.adresse_debut = parts[pLen - 2]; // Second to last
+                    } else {
+                        entry.adresse_debut = parts[13 + shiftIndex];
+                        entry.adresse_fin = parts[14 + shiftIndex];
+                    }
 
                     entry.stationnement = "";
                     entry.territoire_debut = "";
 
-                    // CHANGEMENT & CHANGEMENT PAR - ALWAYS EMPTY
+                    // FORCE EMPTY CHANGEMENT
                     entry.changement = "";
                     entry.changement_par = "";
 
@@ -292,7 +290,7 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
         }
 
         const observation = observeData(currentEntries);
-        // ... (Error handling omitted for brevity, similar to before)
+        // ... (Error handling omitted)
 
         console.timeEnd('ObserveExecute_Total');
 
@@ -302,7 +300,10 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
             if (Array.isArray(entry)) return headers.map((_, i) => String(entry[i] || ''));
 
             return headers.map(header => {
-                // Standard Mapping
+                // STRICT EMPTY RETURN FOR CHANGEMENT COLUMNS
+                if (header === "Changement") return "";
+                if (header === "Changement par") return "";
+
                 if (header === "Tournée" && entry.tournee) return entry.tournee;
                 if (header === "Nom" && entry.nom_compagnie) return entry.nom_compagnie;
                 if (header === "Début tournée" && entry.debut_tournee) return entry.debut_tournee;
@@ -321,8 +322,6 @@ Respecte scrupuleusement cet ordre de 15 colonnes pour éviter tout décalage.`;
                 if (header === "Territoire début" && entry.territoire_debut) return entry.territoire_debut;
                 if (header === "Adresse de début" && entry.adresse_debut) return entry.adresse_debut;
                 if (header === "Adresse de fin" && entry.adresse_fin) return entry.adresse_fin;
-                if (header === "Changement" && entry.changement) return entry.changement;
-                if (header === "Changement par" && entry.changement_par) return entry.changement_par;
 
                 return "";
             });
