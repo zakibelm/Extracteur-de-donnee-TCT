@@ -85,8 +85,15 @@ async function callAI(
 const TCT_TABLE_HEADERS = [
     "Tournée", "Nom", "Début tournée", "Fin tournée", "Classe véhicule", "Employé",
     "Nom de l'employé", "Véhicule", "Classe véhicule affecté", "Stationnement",
-    "Approuvé", "Territoire début", "Adresse de début", "Adresse de fin"
+    "Approuvé", "Territoire début", "Adresse de début", "Adresse de fin",
+    "Changement", "Changement par"
 ];
+
+// ... (in mapping logic)
+
+if (header === "Adresse de fin" && (entry.adresse_fin || entry.adresse_arrivee)) return entry.adresse_fin || entry.adresse_arrivee;
+if (header === "Changement" && entry.changement) return entry.changement;
+if (header === "Changement par" && entry.changement_par) return entry.changement_par;
 
 const tctResponseSchema: Schema = {
     type: Type.OBJECT,
