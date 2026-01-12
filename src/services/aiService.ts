@@ -14,7 +14,7 @@ const OLYMEL_TABLE_HEADERS = [
     "Date", "Heure", "Transport", "Numéro", "Chauffeur"
 ];
 
-// TCT Columns (Display Headers)
+// TCT Columns (17 Columns - Structure Réelle)
 export const TCT_TABLE_HEADERS = [
     "Tournée",
     "Nom",
@@ -23,11 +23,12 @@ export const TCT_TABLE_HEADERS = [
     "Classe véhicule",
     "Employé",
     "Nom de l'employé",
+    "Employé (Confirm)",
     "Véhicule",
     "Classe véhicule affecté",
-    "Stationnement",
+    "Autoris",
     "Approuvé",
-    "Territoire début",
+    "Retour",
     "Adresse de début",
     "Adresse de fin",
     "Changement",
@@ -141,38 +142,43 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
         if (storedTctPrompt && storedTctPrompt.trim() !== "" && !likelyJsonPrompt) {
             systemInstruction = storedTctPrompt;
         } else {
-            console.warn("Overriding prompt for Robust 15-col alignment V2.");
+            console.warn("Using Standard 17-col TCT Prompt.");
             systemInstruction = `Tu es un agent expert pour Taxi Coop Terrebonne.
 Extrais les données et retourne un tableau texte avec séparateur PIPE (|).
 
-## COLONNES (15 - STRUCTURE EXACTE)
-Tournée | Nom | Déb tour | Fin tour | Cl véh | Employé | Nom de l'employé | Employé_Double | Véhicule | Cl véh aff | Autoris | Approuvé | Retour | Adresse de début | Adresse de fin
+## STRUCTURE EXACTE (17 COLONNES)
+1. Tournée
+2. Nom (TAXI COOP...)
+3. Déb tour
+4. Fin tour
+5. Cl véh
+6. Employé (ID)
+7. Nom de l'employé
+8. Employé (ID Confirm)
+9. Véhicule
+10. Cl véh aff
+11. Autoris
+12. Approuvé
+13. Retour
+14. Adresse de début
+15. Adresse de fin
+16. Changement (DOME)
+17. Changement par (DOME)
 
-## RÈGLES DE MAPPING (CRUCIAL)
-1. **Employé** (Col 6) : Chiffres (ID). S'il y a "TAXI", laisse VIDE.
-2. **Employé_Double** (Col 8) : Ignore, mais garde la colonne.
-3. **Approuvé** (Col 12) : Oui/Non.
-4. **Adresses** : Copie complète.
-5. **CHANGEMENT** : STOP. Ne rien extraire après Adresses.
-6. UNE LIGNE PAR TOURNÉE.
-
-Respecte scrupuleusement cet ordre de 15 colonnes.`;
+## IMPORTANT
+- Conserve l'ordre exact.
+- Retourne des valeurs vides si absent.
+- Changement/Changement par sont des numéros.`;
         }
     }
 
     const basePrompt = isOlymel
         ? `MODE TABLEAU TEXTE (Séparateur Pipe |).`
         : `MODE TABLEAU TEXTE (Séparateur Pipe |).
-           Analyse l'image. aligne les données EXACTEMENT sous ces entêtes:
-           
-           COLONNES (15):
-           Tournée | Nom | Déb tour | Fin tour | Cl véh | Employé (ID) | Nom de l'employé | Employé (Double) | Véhicule (ID) | Cl véh aff | Autoris | Approuvé | Retour | Adresse de début | Adresse de fin
-           
-           RÈGLES ANTI-DÉCALAGE:
-           1. Col 5 (Classe véh) = "TAXI" ou "MINIVAN".
-           2. Col 6 (Employé) = CHIFFRES UNIQUEMENT.
-           3. RECUPERE les 2 dernieres colonnes non vides comme ADRESSES.
-           4. SORTIE BRUTE UNIQUEMENT.`;
+           Analyse l'image. Extrais les 17 colonnes pour chaque tournée.
+           Si une colonne est vide, laisse l'espace vide entre les pipes.
+           Attends-toi à une double colonne Employé (col 6 et 8).
+           SORTIE BRUTE UNIQUEMENT.`;
 
     try {
         let initialRawText = await callAI(base64Image, mimeType, basePrompt, systemInstruction, documentType, 0.1);
@@ -187,16 +193,19 @@ Respecte scrupuleusement cet ordre de 15 colonnes.`;
         if (!isJsonLike) {
             lines.forEach(line => {
                 const trimmedLine = line.trim();
+                // Skip short lines or separator lines
                 if (trimmedLine.length < 5 || trimmedLine.match(/^[-=|]+$/)) return;
                 if (!trimmedLine.includes('|')) return;
 
                 const parts = trimmedLine.split('|').map(p => p.trim());
+                // Handle leading/trailing pipe emptiness
                 if (parts.length > 0 && parts[0] === '') parts.shift();
                 if (parts.length > 0 && parts[parts.length - 1] === '') parts.pop();
 
                 const entry: any = {};
 
                 if (isOlymel) {
+                    // ... (Olymel logic unchanged)
                     if (parts.length >= 3) {
                         let dateVal = parts[0];
                         if (dateVal.length < 3 && lastDate.length > 3) dateVal = lastDate;
@@ -204,75 +213,65 @@ Respecte scrupuleusement cet ordre de 15 colonnes.`;
                         currentEntries.push(entry);
                     }
                 } else {
-                    // TCT MAPPING (15 COLUMNS scheme)
+                    // TCT MAPPING (17 COLUMNS scheme)
                     if (parts[0].toLowerCase().includes('tourn')) return;
 
-                    entry.tournee = parts[0];
-                    entry.nom_compagnie = parts[1];
-                    entry.debut_tournee = parts[2];
-                    entry.fin_tournee = parts[3];
-                    entry.classe_vehicule = parts[4];
-                    entry.id_employe = parts[5];
-
-                    // --- ANTI-SHIFT AUTO-CORRECTION ---
-                    const valCol5 = (parts[5] || "").toUpperCase();
-                    const valCol6 = (parts[6] || "").trim();
-                    let shiftIndex = 0;
-
-                    if ((valCol5 === 'TAXI' || valCol5 === 'MINIVAN') && /^\d+$/.test(valCol6)) {
-                        shiftIndex = 1; // Major Shift Detected
-                        entry.id_employe = parts[6];
-                    }
-
-                    // Map fields based on shift
-                    const rawNameIndex = 6 + shiftIndex;
-                    const rawName = parts[rawNameIndex] || "";
-
+                    // 1. Tournée
+                    entry.tournee = parts[0] || "";
+                    // 2. Nom
+                    entry.nom_compagnie = parts[1] || "";
+                    // 3. Déb tour
+                    entry.debut_tournee = parts[2] || "";
+                    // 4. Fin tour
+                    entry.fin_tournee = parts[3] || "";
+                    // 5. Cl véh
+                    entry.classe_vehicule = parts[4] || "";
+                    // 6. Employé (ID)
+                    entry.id_employe = parts[5] || "";
+                    // 7. Nom de l'employé
+                    const rawName = parts[6] || "";
                     if (rawName.includes(',')) {
                         const [nom, prenom] = rawName.split(',').map(s => s.trim());
                         entry.nom_employe = nom;
                         entry.prenom_employe = prenom;
-                    } else if (rawName.includes(' ')) {
-                        const nameParts = rawName.split(' ');
-                        entry.nom_employe = nameParts[0];
-                        entry.prenom_employe = nameParts.slice(1).join(' ');
                     } else {
                         entry.nom_employe = rawName;
                         entry.prenom_employe = "";
                     }
+                    // 8. Employé (Confirm) - Optional usage
+                    entry.id_employe_confirm = parts[7] || "";
 
-                    const vehiculeIndex = 8 + shiftIndex;
-                    entry.vehicule = parts[vehiculeIndex];
-                    entry.classe_vehicule_affecte = parts[vehiculeIndex + 1];
+                    // 9. Véhicule
+                    entry.vehicule = parts[8] || "";
+                    // 10. Cl véh aff
+                    entry.classe_vehicule_affecte = parts[9] || "";
+                    // 11. Autoris
+                    entry.autoris = parts[10] || "";
 
-                    // Approuve logic
-                    const approuveIndex = vehiculeIndex + 3; // +3 skips ClVehAff, Autoris
-                    const rawAppr = (parts[approuveIndex] || "").toLowerCase();
+                    // 12. Approuvé
+                    const rawAppr = (parts[11] || "").toLowerCase();
                     entry.approuve = rawAppr.includes('oui') || rawAppr.includes('true') || rawAppr.includes('x') || rawAppr === 'o';
 
-                    // SMART ADDRESS FETCHING (Grab from end of array)
-                    const pLen = parts.length;
-                    if (pLen >= 15) {
-                        entry.adresse_fin = parts[pLen - 1] || ""; // Safe fallback
-                        entry.adresse_debut = parts[pLen - 2] || "";
-                    } else {
-                        entry.adresse_debut = parts[13 + shiftIndex] || "";
-                        entry.adresse_fin = parts[14 + shiftIndex] || "";
-                    }
+                    // 13. Retour
+                    const rawRetour = (parts[12] || "").toLowerCase();
+                    entry.retour = rawRetour.includes('oui') || rawRetour.includes('true') || rawRetour.includes('x');
 
-                    entry.stationnement = "";
-                    entry.territoire_debut = "";
+                    // 14. Adresse début
+                    entry.adresse_debut = parts[13] || "";
+                    // 15. Adresse fin
+                    entry.adresse_fin = parts[14] || "";
 
-                    // FORCE EMPTY CHANGEMENT
-                    entry.changement = "";
-                    entry.changement_par = "";
+                    // 16. Changement
+                    entry.changement = parts[15] || "";
+                    // 17. Changement par
+                    entry.changement_par = parts[16] || "";
 
                     if (Object.values(entry).filter(v => v !== "").length > 2) {
                         currentEntries.push(entry);
                     }
                 }
             });
-            console.log(`Parsed ${currentEntries.length} rows (Pipe Mode).`);
+            console.log(`Parsed ${currentEntries.length} rows (17-Col Mode).`);
         }
 
         if (isJsonLike || currentEntries.length === 0) {
@@ -281,11 +280,11 @@ Respecte scrupuleusement cet ordre de 15 colonnes.`;
                 if (Array.isArray(parsedData)) currentEntries = parsedData;
                 else if (parsedData.entries) currentEntries = parsedData.entries;
                 else if (parsedData.data) currentEntries = parsedData.data;
+                // If json is used, map snake_case or new keys to flat entry
             } catch (e) { console.error("JSON Fallback failed", e); }
         }
 
         const observation = observeData(currentEntries);
-        // ... err handling
 
         console.timeEnd('ObserveExecute_Total');
 
@@ -293,36 +292,31 @@ Respecte scrupuleusement cet ordre de 15 colonnes.`;
 
         const rows: string[][] = currentEntries.map((entry: any) => {
             if (Array.isArray(entry)) {
-                // ARRAY MODE: Strict mapping with Empty Changement Forced
-                return headers.map((header, i) => {
-                    if (header === "Changement" || header === "Changement par") return "";
-                    return String(entry[i] || '');
-                });
+                // Return straight array if already array
+                return headers.map((_, i) => String(entry[i] || ''));
             }
 
             return headers.map(header => {
-                // OBJECT MODE: Strict Empty Return
-                if (header === "Changement") return "";
-                if (header === "Changement par") return "";
-
-                if (header === "Tournée" && entry.tournee) return entry.tournee;
-                if (header === "Nom" && entry.nom_compagnie) return entry.nom_compagnie;
-                if (header === "Début tournée" && entry.debut_tournee) return entry.debut_tournee;
-                if (header === "Fin tournée" && entry.fin_tournee) return entry.fin_tournee;
-                if (header === "Classe véhicule" && entry.classe_vehicule) return entry.classe_vehicule;
-                if (header === "Employé" && entry.id_employe) return entry.id_employe;
+                if (header === "Tournée") return entry.tournee || "";
+                if (header === "Nom") return entry.nom_compagnie || "";
+                if (header === "Début tournée") return entry.debut_tournee || "";
+                if (header === "Fin tournée") return entry.fin_tournee || "";
+                if (header === "Classe véhicule") return entry.classe_vehicule || "";
+                if (header === "Employé") return entry.id_employe || "";
                 if (header === "Nom de l'employé") {
                     if (entry.nom_employe && entry.prenom_employe) return `${entry.nom_employe}, ${entry.prenom_employe}`;
-                    if (entry.nom_employe) return entry.nom_employe;
-                    return "";
+                    return entry.nom_employe || "";
                 }
-                if (header === "Véhicule" && entry.vehicule) return entry.vehicule;
-                if (header === "Classe véhicule affecté" && entry.classe_vehicule_affecte) return entry.classe_vehicule_affecte;
-                if (header === "Stationnement" && entry.stationnement) return entry.stationnement;
+                if (header === "Employé (Confirm)") return entry.id_employe_confirm || "";
+                if (header === "Véhicule") return entry.vehicule || "";
+                if (header === "Classe véhicule affecté") return entry.classe_vehicule_affecte || "";
+                if (header === "Autoris") return entry.autoris || "";
                 if (header === "Approuvé") return entry.approuve ? "Oui" : "Non";
-                if (header === "Territoire début" && entry.territoire_debut) return entry.territoire_debut;
-                if (header === "Adresse de début" && entry.adresse_debut) return entry.adresse_debut;
-                if (header === "Adresse de fin" && entry.adresse_fin) return entry.adresse_fin;
+                if (header === "Retour") return entry.retour ? "Oui" : "";
+                if (header === "Adresse de début") return entry.adresse_debut || "";
+                if (header === "Adresse de fin") return entry.adresse_fin || "";
+                if (header === "Changement") return entry.changement || "";
+                if (header === "Changement par") return entry.changement_par || "";
 
                 return "";
             });
