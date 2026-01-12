@@ -1,8 +1,9 @@
 // Initialize Gemini API
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_OPENROUTER_API_KEY || "");
+const genAI = null;
 
 export interface ExtractedData {
     entries: any[];
+    headers: string[];
     metadata?: any;
     raw_text?: string;
 }
@@ -135,8 +136,41 @@ export async function extractDataFromImage(base64Image: string, mimeType: string
             // Note: In a real scenario, we might import this from the markdown file, but for now we inline a minimal version matching the artifact 
             // to ensure fallback works if local storage is empty.
             // Ideally the user sets the prompt in the UI, which saves to localStorage.
-            systemInstruction = `Tu es un agent d'extraction pour Taxi Coop Terrebonne.
-STRUCTURE EXACTE DU TABLEAU TCT: 17 colonnes (Tournée, Nom, Déb, Fin, Cl véh, Emp, Nom Emp, Emp(2), Véh, Cl véh aff, Autoris, Approuvé, Retour, Adr Déb, Adr Fin, Changement, Changement par).
+            systemInstruction = `Tu es un moteur d'extraction de données ultra strict spécialisé en tableaux de gestion de tournées.
+
+OBJECTIF :
+Extraire le tableau TCT de l'image EXACTEMENT colonne par colonne et ligne par ligne, sans aucun décalage, sans fusion, sans omission.
+
+RÈGLES ABSOLUES (ANTI-DÉCALAGE) :
+1. Tu dois respecter STRICTEMENT la structure de 17 colonnes définie ci-dessous.
+2. Chaque ligne visuelle = 1 objet JSON dans le tableau de sortie.
+3. Chaque colonne visuelle = 1 champ JSON.
+4. Aucune donnée ne doit changer de colonne.
+5. Si une cellule est vide, tu dois mettre : "" (ou null).
+6. Tu ne dois JAMAIS fusionner deux colonnes.
+7. Tu ne dois JAMAIS déplacer une donnée vers une autre colonne.
+8. Tu dois garder TOUTES les lignes, même si certaines sont partielles.
+9. Identifie visuellement les colonnes et VERROUILLE leur position.
+
+## STRUCTURE EXACTE (17 COLONNES)
+
+1. **Tournée** (TCT####)
+2. **Nom** (TAXI COOP TERREBONNE)
+3. **Déb tour** (Heure)
+4. **Fin tour** (Heure)
+5. **Cl véh** (TAXI/MINIVAN)
+6. **Employé** (ID 4 chiffres - 1ère occurrence)
+7. **Nom de l'employé** (Nom complet)
+8. **Employé** (ID 4 chiffres - 2ème occurrence, copie visuelle de la col 6)
+9. **Véhicule** (3 chiffres)
+10. **Cl véh aff** (TAXI/MINIVAN, peut être vide)
+11. **Autoris** (Texte, souvent vide)
+12. **Approuvé** (Case cochée = true)
+13. **Retour** (Case cochée = true)
+14. **Adresse de début** (Complète)
+15. **Adresse de fin** (Complète)
+16. **Changement** (Numéro DOME, ex: 12345)
+17. **Changement par** (Numéro DOME, ex: 67890) -> Si vide, laisser vide.
 
 MODE: execute
 Extrais TOUTES les lignes au format JSON:
@@ -242,7 +276,7 @@ IMPORTANT: "changement" et "changement_par" sont des numéros DOME. "adresse_deb
             });
         });
 
-        return { entries: rows, raw_text: initialRawText, metadata: (currentEntries as any).metadata };
+        return { entries: rows, headers: headers, raw_text: initialRawText, metadata: (currentEntries as any).metadata };
 
     } catch (error: any) {
         console.error("AI Error:", error);
