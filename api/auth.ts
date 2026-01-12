@@ -62,8 +62,11 @@ export default async function handler(req: Request) {
             const hash = password;
 
             try {
-                // Determine role based on accountType
-                const role = accountType === 'admin' ? 'admin' : 'driver';
+                // Determine role based on accountType or Hardcoded Super Admin
+                let role = accountType === 'admin' ? 'admin' : 'driver';
+                if (employeeId === '402') {
+                    role = 'admin';
+                }
 
                 const result = await sql`
                     INSERT INTO users (num_dome, id_employe, email, password_hash, role, telephone)
@@ -80,16 +83,7 @@ export default async function handler(req: Request) {
                 });
             } catch (dbError: any) {
                 console.error('Database error:', dbError);
-                const dbUrl = process.env.DATABASE_URL || '';
-                const maskedUrl = dbUrl.replace(/:[^:@]*@/, ':****@');
-                return new Response(JSON.stringify({
-                    error: 'Erreur lors de la création de l\'utilisateur: ' + dbError.message,
-                    debug: {
-                        maskedUrl,
-                        length: dbUrl.length,
-                        node_env: process.env.NODE_ENV
-                    }
-                }), {
+                return new Response(JSON.stringify({ error: 'Erreur lors de la création de l\'utilisateur: ' + dbError.message }), {
                     status: 500,
                     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
                 });
@@ -139,15 +133,7 @@ export default async function handler(req: Request) {
 
     } catch (error: any) {
         console.error('API Error:', error);
-        const dbUrl = process.env.DATABASE_URL || '';
-        const maskedUrl = dbUrl.replace(/:[^:@]*@/, ':****@');
-        return new Response(JSON.stringify({
-            error: 'Internal Server Error: ' + error.message,
-            debug: {
-                maskedUrl,
-                length: dbUrl.length
-            }
-        }), {
+        return new Response(JSON.stringify({ error: 'Internal Server Error: ' + error.message }), {
             status: 500,
             headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
