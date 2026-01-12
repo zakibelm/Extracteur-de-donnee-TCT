@@ -256,7 +256,7 @@ export async function extractDataFromImage(
     const isOlymel = documentType === 'olymel';
     const headers = isOlymel ? OLYMEL_TABLE_HEADERS : TCT_TABLE_HEADERS;
 
-    // Load custom prompts from localStorage if available
+    // Load custom prompts from localStorage
     const storedTctPrompt = localStorage.getItem('adt_settings_prompt_tct');
     const storedOlymelPrompt = localStorage.getItem('adt_settings_prompt_olymel');
 
@@ -267,9 +267,28 @@ export async function extractDataFromImage(
             ? storedOlymelPrompt
             : `Tu es un extracteur de données expert pour les horaires de transport Olymel. Fidélité absolue des données requise.`;
     } else {
-        systemInstruction = storedTctPrompt && storedTctPrompt.trim() !== ""
-            ? storedTctPrompt
-            : `Tu es un extracteur de données expert pour un logiciel de logistique. Fidélité absolue des données requise.`;
+        // TCT LOGIC: Force Pipe Mode compatibility
+        // If the user has an old "JSON" prompt stored, it will BREAK the new Pipe strategy.
+        // We detect this and override it with the correct Pipe prompt.
+        const likelyJsonPrompt = storedTctPrompt && (storedTctPrompt.toLowerCase().includes('json') || storedTctPrompt.includes('{'));
+
+        if (storedTctPrompt && storedTctPrompt.trim() !== "" && !likelyJsonPrompt) {
+            systemInstruction = storedTctPrompt;
+        } else {
+            if (likelyJsonPrompt) console.warn("Overriding user's JSON Prompt to enforce Pipe Strategy.");
+            systemInstruction = `Tu es un agent expert pour Taxi Coop Terrebonne.
+Extrais les données du tableau et retourne UNIQUEMENT un tableau texte avec séparateur PIPE (|).
+
+## FORMAT DE SORTIE OBLIGATOIRE (Respecte l'ordre)
+Tournée | Nom Compagnie | Début | Fin | Classe V. | ID Employé | Nom Employé | Prénom Employé | Véhicule | Classe V. Affecté | Stationnement | Approuvé | Territoire | Adresse Début | Adresse Fin | Changement | Changement Par
+
+## RÈGLES CRITIQUES
+1. **UNE SEULE LIGNE PAR TOURNÉE.**
+2. Si une cellule est vide, laisse l'espace vide (ex: ...| |...).
+3. **Approuvé** : Si coché (✓/Oui) = true, Sinon = false.
+4. **Noms** : Sépare bien Nom et Prénom.
+5. **PAS DE MARKDOWN** (pas de tableau ASCII). Juste les données brutes.`;
+        }
     }
 
     // CHANGED: BOTH Olymel AND TCT now use PIPE-SEPARATED values (|) for robustness
