@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User as UserIcon, Car, CheckCircle, AlertCircle, Loader, Mail, Lock, Hash } from 'lucide-react';
+import { User as UserIcon, Car, CheckCircle, AlertCircle, Loader, Mail, Lock, Hash, CreditCard } from 'lucide-react';
 import { authService } from '../services/authService';
 import { User } from '../types';
 
@@ -16,10 +16,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   const [accountType, setAccountType] = useState<AccountType>('admin');
 
   // Login fields
-  const [identifier, setIdentifier] = useState('');
+  const [loginEmployeeId, setLoginEmployeeId] = useState('');
   const [password, setPassword] = useState('');
 
   // Signup fields
+  const [numDome, setNumDome] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [email, setEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [telephone, setTelephone] = useState('');
@@ -32,12 +34,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     setError(null);
 
     if (mode === 'login') {
-      if (!identifier.trim() || !password.trim()) {
+      if (!loginEmployeeId.trim() || !password.trim()) {
         setError('Veuillez remplir tous les champs obligatoires');
         return;
       }
     } else {
-      if (!email.trim() || !signupPassword.trim()) {
+      if (!numDome.trim() || !employeeId.trim() || !email.trim() || !signupPassword.trim() || !telephone.trim()) {
         setError('Veuillez remplir tous les champs obligatoires');
         return;
       }
@@ -48,13 +50,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     try {
       let user: User;
       if (mode === 'login') {
-        user = await authService.login(identifier.trim(), password.trim());
+        user = await authService.login(loginEmployeeId.trim(), password.trim());
       } else {
         user = await authService.signup(
+          numDome.trim(),
+          employeeId.trim(),
           email.trim(),
           signupPassword.trim(),
           accountType,
-          telephone.trim() || undefined
+          telephone.trim()
         );
       }
 
@@ -161,16 +165,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             {/* LOGIN FORM */}
             {mode === 'login' && (
               <div className="space-y-3 pt-2">
-                {/* Identifier (Numéro de Dôme or Email) */}
+                {/* ID Employé */}
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Hash size={18} className="text-slate-400 group-focus-within:text-emerald-400 transition-colors" />
+                    <CreditCard size={18} className="text-slate-400 group-focus-within:text-emerald-400 transition-colors" />
                   </div>
                   <input
                     type="text"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="Email ou ID (Numéro de Dôme)"
+                    value={loginEmployeeId}
+                    onChange={(e) => setLoginEmployeeId(e.target.value)}
+                    placeholder="ID Employé"
                     className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm font-mono"
                     required
                   />
@@ -196,6 +200,37 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             {/* SIGNUP FORM */}
             {mode === 'signup' && (
               <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-2">
+
+                {/* Numéro de Dôme */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Car size={18} className="text-slate-400 group-focus-within:text-cyan-400 transition-colors" />
+                  </div>
+                  <input
+                    type="text"
+                    value={numDome}
+                    onChange={(e) => setNumDome(e.target.value)}
+                    placeholder="Numéro de Dôme"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm font-mono"
+                    required
+                  />
+                </div>
+
+                {/* ID Employé */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <CreditCard size={18} className="text-slate-400 group-focus-within:text-cyan-400 transition-colors" />
+                  </div>
+                  <input
+                    type="text"
+                    value={employeeId}
+                    onChange={(e) => setEmployeeId(e.target.value)}
+                    placeholder="ID Employé"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm font-mono"
+                    required
+                  />
+                </div>
+
                 {/* Email */}
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -207,6 +242,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Adresse email"
                     className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm"
+                    required
+                  />
+                </div>
+
+                {/* Téléphone */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <div className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-mono group-focus-within:text-cyan-400 group-focus-within:bg-cyan-500/10 transition-colors">Tel</div>
+                  </div>
+                  <input
+                    type="tel"
+                    value={telephone}
+                    onChange={(e) => setTelephone(e.target.value)}
+                    placeholder="Numéro de téléphone"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm font-mono"
                     required
                   />
                 </div>
@@ -223,20 +273,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     placeholder="Mot de passe"
                     className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm"
                     required
-                  />
-                </div>
-
-                {/* Téléphone (Optional) */}
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <div className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-mono group-focus-within:text-cyan-400 group-focus-within:bg-cyan-500/10 transition-colors">Tel</div>
-                  </div>
-                  <input
-                    type="tel"
-                    value={telephone}
-                    onChange={(e) => setTelephone(e.target.value)}
-                    placeholder="Téléphone (Optionnel)"
-                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm font-mono"
                   />
                 </div>
               </div>

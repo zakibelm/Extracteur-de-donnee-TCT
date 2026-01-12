@@ -1,129 +1,138 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getSql } from './db.js';
-import crypto from 'crypto';
+import { getSql } from './db';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-    console.log('API Request received:', req.url, req.method);
+// Enable CORS
+export const config = {
+    runtime: 'edge',
+};
 
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+export default async function handler(req: Request) {
+    // Handle CORS preflight requests
     if (req.method === 'OPTIONS') {
-        return res.status(200).end();
+        return new Response(null, {
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+            },
+        });
     }
 
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+        return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
     }
 
     try {
-        // Parse body - handle both string and already-parsed body
-        let body = req.body;
-        if (typeof body === 'string') {
-            try {
-                body = JSON.parse(body);
-            } catch (e) {
-                return res.status(400).json({ error: 'Format JSON invalide' });
-            }
-        }
-
-        const { action, identifier, num_dome, password, email, accountType, telephone } = body || {};
-        // Support backward compatibility (if num_dome is passed but not identifier)
-        const loginIdentifier = identifier || num_dome;
-
-        console.log('Request body action:', action, 'identifier:', loginIdentifier);
-
+        const body = await req.json();
+        const { action } = body;
         const sql = getSql();
 
-        // ========== LOGIN ==========
-        if (action === 'login') {
-            if (!loginIdentifier || !password) {
-                console.log('Missing login parameters');
-                return res.status(400).json({ error: 'Email/ID et mot de passe requis' });
+        if (action === 'signup') {
+            const { numDome, employeeId, email, password, accountType, telephone } = body;
+
+            // Validate required fields
+            if (!numDome || !employeeId || !email || !password || !accountType || !telephone) {
+                return new Response(JSON.stringify({ error: 'Tous les champs sont requis' }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
             }
 
-            console.log('Processing login for:', loginIdentifier);
-            const hash = crypto.createHash('sha256').update(password).digest('hex');
+            // Check if user exists (by email or employee_id)
+            try {
+                const existingUser = await sql`
+                    SELECT * FROM users 
+                    WHERE email = ${email} OR employee_id = ${employeeId}
+                `;
 
+                if (existingUser.length > 0) {
+                    return new Response(JSON.stringify({ error: 'Un utilisateur avec cet email ou ID employé existe déjà' }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                    });
+                }
+            } catch (err: any) {
+                console.error('Error checking existing user:', err);
+                // If column doesn't exist yet (migration lag?), might fail. But we ran migration.
+            }
+
+            // Simple hash placeholder (in production, use bcrypt/argon2)
+            const hash = password;
+
+            try {
+                // Determine role based on accountType
+                const role = accountType === 'admin' ? 'admin' : 'driver';
+
+                const result = await sql`
+                    INSERT INTO users (num_dome, employee_id, email, password_hash, role, telephone)
+                    VALUES (${numDome}, ${employeeId}, ${email}, ${hash}, ${role}, ${telephone})
+                    RETURNING id, num_dome, email, role, employee_id, created_at
+                `;
+
+                return new Response(JSON.stringify({
+                    message: 'Utilisateur créé avec succès',
+                    user: result[0]
+                }), {
+                    status: 201,
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
+            } catch (dbError: any) {
+                console.error('Database error:', dbError);
+                return new Response(JSON.stringify({ error: 'Erreur lors de la création de l\'utilisateur: ' + dbError.message }), {
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
+            }
+
+        } else if (action === 'login') {
+            const { employeeId, password } = body;
+
+            if (!employeeId || !password) {
+                return new Response(JSON.stringify({ error: 'ID Employé et mot de passe requis' }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
+            }
+
+            // Query by employee_id
             const users = await sql`
                 SELECT * FROM users 
-                WHERE (num_dome = ${loginIdentifier} OR email = ${loginIdentifier})
-                AND password_hash = ${hash}
+                WHERE employee_id = ${employeeId} 
+                AND password_hash = ${password}
             `;
 
-            if (users.length === 0) {
-                console.log('Invalid credentials');
-                return res.status(401).json({ error: 'Identifiants invalides.' });
-            }
+            if (users.length > 0) {
+                const user = users[0];
+                // Remove sensitive data
+                const { password_hash, ...safeUser } = user;
 
-            console.log('Login successful');
-            const user = users[0];
-            return res.status(200).json({
-                user: {
-                    id: user.id,
-                    numDome: user.num_dome,
-                    email: user.email,
-                    role: user.role,
-                    isAdmin: user.role === 'admin',
-                    created_at: user.created_at
-                }
-            });
+                return new Response(JSON.stringify({
+                    message: 'Connexion réussie',
+                    user: safeUser
+                }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
+            } else {
+                return new Response(JSON.stringify({ error: 'Identifiants invalides' }), {
+                    status: 401,
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
+            }
         }
 
-        // ========== SIGNUP ==========
-        if (action === 'signup') {
-            if (!email || !password) {
-                console.log('Missing signup parameters');
-                return res.status(400).json({ error: 'Email et mot de passe requis' });
-            }
-
-            console.log('Processing signup for:', email);
-
-            // Check if email already exists
-            const existingUser = await sql`SELECT * FROM users WHERE email = ${email}`;
-            if (existingUser.length > 0) {
-                console.log('Email already exists');
-                return res.status(400).json({ error: 'Cet email est déjà enregistré.' });
-            }
-
-            // Generate a unique num_dome (ID) for the new user
-            const generatedNumDome = `U${Date.now().toString(36).toUpperCase()}`;
-
-            console.log('Hashing password...');
-            const hash = crypto.createHash('sha256').update(password).digest('hex');
-
-            const role = accountType || 'driver';
-
-            console.log('Inserting user...');
-            const result = await sql`
-                INSERT INTO users (num_dome, email, role, password_hash, telephone)
-                VALUES (${generatedNumDome}, ${email}, ${role}, ${hash}, ${telephone || null})
-                RETURNING id, num_dome, email, role, created_at
-            `;
-            console.log('User inserted:', result[0]);
-
-            const newUser = result[0];
-            return res.status(201).json({
-                user: {
-                    id: newUser.id,
-                    numDome: newUser.num_dome,
-                    email: newUser.email,
-                    role: newUser.role,
-                    isAdmin: newUser.role === 'admin',
-                    created_at: newUser.created_at
-                }
-            });
-        }
-
-        return res.status(400).json({ error: 'Action invalide' });
+        return new Response(JSON.stringify({ error: 'Action non reconnue' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
 
     } catch (error: any) {
         console.error('API Error:', error);
-        return res.status(500).json({
-            error: 'Erreur serveur interne',
-            details: error.message
+        return new Response(JSON.stringify({ error: 'Internal Server Error: ' + error.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
     }
 }

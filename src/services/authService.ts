@@ -7,11 +7,11 @@ interface AuthResponse {
 }
 
 export const authService = {
-    async login(identifier: string, password: string): Promise<User> {
+    async login(employeeId: string, password: string): Promise<User> {
         const response = await fetch('/api/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'login', identifier, password })
+            body: JSON.stringify({ action: 'login', employeeId, password })
         });
 
         const data: AuthResponse = await response.json();
@@ -27,12 +27,14 @@ export const authService = {
         return data.user;
     },
 
-    async signup(email: string, password: string, accountType: 'admin' | 'driver', telephone?: string): Promise<User> {
+    async signup(numDome: string, employeeId: string, email: string, password: string, accountType: 'admin' | 'driver', telephone: string): Promise<User> {
         const response = await fetch('/api/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 action: 'signup',
+                numDome,
+                employeeId,
                 email,
                 password,
                 accountType,
