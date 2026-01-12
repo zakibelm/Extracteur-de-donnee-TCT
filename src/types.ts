@@ -63,6 +63,7 @@ export interface User {
   id?: number;
   numDome: string;
   idEmploye: string;
+  email?: string;
   telephone?: string;
   isAdmin: boolean;
   role?: string;

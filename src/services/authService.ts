@@ -7,11 +7,11 @@ interface AuthResponse {
 }
 
 export const authService = {
-    async login(numDome: string, idEmploye: string): Promise<User> {
+    async login(numDome: string, password: string): Promise<User> {
         const response = await fetch('/api/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'login', numDome, idEmploye })
+            body: JSON.stringify({ action: 'login', num_dome: numDome, password })
         });
 
         const data: AuthResponse = await response.json();
@@ -27,14 +27,14 @@ export const authService = {
         return data.user;
     },
 
-    async signup(numDome: string, idEmploye: string, accountType: 'admin' | 'driver', telephone?: string): Promise<User> {
+    async signup(email: string, password: string, accountType: 'admin' | 'driver', telephone?: string): Promise<User> {
         const response = await fetch('/api/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 action: 'signup',
-                numDome,
-                idEmploye,
+                email,
+                password,
                 accountType,
                 telephone
             })
@@ -54,7 +54,8 @@ export const authService = {
 
         return {
             ...data.user,
-            telephone // Add back persistent fields if needed that aren't in DB response yet
+            email,
+            telephone
         };
     }
 };

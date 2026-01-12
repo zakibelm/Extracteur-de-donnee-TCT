@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User as UserIcon, Car, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { User as UserIcon, Car, CheckCircle, AlertCircle, Loader, Mail, Lock, Hash } from 'lucide-react';
 import { authService } from '../services/authService';
 import { User } from '../types';
 
@@ -14,9 +14,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   console.log('🔐 AuthPage is rendering...');
   const [mode, setMode] = useState<AuthMode>('login');
   const [accountType, setAccountType] = useState<AccountType>('admin');
+
+  // Login fields
   const [numDome, setNumDome] = useState('');
-  const [idEmploye, setIdEmploye] = useState('');
+  const [password, setPassword] = useState('');
+
+  // Signup fields
+  const [email, setEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
   const [telephone, setTelephone] = useState('');
+
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -24,9 +31,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     e.preventDefault();
     setError(null);
 
-    if (!numDome.trim() || !idEmploye.trim()) {
-      setError('Veuillez remplir tous les champs obligatoires');
-      return;
+    if (mode === 'login') {
+      if (!numDome.trim() || !password.trim()) {
+        setError('Veuillez remplir tous les champs obligatoires');
+        return;
+      }
+    } else {
+      if (!email.trim() || !signupPassword.trim()) {
+        setError('Veuillez remplir tous les champs obligatoires');
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -34,11 +48,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     try {
       let user: User;
       if (mode === 'login') {
-        user = await authService.login(numDome.trim(), idEmploye.trim());
+        user = await authService.login(numDome.trim(), password.trim());
       } else {
         user = await authService.signup(
-          numDome.trim(),
-          idEmploye.trim(),
+          email.trim(),
+          signupPassword.trim(),
           accountType,
           telephone.trim() || undefined
         );
@@ -103,79 +117,117 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
               </div>
             )}
 
-            {/* Account Type Selection - Very Compact */}
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setAccountType('admin')}
-                className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'admin'
-                  ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-100'
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
-                  }`}
-              >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'admin' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
-                  <UserIcon size={16} />
-                </div>
-                <div className="text-left">
-                  <div className={`text-xs font-bold ${accountType === 'admin' ? 'text-emerald-400' : 'text-slate-300'}`}>Répartition</div>
-                  <div className="text-[10px] opacity-70">Accès total</div>
-                </div>
-                {accountType === 'admin' && <CheckCircle size={14} className="ml-auto text-emerald-500" />}
-              </button>
+            {/* Account Type Selection - Only for Signup */}
+            {mode === 'signup' && (
+              <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+                <button
+                  type="button"
+                  onClick={() => setAccountType('admin')}
+                  className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'admin'
+                    ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-100'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
+                    }`}
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'admin' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
+                    <UserIcon size={16} />
+                  </div>
+                  <div className="text-left">
+                    <div className={`text-xs font-bold ${accountType === 'admin' ? 'text-emerald-400' : 'text-slate-300'}`}>Répartition</div>
+                    <div className="text-[10px] opacity-70">Accès total</div>
+                  </div>
+                  {accountType === 'admin' && <CheckCircle size={14} className="ml-auto text-emerald-500" />}
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setAccountType('driver')}
-                className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'driver'
-                  ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-100'
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
-                  }`}
-              >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'driver' ? 'bg-cyan-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
-                  <Car size={16} />
-                </div>
-                <div className="text-left">
-                  <div className={`text-xs font-bold ${accountType === 'driver' ? 'text-cyan-400' : 'text-slate-300'}`}>Conducteur</div>
-                  <div className="text-[10px] opacity-70">Routes</div>
-                </div>
-                {accountType === 'driver' && <CheckCircle size={14} className="ml-auto text-cyan-500" />}
-              </button>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              {/* Numéro de Dôme */}
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <div className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-mono group-focus-within:text-emerald-400 group-focus-within:bg-emerald-500/10 transition-colors">#</div>
-                </div>
-                <input
-                  type="text"
-                  value={numDome}
-                  onChange={(e) => setNumDome(e.target.value)}
-                  placeholder="Numéro de Dôme (ex: 123)"
-                  className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm font-mono"
-                  required
-                />
+                <button
+                  type="button"
+                  onClick={() => setAccountType('driver')}
+                  className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'driver'
+                    ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-100'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
+                    }`}
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'driver' ? 'bg-cyan-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
+                    <Car size={16} />
+                  </div>
+                  <div className="text-left">
+                    <div className={`text-xs font-bold ${accountType === 'driver' ? 'text-cyan-400' : 'text-slate-300'}`}>Conducteur</div>
+                    <div className="text-[10px] opacity-70">Routes</div>
+                  </div>
+                  {accountType === 'driver' && <CheckCircle size={14} className="ml-auto text-cyan-500" />}
+                </button>
               </div>
+            )}
 
-              {/* ID Employé */}
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <div className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-mono group-focus-within:text-emerald-400 group-focus-within:bg-emerald-500/10 transition-colors">ID</div>
+            {/* LOGIN FORM */}
+            {mode === 'login' && (
+              <div className="space-y-3 pt-2">
+                {/* ID (Numéro de Dôme) */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Hash size={18} className="text-slate-400 group-focus-within:text-emerald-400 transition-colors" />
+                  </div>
+                  <input
+                    type="text"
+                    value={numDome}
+                    onChange={(e) => setNumDome(e.target.value)}
+                    placeholder="ID (Numéro de Dôme)"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm font-mono"
+                    required
+                  />
                 </div>
-                <input
-                  type="password"
-                  value={idEmploye}
-                  onChange={(e) => setIdEmploye(e.target.value)}
-                  placeholder="Mot de passe (ID Employé)"
-                  className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm font-mono"
-                  required
-                />
-              </div>
 
-              {/* Téléphone (Optional) */}
-              {mode === 'signup' && (
-                <div className="relative group animate-in slide-in-from-top-1 fade-in">
+                {/* Mot de passe */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock size={18} className="text-slate-400 group-focus-within:text-emerald-400 transition-colors" />
+                  </div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Mot de passe"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* SIGNUP FORM */}
+            {mode === 'signup' && (
+              <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-2">
+                {/* Email */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail size={18} className="text-slate-400 group-focus-within:text-cyan-400 transition-colors" />
+                  </div>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Adresse email"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm"
+                    required
+                  />
+                </div>
+
+                {/* Mot de passe */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock size={18} className="text-slate-400 group-focus-within:text-cyan-400 transition-colors" />
+                  </div>
+                  <input
+                    type="password"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    placeholder="Mot de passe"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm"
+                    required
+                  />
+                </div>
+
+                {/* Téléphone (Optional) */}
+                <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <div className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-mono group-focus-within:text-cyan-400 group-focus-within:bg-cyan-500/10 transition-colors">Tel</div>
                   </div>
@@ -187,8 +239,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm font-mono"
                   />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="pt-2">
               <button
