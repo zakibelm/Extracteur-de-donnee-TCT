@@ -4,7 +4,7 @@ import { TableData } from '../types';
 import { Button } from './Button';
 import { Icons } from './Icons';
 import { Modal } from './Modal';
-import { User } from './AuthPage';
+import { User } from '../types';
 
 interface FinalDocumentViewProps {
     tableData: TableData | null;
@@ -15,6 +15,27 @@ interface FinalDocumentViewProps {
 }
 
 export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData, onPrint, onDownloadPdf, onTableUpdate, user }) => {
+    // Filter out 'Changement' and 'Changement par' columns if they exist in legacy data
+    const cleanTableData = useMemo(() => {
+        if (!tableData) return null;
+        const banned = ['Changement', 'Changement par'];
+        // Get indices of columns that are NOT banned
+        const validIndices = tableData.headers
+            .map((h, i) => banned.includes(h) ? -1 : i)
+            .filter(i => i !== -1);
+
+        // If no columns are filtered, return original to preserve reference
+        if (validIndices.length === tableData.headers.length) return tableData;
+
+        return {
+            headers: validIndices.map(i => tableData.headers[i]),
+            rows: tableData.rows.map(row => validIndices.map(i => row[i] || ''))
+        };
+    }, [tableData]);
+
+    // Use cleanTableData instead of tableData for the rest of the component
+    const displayData = cleanTableData;
+
     const [tourneeFilter, setTourneeFilter] = useState('');
     const [vehiculeFilter, setVehiculeFilter] = useState('');
 
@@ -33,22 +54,22 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
 
     // Synchronisation initiale
     useEffect(() => {
-        if (tableData) {
-            setRows(tableData.rows.map(row => [...row]));
+        if (displayData) {
+            setRows(displayData.rows.map(row => [...row]));
         }
-    }, [tableData]);
+    }, [displayData]);
 
     const { tourneeIndex, vehiculeIndex, debutTourneeIndex, changementIndex, changementParIndex, employeIndex } = useMemo(() => {
-        if (!tableData) return { tourneeIndex: -1, vehiculeIndex: -1, debutTourneeIndex: -1, changementIndex: -1, changementParIndex: -1, employeIndex: -1 };
+        if (!displayData) return { tourneeIndex: -1, vehiculeIndex: -1, debutTourneeIndex: -1, changementIndex: -1, changementParIndex: -1, employeIndex: -1 };
         return {
-            tourneeIndex: tableData.headers.indexOf('Tournée'),
-            vehiculeIndex: tableData.headers.indexOf('Véhicule'),
-            debutTourneeIndex: tableData.headers.indexOf('Déb tour'),
-            changementIndex: tableData.headers.indexOf('Changement'),
-            changementParIndex: tableData.headers.indexOf('Changement par'),
-            employeIndex: tableData.headers.indexOf('Employé'),
+            tourneeIndex: displayData.headers.indexOf('Tournée'),
+            vehiculeIndex: displayData.headers.indexOf('Véhicule'),
+            debutTourneeIndex: displayData.headers.indexOf('Déb tour'),
+            changementIndex: displayData.headers.indexOf('Changement'),
+            changementParIndex: displayData.headers.indexOf('Changement par'),
+            employeIndex: displayData.headers.indexOf('Employé'),
         };
-    }, [tableData]);
+    }, [displayData]);
 
     // Fonction de normalisation stricte pour la comparaison d'ID
     const normalizeId = (str: any) => {
@@ -168,7 +189,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     };
 
     const confirmChange = () => {
-        if (tableData && pendingChange) {
+        if (displayData && pendingChange) {
             // Copie sécurisée pour l'état React
             const rowIndex = rows.indexOf(pendingChange.row);
 
@@ -197,7 +218,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
 
                 // Persistance globale (Local Storage pour la journée)
                 const newTable = {
-                    ...tableData,
+                    ...displayData,
                     rows: newRows
                 };
                 onTableUpdate(newTable);
@@ -223,7 +244,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         setVehiculeFilter('');
     };
 
-    if (!tableData) {
+    if (!displayData) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
                 <Icons.UploadCloud className="w-20 h-20 text-slate-600 mb-6" />
@@ -314,10 +335,10 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                         <Button onClick={resetFilters} className="bg-slate-600 hover:bg-slate-500 text-sm py-2 px-3">
                             Réinitialiser
                         </Button>
-                        <Button onClick={() => onDownloadPdf(tableData.headers, filteredRows)} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3">
+                        <Button onClick={() => onDownloadPdf(displayData.headers, filteredRows)} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3">
                             <Icons.FilePdf className="mr-2" /> PDF
                         </Button>
-                        <Button onClick={() => onPrint(tableData.headers, filteredRows)} className="bg-slate-500 hover:bg-slate-600 text-sm py-2 px-3">
+                        <Button onClick={() => onPrint(displayData.headers, filteredRows)} className="bg-slate-500 hover:bg-slate-600 text-sm py-2 px-3">
                             <Icons.Print className="mr-2" /> Imprimer
                         </Button>
                     </div>
@@ -389,7 +410,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={tableData.headers.length} className="text-center p-8 text-slate-500">
+                                    <td colSpan={displayData.headers.length} className="text-center p-8 text-slate-500">
                                         Aucun résultat ne correspond à vos filtres.
                                     </td>
                                 </tr>
