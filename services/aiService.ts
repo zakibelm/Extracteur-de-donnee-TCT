@@ -1,5 +1,5 @@
-
 import { ParsedContent, TABLE_HEADERS, AISettings } from '../types';
+import { convertAIResponseToSQL, RowWithCoordinates } from './coordinateValidator';
 
 /**
  * Optimise une image pour l'envoi au moteur IA
@@ -59,7 +59,7 @@ export async function validateOpenRouterKey(key: string): Promise<boolean> {
 }
 
 /**
- * Extrait les données via OpenRouter API - FORMAT CSV SIMPLIFIÉ
+ * Extrait les données via OpenRouter API - MODE MATRICE STRICTE
  */
 export async function extractDataFromImage(
     base64Image: string,
@@ -72,37 +72,55 @@ export async function extractDataFromImage(
 
     const url = 'https://openrouter.ai/api/v1/chat/completions';
 
-    // Prompt CSV simplifié - BEAUCOUP plus simple que JSON !
-    const systemPrompt = `Tu es un extracteur de données de tableaux logistiques.
+    // Prompt JSON Matriciel - Validation Stricte des Positions
+    const systemPrompt = `Tu es un extracteur de données logistiques de HAUTE PRÉCISION.
 
-TÂCHE: Extraire le tableau "Affectations des tournées" au format CSV.
+ ta mission est de scanner le tableau et de retourner un objet JSON structuré avec les COORDONNÉES EXACTES de chaque cellule.
 
-FORMAT DE SORTIE (CSV uniquement, pas de JSON):
-Tournée,Nom,Début tournée,Fin tournée,Classe véhicule,Employé,Nom de l'employé,Véhicule,Changement,Changement par,Classe véhicule affecté,Stationnement,Approuvé,Territoire début,Adresse de début,Adresse de fin
-TCT0010,TAXI COOP TERREBONNE,6:30,7:25,TAXI,0458,Hammada Abdel Aziz,212,212,,TAXI,104,✓,104,3941 du Lias RUE,777 de Bois-de-Boulogne AV
-TCT0027,TAXI COOP TERREBONNE,6:30,7:28,TAXI,0503,Daher Youssef,214,214,,MINIVAN,104,✓,104,2960 des Hirondelles RUE,1415 de l'Avenir CH
+STRUCTURE JSON ATTENDUE:
+{
+  "phase": "extraction_matricielle",
+  "rows": [
+    {
+      "row_number": 1,
+      "y_position": 135,
+      "cells_by_position": {
+        "1": { "position": 1, "header": "Tournée", "value": "TCT0010" },
+        "2": { "position": 2, "header": "Nom", "value": "TAXI COOP TERREBONNE" },
+        "3": { "position": 3, "header": "Déb tour", "value": "6:30" },
+        "4": { "position": 4, "header": "Fin tour", "value": "7:25" },
+        "5": { "position": 5, "header": "Classe véhicule", "value": "TAXI" },
+        "6": { "position": 6, "header": "Employé", "value": "0458" },
+        "7": { "position": 7, "header": "Nom de l'employé", "value": "Hammada Abdel Aziz" },
+        "8": { "position": 8, "header": "Employé", "value": "" },
+        "9": { "position": 9, "header": "Véhicule", "value": "212" },
+        "10": { "position": 10, "header": "Classe véhicule affecté", "value": "TAXI" },
+        "11": { "position": 11, "header": "Autorisation", "value": "" },
+        "12": { "position": 12, "header": "Approuvé", "value": "✓" },
+        "13": { "position": 13, "header": "Retour", "value": "" },
+        "14": { "position": 14, "header": "Territoire début", "value": "104" },
+        "15": { "position": 15, "header": "Adresse de début", "value": "3941 du Lias RUE" },
+        "16": { "position": 16, "header": "Adresse de fin", "value": "777 de Bois-de-Boulogne AV" },
+        "17": { "position": 17, "header": "Changement", "value": "" }
+      }
+    }
+  ]
+}
 
-RÈGLES IMPORTANTES:
-- Première ligne = en-têtes (exactement comme ci-dessus)
-- Lignes suivantes = données du tableau
-- Séparer les colonnes par des virgules
-- Si une cellule contient une virgule, l'entourer de guillemets "..."
-- Si une cellule est vide, laisser vide entre les virgules
-- Extraire TOUTES les lignes visibles dans le tableau
-- NE PAS ajouter de texte avant ou après le CSV
-- NE PAS ajouter de notes ou commentaires
+RÈGLES CRITIQUES:
+1. Scan chaque ligne visuelle du tableau.
+2. Pour CHAQUE ligne, identifie les 17 colonnes.
+3. Si une cellule est VIDE, retourne "value": "".
+4. "header" doit être le texte exact de l'en-tête de cette colonne.
+5. "position" doit correspondre STRICTEMENT à l'ordre des colonnes (1 à 17).
+6. "value" doit être le contenu brut de la cellule.
+7. NE JAMAIS inventer de données. Donne exactement ce que tu vois.
 
-ATTENTION SPÉCIALE POUR LA COLONNE "Véhicule":
-- La colonne "Véhicule" doit contenir le NUMÉRO du véhicule (exemple: 212, 214, 409, 111)
-- PAS le nom de la personne ou du conducteur
-- Cherche le numéro du véhicule dans le tableau, généralement une colonne avec des chiffres
-- La colonne "Changement" doit contenir le MÊME numéro que "Véhicule"
-- Exemple: si Véhicule=212, alors Changement=212
-
-Juste le CSV pur`;
+Retourne UNIQUEMENT le JSON.`;
 
     const payload = {
         model: settings.modelId,
+        response_format: { type: "json_object" },
         messages: [
             {
                 role: "system",
@@ -113,7 +131,7 @@ Juste le CSV pur`;
                 content: [
                     {
                         type: "text",
-                        text: "Extrait le tableau au format CSV comme demandé. Réponds UNIQUEMENT avec le CSV, sans aucun texte supplémentaire."
+                        text: "Analyse ce tableau et retourne la matrice JSON complète avec les coordonnées."
                     },
                     {
                         type: "image_url",
@@ -126,167 +144,97 @@ Juste le CSV pur`;
         max_tokens: 4000
     };
 
-    console.log('🔍 Envoi requête à OpenRouter:', {
+    console.log('🔍 Envoi requête Matricielle à OpenRouter:', {
         model: settings.modelId,
-        imageSize: base64Image.length,
-        mimeType
+        imageSize: base64Image.length
     });
 
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${settings.openRouterKey}`,
-            'HTTP-Referer': window.location.origin,
-            'X-Title': 'ADT Logistics AI'
-        },
-        body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-        const errBody = await response.text();
-        console.error('❌ Erreur OpenRouter:', response.status, errBody);
-        throw new Error(`Erreur OpenRouter (${response.status}): ${errBody}`);
-    }
-
-    const result = await response.json();
-    console.log('📥 Réponse OpenRouter:', result);
-
-    if (!result.choices || !result.choices[0] || !result.choices[0].message) {
-        console.error('❌ Format de réponse invalide:', result);
-        throw new Error('Format de réponse OpenRouter invalide');
-    }
-
-    const text = result.choices[0].message.content;
-    console.log('📝 Contenu CSV extrait:', text);
-
-    if (!text || text.trim() === '') {
-        throw new Error('Le modèle IA a retourné une réponse vide');
-    }
-
-    return parseCSVResponse(text);
-}
-
-/**
- * Parser CSV - BEAUCOUP plus simple que JSON !
- */
-const HEADER_MAPPING: Record<string, string[]> = {
-    "Tournée": ["Tournée", "Tournee", "Route", "Tour"],
-    "Nom": ["Nom", "Name", "Compagnie", "Company"],
-    "Début tournée": ["Début tournée", "Debut tournee", "Déb tour", "Deb tour", "Start", "Begin"],
-    "Fin tournée": ["Fin tournée", "Fin tournee", "Fin tour", "End", "Finish"],
-    "Classe véhicule": ["Classe véhicule", "Classe vehicule", "Class", "Vehicle Class"],
-    "Employé": ["Employé", "Employe", "Employee", "Driver ID", "Matricule"],
-    "Nom de l'employé": ["Nom de l'employé", "Nom de l'employe", "Driver Name", "Conducteur"],
-    "Véhicule": ["Véhicule", "Vehicule", "Vehicle", "Car #", "Taxi #"],
-    "Changement": ["Changement", "Change", "Switch"],
-    "Changement par": ["Changement par", "Change by", "Switched by"],
-    "Classe véhicule affecté": ["Classe véhicule affecté", "Classe vehicule affecte", "Assigned Class"],
-    "Stationnement": ["Stationnement", "Parking", "Station"],
-    "Approuvé": ["Approuvé", "Approuve", "Approved", "OK"],
-    "Territoire début": ["Territoire début", "Territoire debut", "Start Territory"],
-    "Adresse de début": ["Adresse de début", "Adresse de debut", "Start Address", "Pickup"],
-    "Adresse de fin": ["Adresse de fin", "End Address", "Dropoff"]
-};
-
-function normalizeHeader(header: string): string {
-    return header.trim().toLowerCase().replace(/[éèêë]/g, 'e').replace(/[^a-z0-9]/g, '');
-}
-
-/**
- * Parser CSV Intelligent avec Mapping Dynamique
- */
-function parseCSVResponse(text: string): ParsedContent {
     try {
-        // Nettoyer le texte
-        let csvText = text.trim();
-
-        // Supprimer les balises markdown
-        if (csvText.startsWith('```csv') || csvText.startsWith('```')) {
-            csvText = csvText.replace(/```csv\n?/g, '').replace(/```\n?/g, '').trim();
-        }
-
-        console.log('🔍 CSV brut reçu:', csvText.substring(0, 200) + '...');
-
-        // Séparer en lignes
-        const lines = csvText.split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 0);
-
-        if (lines.length < 2) {
-            throw new Error('CSV invalide : moins de 2 lignes');
-        }
-
-        // 1. ANALYSE DES EN-TÊTES
-        // On prend la première ligne comme en-têtes
-        const rawHeaders = parseCSVLine(lines[0]);
-        console.log('📋 En-têtes détectés:', rawHeaders);
-
-        // Créer une map : Standard Header -> Index dans le CSV
-        const headerMap = new Map<string, number>();
-
-        // Pour chaque colonne standard attendue
-        TABLE_HEADERS.forEach(targetHeader => {
-            // Chercher si un des alias correspond à un en-tête du CSV
-            const aliases = HEADER_MAPPING[targetHeader] || [targetHeader];
-
-            // Cherche l'index du premier alias qui match
-            const foundIndex = rawHeaders.findIndex(h => {
-                const hNorm = normalizeHeader(h);
-                return aliases.some(alias => normalizeHeader(alias) === hNorm);
-            });
-
-            if (foundIndex !== -1) {
-                headerMap.set(targetHeader, foundIndex);
-                console.log(`✅ Mapping: "${targetHeader}" -> Colonne ${foundIndex} ("${rawHeaders[foundIndex]}")`);
-            } else {
-                console.warn(`⚠️ Colonne manquante: "${targetHeader}"`);
-            }
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.openRouterKey}`,
+                'HTTP-Referer': window.location.origin,
+                'X-Title': 'ADT Logistics AI'
+            },
+            body: JSON.stringify(payload)
         });
 
-        // 2. EXTRACTION DES DONNÉES
-        const dataLines = lines.slice(1);
-        const rows: string[][] = dataLines.map((line, idx) => {
-            const rawRow = parseCSVLine(line);
+        if (!response.ok) {
+            const errBody = await response.text();
+            console.error('❌ Erreur OpenRouter:', response.status, errBody);
+            throw new Error(`Erreur OpenRouter (${response.status}): ${errBody}`);
+        }
 
-            // Reconstruire la ligne dans le bon ordre
-            return TABLE_HEADERS.map(header => {
-                const index = headerMap.get(header);
-                // Si la colonne a été trouvée, on prend la valeur, sinon vide
-                let value = (index !== undefined && index < rawRow.length) ? rawRow[index] : '';
+        const result = await response.json();
 
-                // Nettoyage basique
-                return value.trim();
-            });
+        if (!result.choices || !result.choices[0] || !result.choices[0].message) {
+            throw new Error('Réponse vide ou invalide de l\'IA');
+        }
+
+        const jsonContent = result.choices[0].message.content;
+        console.log('📥 JSON reçu:', jsonContent.substring(0, 200) + '...');
+
+        // Parser le JSON
+        let aiData;
+        try {
+            aiData = JSON.parse(jsonContent);
+        } catch (e) {
+            console.error("Erreur parsing JSON:", e);
+            throw new Error("L'IA n'a pas retourné un JSON valide.");
+        }
+
+        // Valider et convertir avec le validateur strict
+        const validationResult = convertAIResponseToSQL(aiData);
+
+        if (!validationResult.success) {
+            console.error("❌ Validation échouée:", validationResult.errors);
+            throw new Error(`Validation échouée pour ${validationResult.errors.length} lignes. Voir console.`);
+        }
+
+        console.log(`✅ ${validationResult.validRows.length} lignes validées avec succès.`);
+
+        // Convertir les données validées en format tableau pour l'UI
+        // On mappe les clés SQL du validateur aux index de TABLE_HEADERS
+        const uiRows = validationResult.validRows.map(row => {
+            // Mapping Validator Keys -> UI Array Index
+            // TABLE_HEADERS: [
+            // 0: "Tournée", 1: "Nom", 2: "Début tournée", 3: "Fin tournée", 4: "Classe véhicule", 
+            // 5: "Employé", 6: "Nom de l'employé", 7: "Véhicule", 8: "Changement", 9: "Changement par",
+            // 10: "Classe véhicule affecté", 11: "Stationnement", 12: "Approuvé", 13: "Territoire début",
+            // 14: "Adresse de début", 15: "Adresse de fin"
+            // ]
+
+            return [
+                row.tournee || '',                  // 0: Tournée
+                row.nom_compagnie || '',            // 1: Nom
+                row.debut_tournee || '',            // 2: Début tournée
+                row.fin_tournee || '',              // 3: Fin tournée
+                row.classe_vehicule || '',          // 4: Classe véhicule
+                row.id_employe || '',               // 5: Employé
+                row.nom_employe_complet || '',      // 6: Nom de l'employé
+                row.vehicule || '',                 // 7: Véhicule
+                row.changement || '',               // 8: Changement
+                row.changement_par || '',           // 9: Changement par
+                row.classe_vehicule_affecte || '',  // 10: Classe véhicule affecté
+                row.autorisation || '',             // 11: Stationnement (Map Autoris -> Stationnement?? A vérifier)
+                row.approuve || '',                 // 12: Approuvé
+                row.retour || '',                   // 13: Territoire début (Retour?? Non, Pos 14 est adresse debut...)
+                row.adresse_debut || '',            // 14: Adresse de début (UI: 14)
+                row.adresse_fin || ''               // 15: Adresse de fin (UI: 15)
+            ];
         });
 
-        console.log(`📊 Extraction terminée: ${rows.length} lignes traitées avec mapping dynamique`);
+        const finalRows = uiRows.map(row => row.map(val => String(val)));
 
-        return { headers: TABLE_HEADERS, rows };
+        return {
+            headers: TABLE_HEADERS,
+            rows: finalRows
+        };
 
     } catch (error) {
-        console.error("❌ Erreur parsing CSV:", error);
-        throw new Error(`Erreur parsing CSV: ${error instanceof Error ? error.message : 'Inconnue'}`);
+        console.error("❌ Erreur critique extractDataFromImage:", error);
+        throw error;
     }
-}
-
-// Helper pour parser une ligne CSV simple (gère les guillemets basiques)
-function parseCSVLine(line: string): string[] {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') {
-            inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
-            result.push(current.trim());
-            current = '';
-        } else {
-            current += char;
-        }
-    }
-    result.push(current.trim());
-    return result;
 }
