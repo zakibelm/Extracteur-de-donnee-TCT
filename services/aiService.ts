@@ -66,6 +66,8 @@ export async function extractDataFromImage(
     mimeType: string,
     settings: AISettings
 ): Promise<ParsedContent> {
+    console.log("%c 🚀 AI SERVICE v3: CELL-BY-CELL ACTIVE 🚀", "color: #00ff00; font-weight: bold; font-size: 20px; background: #000; padding: 10px; border-radius: 5px;");
+
     if (!settings.openRouterKey) {
         throw new Error("Clé API OpenRouter requise. Veuillez configurer votre clé dans les paramètres.");
     }
