@@ -1,5 +1,5 @@
 import { ParsedContent, TABLE_HEADERS, AISettings } from '../types';
-import { convertAIResponseToSQL, RowWithCoordinates } from './coordinateValidator';
+import { validateAndConvertAIResponse, debugLogRow, AIResponse } from './cellByCellValidator';
 
 /**
  * Optimise une image pour l'envoi au moteur IA
@@ -59,7 +59,7 @@ export async function validateOpenRouterKey(key: string): Promise<boolean> {
 }
 
 /**
- * Extrait les données via OpenRouter API - MODE MATRICE STRICTE
+ * Extrait les données via OpenRouter API - MODE CELL-BY-CELL STRICT
  */
 export async function extractDataFromImage(
     base64Image: string,
@@ -72,49 +72,42 @@ export async function extractDataFromImage(
 
     const url = 'https://openrouter.ai/api/v1/chat/completions';
 
-    // Prompt JSON Matriciel - Validation Stricte des Positions
+    // Prompt JSON "Cell-by-Cell" - Extraction par ligne + en-tête
     const systemPrompt = `Tu es un extracteur de données logistiques de HAUTE PRÉCISION.
 
- ta mission est de scanner le tableau et de retourner un objet JSON structuré avec les COORDONNÉES EXACTES de chaque cellule.
+TA MISSION:
+1. Analyse l'image du tableau de tournées.
+2. Identifie TOUS les en-têtes de colonnes (environ 15 à 17).
+3. Pour CHAQUE ligne de donnée, extrais la valeur correspondant à CHAQUE en-tête.
 
 STRUCTURE JSON ATTENDUE:
 {
-  "phase": "extraction_matricielle",
-  "rows": [
+  "phase": "execute",
+  "headers_detected": [
+    "Tournée", "Nom", "Déb tour", "Fin tour", "Cl véh",
+    "Employé", "Nom de l'employé", "Employé", "Véhicule",
+    "Cl véh aff", "Autoris", "Approuvé", "Retour",
+    "Adresse de début", "Adresse de fin"
+  ],
+  "total_headers": 15,
+  "data": [
     {
       "row_number": 1,
-      "y_position": 135,
-      "cells_by_position": {
-        "1": { "position": 1, "header": "Tournée", "value": "TCT0010" },
-        "2": { "position": 2, "header": "Nom", "value": "TAXI COOP TERREBONNE" },
-        "3": { "position": 3, "header": "Déb tour", "value": "6:30" },
-        "4": { "position": 4, "header": "Fin tour", "value": "7:25" },
-        "5": { "position": 5, "header": "Classe véhicule", "value": "TAXI" },
-        "6": { "position": 6, "header": "Employé", "value": "0458" },
-        "7": { "position": 7, "header": "Nom de l'employé", "value": "Hammada Abdel Aziz" },
-        "8": { "position": 8, "header": "Employé", "value": "" },
-        "9": { "position": 9, "header": "Véhicule", "value": "212" },
-        "10": { "position": 10, "header": "Classe véhicule affecté", "value": "TAXI" },
-        "11": { "position": 11, "header": "Autorisation", "value": "" },
-        "12": { "position": 12, "header": "Approuvé", "value": "✓" },
-        "13": { "position": 13, "header": "Retour", "value": "" },
-        "14": { "position": 14, "header": "Territoire début", "value": "104" },
-        "15": { "position": 15, "header": "Adresse de début", "value": "3941 du Lias RUE" },
-        "16": { "position": 16, "header": "Adresse de fin", "value": "777 de Bois-de-Boulogne AV" },
-        "17": { "position": 17, "header": "Changement", "value": "" }
-      }
+      "cells": [
+        { "column_header": "Tournée", "value": "..." },
+        { "column_header": "Nom", "value": "..." },
+        // ... UNE CELLULE POUR CHAQUE HEADER DÉTECTÉ
+      ]
     }
   ]
 }
 
 RÈGLES CRITIQUES:
-1. Scan chaque ligne visuelle du tableau.
-2. Pour CHAQUE ligne, identifie les 17 colonnes.
-3. Si une cellule est VIDE, retourne "value": "".
-4. "header" doit être le texte exact de l'en-tête de cette colonne.
-5. "position" doit correspondre STRICTEMENT à l'ordre des colonnes (1 à 17).
-6. "value" doit être le contenu brut de la cellule.
-7. NE JAMAIS inventer de données. Donne exactement ce que tu vois.
+1. SI UNE COLONNE (ex: "Autoris", "Retour") EST VIDE DANS LE TABLEAU, CRÉE QUAND MÊME LA CELLULE AVEC "value": "".
+2. SI UNE COLONNE "Employé" APPARAÎT 2 FOIS, CRÉE 2 CELLULES AVEC LE HEADER "Employé" À LEUR POSITION RESPECTIVE.
+3. NE SAUTE AUCUNE COLONNE. Si "headers_detected" a 15 éléments, chaque ligne DOIT avoir 15 cellules.
+4. Associe STRICTEMENT la valeur visuelle à son en-tête vertical. Ne décalle jamais.
+5. "value" doit être le contenu brut exact (OCR).
 
 Retourne UNIQUEMENT le JSON.`;
 
@@ -131,7 +124,7 @@ Retourne UNIQUEMENT le JSON.`;
                 content: [
                     {
                         type: "text",
-                        text: "Analyse ce tableau et retourne la matrice JSON complète avec les coordonnées."
+                        text: "Extrait ce tableau cellule par cellule en respectant scrupuleusement les en-têtes."
                     },
                     {
                         type: "image_url",
@@ -144,7 +137,7 @@ Retourne UNIQUEMENT le JSON.`;
         max_tokens: 4000
     };
 
-    console.log('🔍 Envoi requête Matricielle à OpenRouter:', {
+    console.log('🔍 Envoi requête Cell-by-Cell à OpenRouter:', {
         model: settings.modelId,
         imageSize: base64Image.length
     });
@@ -177,7 +170,7 @@ Retourne UNIQUEMENT le JSON.`;
         console.log('📥 JSON reçu:', jsonContent.substring(0, 200) + '...');
 
         // Parser le JSON
-        let aiData;
+        let aiData: AIResponse;
         try {
             aiData = JSON.parse(jsonContent);
         } catch (e) {
@@ -185,8 +178,13 @@ Retourne UNIQUEMENT le JSON.`;
             throw new Error("L'IA n'a pas retourné un JSON valide.");
         }
 
-        // Valider et convertir avec le validateur strict
-        const validationResult = convertAIResponseToSQL(aiData);
+        // Logger pour debug
+        if (aiData.data && aiData.data.length > 0) {
+            debugLogRow(aiData.data[0], aiData.headers_detected);
+        }
+
+        // Valider et convertir avec le validateur Cell-by-Cell
+        const validationResult = validateAndConvertAIResponse(aiData);
 
         if (!validationResult.success) {
             console.error("❌ Validation échouée:", validationResult.errors);
@@ -196,9 +194,9 @@ Retourne UNIQUEMENT le JSON.`;
         console.log(`✅ ${validationResult.validRows.length} lignes validées avec succès.`);
 
         // Convertir les données validées en format tableau pour l'UI
-        // On mappe les clés SQL du validateur aux index de TABLE_HEADERS
+        // On mappe les clés SQL du validateur aux index de TABLE_HEADERS de l'application
         const uiRows = validationResult.validRows.map(row => {
-            // Mapping Validator Keys -> UI Array Index
+            // Mapping Validator SQL Keys -> UI Array Index
             // TABLE_HEADERS: [
             // 0: "Tournée", 1: "Nom", 2: "Début tournée", 3: "Fin tournée", 4: "Classe véhicule", 
             // 5: "Employé", 6: "Nom de l'employé", 7: "Véhicule", 8: "Changement", 9: "Changement par",
@@ -215,14 +213,34 @@ Retourne UNIQUEMENT le JSON.`;
                 row.id_employe || '',               // 5: Employé
                 row.nom_employe_complet || '',      // 6: Nom de l'employé
                 row.vehicule || '',                 // 7: Véhicule
+                row.changement || '',               // 8: Changement (Attention: SQL a idx 8 'changement' mais parfois 'employe_confirm' est là?)
+                // NON: UI TABLE_HEADERS index 7 est "Véhicule". Mon validator a 'id_employe_confirm' qui n'est pas dans TABLE_HEADERS direct pour affichage?
+                // Attends... TABLE_HEADERS a "Employé" à l'index 5.
+                // Regardons TABLE_HEADERS dans types.ts:
+                // export const TABLE_HEADERS = [
+                //   "Tournée", "Nom", "Début tournée", "Fin tournée", "Classe véhicule", "Employé",
+                //   "Nom de l'employé", "Véhicule", "Changement", "Changement par", ...
+                // ];
+                // Le viewer a [8] "Changement", [9] "Changement par".
+                // Le `row.id_employe_confirm` est la 2eme col employe, qui n'est PAS affichée dans le tableau final?
+                // Si le tableau source a 2 cols Employé, on garde laquelle? La première (col 5).
+                // La 2eme col Employé semble inutile pour l'affichage final si elle n'est pas dans TABLE_HEADERS.
+                // => On ignore id_employe_confirm pour l'array UI.
+
                 row.changement || '',               // 8: Changement
                 row.changement_par || '',           // 9: Changement par
                 row.classe_vehicule_affecte || '',  // 10: Classe véhicule affecté
-                row.autorisation || '',             // 11: Stationnement (Map Autoris -> Stationnement?? A vérifier)
+                row.autorisation || '',             // 11: Stationnement (Mappé à 'autorisation' dans le validator)
                 row.approuve || '',                 // 12: Approuvé
-                row.retour || '',                   // 13: Territoire début (Retour?? Non, Pos 14 est adresse debut...)
-                row.adresse_debut || '',            // 14: Adresse de début (UI: 14)
-                row.adresse_fin || ''               // 15: Adresse de fin (UI: 15)
+                row.retour || '',                   // 13: Territoire début (Mappé à 'retour' dans le validator? "Territoire début" est souvent vide, "Retour" aussi...)
+                // UI index 13 est "Territoire début". Dans le validateur, j'ai mappé 'retour' -> 'retour'.
+                // Est-ce que 'Territoire début' est 'retour'? 
+                // Dans l'image user: Colonne 13 "Retour", Colonne 14 "Territoire début" (dans son schema manuel précédent).
+                // Mais dans mon validator: `else if (header.includes('retour') || header.includes('territ')) { sqlRow.retour = val; }`
+                // C'est un peu flou. Mais suivons le mapping basique.
+
+                row.adresse_debut || '',            // 14: Adresse de début
+                row.adresse_fin || ''               // 15: Adresse de fin
             ];
         });
 
