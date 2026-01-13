@@ -170,73 +170,123 @@ Juste le CSV pur`;
 /**
  * Parser CSV - BEAUCOUP plus simple que JSON !
  */
+const HEADER_MAPPING: Record<string, string[]> = {
+    "Tournée": ["Tournée", "Tournee", "Route", "Tour"],
+    "Nom": ["Nom", "Name", "Compagnie", "Company"],
+    "Début tournée": ["Début tournée", "Debut tournee", "Déb tour", "Deb tour", "Start", "Begin"],
+    "Fin tournée": ["Fin tournée", "Fin tournee", "Fin tour", "End", "Finish"],
+    "Classe véhicule": ["Classe véhicule", "Classe vehicule", "Class", "Vehicle Class"],
+    "Employé": ["Employé", "Employe", "Employee", "Driver ID", "Matricule"],
+    "Nom de l'employé": ["Nom de l'employé", "Nom de l'employe", "Driver Name", "Conducteur"],
+    "Véhicule": ["Véhicule", "Vehicule", "Vehicle", "Car #", "Taxi #"],
+    "Changement": ["Changement", "Change", "Switch"],
+    "Changement par": ["Changement par", "Change by", "Switched by"],
+    "Classe véhicule affecté": ["Classe véhicule affecté", "Classe vehicule affecte", "Assigned Class"],
+    "Stationnement": ["Stationnement", "Parking", "Station"],
+    "Approuvé": ["Approuvé", "Approuve", "Approved", "OK"],
+    "Territoire début": ["Territoire début", "Territoire debut", "Start Territory"],
+    "Adresse de début": ["Adresse de début", "Adresse de debut", "Start Address", "Pickup"],
+    "Adresse de fin": ["Adresse de fin", "End Address", "Dropoff"]
+};
+
+function normalizeHeader(header: string): string {
+    return header.trim().toLowerCase().replace(/[éèêë]/g, 'e').replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Parser CSV Intelligent avec Mapping Dynamique
+ */
 function parseCSVResponse(text: string): ParsedContent {
     try {
         // Nettoyer le texte
         let csvText = text.trim();
 
-        // Supprimer les balises markdown si présentes
+        // Supprimer les balises markdown
         if (csvText.startsWith('```csv') || csvText.startsWith('```')) {
             csvText = csvText.replace(/```csv\n?/g, '').replace(/```\n?/g, '').trim();
         }
 
-        console.log('🔍 CSV reçu (200 premiers caractères):', csvText.substring(0, 200) + '...');
+        console.log('🔍 CSV brut reçu:', csvText.substring(0, 200) + '...');
 
         // Séparer en lignes
-        const lines = csvText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+        const lines = csvText.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
 
         if (lines.length < 2) {
-            throw new Error('CSV invalide : moins de 2 lignes (en-têtes + données)');
+            throw new Error('CSV invalide : moins de 2 lignes');
         }
 
-        console.log(`📊 ${lines.length} lignes trouvées (1 en-tête + ${lines.length - 1} données)`);
+        // 1. ANALYSE DES EN-TÊTES
+        // On prend la première ligne comme en-têtes
+        const rawHeaders = parseCSVLine(lines[0]);
+        console.log('📋 En-têtes détectés:', rawHeaders);
 
-        // Parser chaque ligne CSV
-        const parseCSVLine = (line: string): string[] => {
-            const result: string[] = [];
-            let current = '';
-            let inQuotes = false;
+        // Créer une map : Standard Header -> Index dans le CSV
+        const headerMap = new Map<string, number>();
 
-            for (let i = 0; i < line.length; i++) {
-                const char = line[i];
+        // Pour chaque colonne standard attendue
+        TABLE_HEADERS.forEach(targetHeader => {
+            // Chercher si un des alias correspond à un en-tête du CSV
+            const aliases = HEADER_MAPPING[targetHeader] || [targetHeader];
 
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
-                    result.push(current.trim());
-                    current = '';
-                } else {
-                    current += char;
-                }
+            // Cherche l'index du premier alias qui match
+            const foundIndex = rawHeaders.findIndex(h => {
+                const hNorm = normalizeHeader(h);
+                return aliases.some(alias => normalizeHeader(alias) === hNorm);
+            });
+
+            if (foundIndex !== -1) {
+                headerMap.set(targetHeader, foundIndex);
+                console.log(`✅ Mapping: "${targetHeader}" -> Colonne ${foundIndex} ("${rawHeaders[foundIndex]}")`);
+            } else {
+                console.warn(`⚠️ Colonne manquante: "${targetHeader}"`);
             }
-            result.push(current.trim());
-            return result;
-        };
-
-        // Extraire les données (ignorer la première ligne d'en-têtes)
-        const dataLines = lines.slice(1);
-        const rows: string[][] = dataLines.map(line => {
-            const parsed = parseCSVLine(line);
-
-            // S'assurer qu'on a le bon nombre de colonnes
-            while (parsed.length < TABLE_HEADERS.length) {
-                parsed.push('');
-            }
-
-            return parsed.slice(0, TABLE_HEADERS.length);
         });
 
-        console.log('✅ Extraction CSV réussie:', rows.length, 'lignes');
+        // 2. EXTRACTION DES DONNÉES
+        const dataLines = lines.slice(1);
+        const rows: string[][] = dataLines.map((line, idx) => {
+            const rawRow = parseCSVLine(line);
 
-        // Afficher un aperçu
-        if (rows.length > 0) {
-            console.log('📋 Première ligne:', rows[0].slice(0, 5).join(' | '));
-        }
+            // Reconstruire la ligne dans le bon ordre
+            return TABLE_HEADERS.map(header => {
+                const index = headerMap.get(header);
+                // Si la colonne a été trouvée, on prend la valeur, sinon vide
+                let value = (index !== undefined && index < rawRow.length) ? rawRow[index] : '';
+
+                // Nettoyage basique
+                return value.trim();
+            });
+        });
+
+        console.log(`📊 Extraction terminée: ${rows.length} lignes traitées avec mapping dynamique`);
 
         return { headers: TABLE_HEADERS, rows };
+
     } catch (error) {
         console.error("❌ Erreur parsing CSV:", error);
-        console.error("📝 Texte reçu:", text);
-        throw new Error(`Le modèle IA n'a pas retourné un format CSV compatible: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+        throw new Error(`Erreur parsing CSV: ${error instanceof Error ? error.message : 'Inconnue'}`);
     }
+}
+
+// Helper pour parser une ligne CSV simple (gère les guillemets basiques)
+function parseCSVLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current.trim());
+    return result;
 }

@@ -11,10 +11,14 @@
     "db:migrate": "tsx ./src/db/migrate.ts"
   },
   "dependencies": {
+<<<<<<< HEAD
     "@gsap/react": "^2.1.2",
     "@neondatabase/serverless": "^0.9.0",
     "drizzle-orm": "^0.30.0",
     "gsap": "^3.14.2",
+=======
+    "@neondatabase/serverless": "^1.0.2",
+>>>>>>> 2d17a1b6609500a20800b3347c1128e9b3f7901e
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.8.2",
     "lucide-react": "^0.556.0",
