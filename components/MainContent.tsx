@@ -164,7 +164,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                     )}
                     {activeView === 'report' && (
                         <ReportView
-                            tableData={unifiedTable}
+                            extractedData={extractedData}
                             onPrint={onPrint}
                             onDownloadPdf={onDownloadPdf}
                         />
