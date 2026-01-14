@@ -12,7 +12,7 @@ import { SettingsPage } from './SettingsPage';
 
 interface MainContentProps {
     activeSection: 'tct' | 'olymel' | 'settings';
-    setActiveSection: (section: 'tct' | 'olymel' | 'settings') => void;
+    setActiveSection: (section: 'tct' | 'olymel') => void;
 
     // TCT
     activeTctView: 'extract' | 'document' | 'report';
@@ -173,46 +173,37 @@ export const MainContent: React.FC<MainContentProps> = ({
                     </div>
                 )}
 
-                {/* Sélecteur de section (TCT / Olymel / Paramètres) */}
-                <div className="flex-none flex gap-3 mb-4">
-                    <button
-                        onClick={() => setActiveSection('tct')}
-                        className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${activeSection === 'tct'
-                            ? 'bg-emerald-600 text-white shadow-lg'
-                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                            }`}
-                    >
-                        <Icons.ScanText className="inline-block mr-2 w-4 h-4" />
-                        TCT
-                    </button>
-                    <button
-                        onClick={() => setActiveSection('olymel')}
-                        className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${activeSection === 'olymel'
-                            ? 'bg-cyan-600 text-white shadow-lg'
-                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                            }`}
-                    >
-                        <Icons.ScanText className="inline-block mr-2 w-4 h-4" />
-                        Olymel
-                    </button>
-                    {user?.isAdmin && (
+                {/* Sélecteur de section (TCT / Olymel) - Caché si paramètres */}
+                {activeSection !== 'settings' && (
+                    <div className="flex-none flex gap-3 mb-4">
                         <button
-                            onClick={() => setActiveSection('settings')}
-                            className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${activeSection === 'settings'
-                                ? 'bg-purple-600 text-white shadow-lg'
+                            onClick={() => setActiveSection('tct')}
+                            className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${activeSection === 'tct'
+                                ? 'bg-emerald-600 text-white shadow-lg'
                                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                                 }`}
                         >
-                            <Icons.Settings className="inline-block mr-2 w-4 h-4" />
-                            Paramètres
+                            <Icons.ScanText className="inline-block mr-2 w-4 h-4" />
+                            TCT
                         </button>
-                    )}
-                </div>
+                        <button
+                            onClick={() => setActiveSection('olymel')}
+                            className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${activeSection === 'olymel'
+                                ? 'bg-cyan-600 text-white shadow-lg'
+                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                }`}
+                        >
+                            <Icons.Truck className="inline-block mr-2 w-4 h-4" />
+                            Olymel
+                        </button>
+                    </div>
+                )}
 
                 {/* Onglets selon la section active */}
-                <div className="flex-none border-b border-slate-700 mb-3">
-                    <nav className="flex space-x-3" aria-label="Tabs">
-                        {activeSection === 'settings' ? null : activeSection === 'tct' ? (
+                {activeSection !== 'settings' && (
+                    <div className="flex-none border-b border-slate-700 mb-3">
+                        <nav className="flex space-x-3" aria-label="Tabs">
+                        {activeSection === 'tct' ? (
                             <>
                                 {/* Onglets TCT */}
                                 {user?.isAdmin && (
@@ -273,11 +264,12 @@ export const MainContent: React.FC<MainContentProps> = ({
                         )}
                     </nav>
                 </div>
+                )}
 
                 {/* Contenu selon section et vue active - Scrollable */}
                 <div className="flex-1 overflow-y-auto min-h-0">
                     {activeSection === 'settings' ? (
-                        <SettingsPage user={user} />
+                        <SettingsPage />
                     ) : activeSection === 'tct' ? (
                         <>
                             {activeTctView === 'extract' && renderTctExtractionView()}

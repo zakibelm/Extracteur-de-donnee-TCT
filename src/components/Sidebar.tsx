@@ -27,7 +27,8 @@ interface SidebarProps {
     // Commun
     user?: User;
     onLogout?: () => void;
-    onSectionChange: (section: 'tct' | 'olymel') => void;
+    onSectionChange: (section: 'tct' | 'olymel' | 'settings') => void;
+    activeSection: 'tct' | 'olymel' | 'settings';
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -48,7 +49,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     olymelChangeEventCount,
     user,
     onLogout,
-    onSectionChange
+    onSectionChange,
+    activeSection
 }) => {
     // Accordion states are now controlled by parent (App.tsx) for persistence
 
@@ -200,6 +202,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </div>
                         </div>
 
+
+                        {/* ================= BOUTON PARAMÈTRES ================= */}
+                        <button
+                            onClick={() => onSectionChange('settings')}
+                            className={`w-full flex items-center gap-3 p-3 rounded-lg font-semibold transition-all ${
+                                activeSection === 'settings' 
+                                    ? 'bg-indigo-600 text-white shadow-lg' 
+                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                            }`}
+                        >
+                            <Icons.Settings className="w-5 h-5" />
+                            <span>Paramètres</span>
+                        </button>
                     </div>
                 ) : (
                     <div className="flex flex-col items-center gap-6 mt-4">
@@ -209,6 +224,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </div>
                         <div title="Olymel" className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center text-cyan-400">
                             <Icons.Truck className="w-6 h-6" />
+                        </div>
+                        <div 
+                            title="Paramètres" 
+                            onClick={() => onSectionChange('settings')}
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
+                                activeSection === 'settings' ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-indigo-400 hover:bg-slate-600'
+                            }`}
+                        >
+                            <Icons.Settings className="w-6 h-6" />
                         </div>
                     </div>
                 )}

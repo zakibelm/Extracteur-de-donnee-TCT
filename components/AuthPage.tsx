@@ -1,195 +1,189 @@
+import React, { useState } from 'react';
+import { User, Car, CheckCircle, Eye, UploadCloud } from 'lucide-react';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Icons } from './Icons';
-import { User } from '../types';
-import { gsap } from 'gsap';
+export interface User {
+  numDome: string;
+  idEmploye: string;
+  telephone?: string;
+  isAdmin: boolean;
+}
 
 interface AuthPageProps {
   onLogin: (user: User) => void;
-  onDemoAccess: () => void;
 }
 
-export const AuthPage: React.FC<AuthPageProps> = ({ onLogin, onDemoAccess }) => {
-  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
-  const [role, setRole] = useState<'dispatch' | 'driver'>('dispatch');
-  const [domeNumber, setDomeNumber] = useState('');
-  const [employeeId, setEmployeeId] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+type AccountType = 'admin' | 'driver';
+type AuthMode = 'login' | 'signup';
 
-  const cardRef = useRef<HTMLDivElement>(null);
-  const glow1Ref = useRef<HTMLDivElement>(null);
-  const glow2Ref = useRef<HTMLDivElement>(null);
+export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
+  console.log('🔐 AuthPage is rendering...');
+  const [mode, setMode] = useState<AuthMode>('login');
+  const [accountType, setAccountType] = useState<AccountType>('admin');
+  const [numDome, setNumDome] = useState('');
+  const [idEmploye, setIdEmploye] = useState('');
+  const [telephone, setTelephone] = useState('');
 
-  useEffect(() => {
-    gsap.fromTo(cardRef.current,
-      { y: 30, opacity: 0, scale: 0.97 },
-      { y: 0, opacity: 1, scale: 1, duration: 1, ease: "power3.out" }
-    );
-
-    gsap.to(glow1Ref.current, {
-      x: "random(-80, 80)",
-      y: "random(-80, 80)",
-      duration: 8,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut"
-    });
-    gsap.to(glow2Ref.current, {
-      x: "random(-80, 80)",
-      y: "random(-80, 80)",
-      duration: 10,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-      delay: 0.5
-    });
-  }, []);
-
-  const handleAccess = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    gsap.to(cardRef.current, { scale: 0.98, duration: 0.1, yoyo: true, repeat: 1 });
-    onDemoAccess();
+
+    if (!numDome.trim() || !idEmploye.trim()) {
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    const user: User = {
+      numDome: numDome.trim(),
+      idEmploye: idEmploye.trim(),
+      telephone: telephone.trim() || undefined,
+      isAdmin: accountType === 'admin' || numDome === '999' || idEmploye === '090'
+    };
+
+    localStorage.setItem('edt_user', JSON.stringify(user));
+    onLogin(user);
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 relative overflow-hidden font-sans">
-      <div ref={glow1Ref} className="bg-glow top-[-15%] left-[-15%] scale-75"></div>
-      <div ref={glow2Ref} className="bg-glow bottom-[-15%] right-[-15%] scale-75"></div>
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 overflow-hidden">
+      <div className="w-full max-w-md animate-in slide-in-from-bottom-4 duration-500">
 
-      <div className="w-full max-w-[390px] relative z-10" ref={cardRef}>
-        <div className="bg-zinc-900/70 backdrop-blur-2xl rounded-[1.8rem] border border-zinc-800/60 shadow-[0_0_60px_-15px_rgba(225,29,72,0.15)] overflow-hidden">
+        {/* Main Card */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
 
-          <div className="px-6 py-8 md:px-8 md:py-10">
-            <div className="flex flex-col items-center mb-6 md:mb-8">
-              <div className="px-3 py-1 bg-zinc-800/90 border border-zinc-700/50 rounded-lg mb-4">
-                <span className="text-red-500 font-black text-xs tracking-tighter uppercase">ADT</span>
+          {/* Header Area */}
+          <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 p-6 border-b border-slate-800">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-3 shadow-inner border border-slate-700">
+                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-emerald-400 to-cyan-400">ADT</span>
               </div>
-              <h1 className="text-xl md:text-2xl font-bold text-white mb-1 tracking-tight">Espace Logistique</h1>
-              <p className="text-zinc-500 text-[10px] md:text-[11px] text-center uppercase tracking-widest font-bold opacity-60">Identification requise</p>
+              <h1 className="text-xl font-bold text-slate-100">Bienvenue</h1>
+              <p className="text-xs text-slate-500 mt-1">Connectez-vous pour accéder au portail</p>
+            </div>
+          </div>
+
+          {/* Tabs - Compact */}
+          <div className="flex border-b border-slate-800 bg-slate-900/50">
+            <button
+              onClick={() => setMode('login')}
+              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors relative ${mode === 'login' ? 'text-emerald-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
+            >
+              Connexion
+              {mode === 'login' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>}
+            </button>
+            <button
+              onClick={() => setMode('signup')}
+              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors relative ${mode === 'signup' ? 'text-cyan-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
+            >
+              Inscription
+              {mode === 'signup' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"></div>}
+            </button>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+
+            {/* Account Type Selection - Very Compact */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setAccountType('admin')}
+                className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'admin'
+                    ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-100'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
+                  }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'admin' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
+                  <User size={16} />
+                </div>
+                <div className="text-left">
+                  <div className={`text-xs font-bold ${accountType === 'admin' ? 'text-emerald-400' : 'text-slate-300'}`}>Répartition</div>
+                  <div className="text-[10px] opacity-70">Accès total</div>
+                </div>
+                {accountType === 'admin' && <CheckCircle size={14} className="ml-auto text-emerald-500" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAccountType('driver')}
+                className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'driver'
+                    ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-100'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
+                  }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'driver' ? 'bg-cyan-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
+                  <Car size={16} />
+                </div>
+                <div className="text-left">
+                  <div className={`text-xs font-bold ${accountType === 'driver' ? 'text-cyan-400' : 'text-slate-300'}`}>Conducteur</div>
+                  <div className="text-[10px] opacity-70">Routes</div>
+                </div>
+                {accountType === 'driver' && <CheckCircle size={14} className="ml-auto text-cyan-500" />}
+              </button>
             </div>
 
-            <div className="flex bg-black/40 p-1 rounded-xl mb-6 border border-zinc-800/40">
-              <button
-                onClick={() => setActiveTab('login')}
-                className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'login' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-600 hover:text-zinc-400'}`}
-              >
-                Connexion
-              </button>
-              <button
-                onClick={() => setActiveTab('signup')}
-                className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'signup' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-600 hover:text-zinc-400'}`}
-              >
-                Inscription
-              </button>
-            </div>
+            <div className="space-y-3 pt-2">
+              {/* Numéro de Dôme */}
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <div className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-mono group-focus-within:text-emerald-400 group-focus-within:bg-emerald-500/10 transition-colors">#</div>
+                </div>
+                <input
+                  type="text"
+                  value={numDome}
+                  onChange={(e) => setNumDome(e.target.value)}
+                  placeholder="Numéro de Dôme (ex: 123)"
+                  className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm font-mono"
+                  required
+                />
+              </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              <button
-                onClick={() => setRole('dispatch')}
-                className={`relative flex flex-col items-center justify-center p-3.5 rounded-xl border-2 transition-all duration-300 group ${role === 'dispatch' ? 'bg-red-600/5 border-red-500/40 shadow-[inset_0_0_15px_rgba(225,29,72,0.05)]' : 'bg-zinc-900/30 border-transparent hover:bg-zinc-800/40'}`}
-              >
-                {role === 'dispatch' && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_8px_#ef4444]"></span>}
-                <Icons.User className={`w-5 h-5 mb-1.5 transition-transform duration-300 group-hover:scale-105 ${role === 'dispatch' ? 'text-red-500' : 'text-zinc-700'}`} />
-                <span className={`text-[9px] font-black uppercase tracking-widest ${role === 'dispatch' ? 'text-white' : 'text-zinc-600'}`}>Répartition</span>
-              </button>
+              {/* ID Employé */}
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <div className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-mono group-focus-within:text-emerald-400 group-focus-within:bg-emerald-500/10 transition-colors">ID</div>
+                </div>
+                <input
+                  type="text"
+                  value={idEmploye}
+                  onChange={(e) => setIdEmploye(e.target.value)}
+                  placeholder="Identifiant Employé"
+                  className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm font-mono"
+                  required
+                />
+              </div>
 
-              <button
-                onClick={() => setRole('driver')}
-                className={`relative flex flex-col items-center justify-center p-3.5 rounded-xl border-2 transition-all duration-300 group ${role === 'driver' ? 'bg-red-600/5 border-red-500/40 shadow-[inset_0_0_15px_rgba(225,29,72,0.05)]' : 'bg-zinc-900/30 border-transparent hover:bg-zinc-800/40'}`}
-              >
-                {role === 'driver' && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_8px_#ef4444]"></span>}
-                <Icons.Truck className={`w-5 h-5 mb-1.5 transition-transform duration-300 group-hover:scale-105 ${role === 'driver' ? 'text-red-500' : 'text-zinc-700'}`} />
-                <span className={`text-[9px] font-black uppercase tracking-widest ${role === 'driver' ? 'text-white' : 'text-zinc-600'}`}>Conducteur</span>
-              </button>
-            </div>
-
-            <form onSubmit={handleAccess} className="space-y-4">
-              <div>
-                <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] ml-1 mb-1.5 block">N° Dôme</label>
-                <div className="relative group">
-                  <Icons.User className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-700 group-focus-within:text-red-500 transition-colors" />
+              {/* Téléphone (Optional) */}
+              {mode === 'signup' && (
+                <div className="relative group animate-in slide-in-from-top-1 fade-in">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <div className="w-5 h-5 rounded bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-mono group-focus-within:text-cyan-400 group-focus-within:bg-cyan-500/10 transition-colors">Tel</div>
+                  </div>
                   <input
-                    type="text"
-                    value={domeNumber}
-                    onChange={(e) => setDomeNumber(e.target.value)}
-                    placeholder="Ex: 123"
-                    className="w-full bg-black/30 border border-zinc-800/80 rounded-xl pl-11 pr-4 py-3 text-xs text-white focus:outline-none focus:border-red-500/40 focus:ring-1 focus:ring-red-500/10 transition-all placeholder:text-zinc-800"
+                    type="tel"
+                    value={telephone}
+                    onChange={(e) => setTelephone(e.target.value)}
+                    placeholder="Téléphone (Optionnel)"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-sm font-mono"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] ml-1 mb-1.5 block">Code Employé</label>
-                <div className="relative group">
-                  <Icons.ScanText className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-700 group-focus-within:text-red-500 transition-colors" />
-                  <input
-                    type="password"
-                    value={employeeId}
-                    onChange={(e) => setEmployeeId(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-black/30 border border-zinc-800/80 rounded-xl pl-11 pr-4 py-3 text-xs text-white focus:outline-none focus:border-red-500/40 focus:ring-1 focus:ring-red-500/10 transition-all placeholder:text-zinc-800"
-                  />
-                </div>
-              </div>
-
-              {activeTab === 'signup' && (
-                <>
-                  <div>
-                    <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] ml-1 mb-1.5 block">Téléphone</label>
-                    <div className="relative group">
-                      <Icons.Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-700 group-focus-within:text-red-500 transition-colors" />
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="Ex: 514-123-4567"
-                        className="w-full bg-black/30 border border-zinc-800/80 rounded-xl pl-11 pr-4 py-3 text-xs text-white focus:outline-none focus:border-red-500/40 focus:ring-1 focus:ring-red-500/10 transition-all placeholder:text-zinc-800"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] ml-1 mb-1.5 block">Email</label>
-                    <div className="relative group">
-                      <Icons.Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-700 group-focus-within:text-red-500 transition-colors" />
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="exemple@email.com"
-                        className="w-full bg-black/30 border border-zinc-800/80 rounded-xl pl-11 pr-4 py-3 text-xs text-white focus:outline-none focus:border-red-500/40 focus:ring-1 focus:ring-red-500/10 transition-all placeholder:text-zinc-800"
-                      />
-                    </div>
-                  </div>
-                </>
               )}
+            </div>
 
-              <div className="pt-2 flex flex-col gap-3">
-                <button
-                  type="submit"
-                  className="w-full py-4 bg-gradient-to-br from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.25em] shadow-[0_10px_20px_-5px_rgba(225,29,72,0.3)] transition-all duration-300 flex items-center justify-center gap-2 group active:scale-[0.98]"
-                >
-                  {activeTab === 'login' ? 'Connexion' : 'Créer un compte'}
-                  <Icons.ChevronRight className="w-3.5 h-3.5 transition-transform duration-300 group-hover:translate-x-1" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onDemoAccess}
-                  className="w-full py-3.5 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 text-zinc-400 hover:text-zinc-200 rounded-xl text-[9px] font-black uppercase tracking-[0.2em] transition-all duration-200 active:scale-[0.99]"
-                >
-                  Accès Démo Rapide
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <div className="py-4 px-8 bg-black/50 border-t border-zinc-800/50 text-center">
-            <p className="text-[8px] text-zinc-700 font-bold uppercase tracking-[0.15em] leading-relaxed">
-              ADT v1.5 • Neon Backend • 2025
-            </p>
-          </div>
+            <div className="pt-2">
+              <button
+                type="submit"
+                className={`w-full py-2.5 text-sm font-bold uppercase tracking-wide text-white rounded-lg shadow-lg transition-all transform active:scale-95 ${mode === 'login'
+                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-900/20'
+                    : 'bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 shadow-cyan-900/20'
+                  }`}
+              >
+                {mode === 'login' ? 'Se connecter' : "Créer un compte"}
+              </button>
+              <p className="text-center text-[10px] text-slate-600 mt-3">
+                En continuant, vous acceptez les conditions d'utilisation de Taxi Coop Terrebonne.
+              </p>
+            </div>
+          </form>
         </div>
       </div>
     </div>

@@ -158,7 +158,7 @@ export const App: React.FC = () => {
             return null;
         }
     });
-    const [activeTctView, setActiveTctView] = useState<'extract' | 'document' | 'report' | 'history'>('extract');
+    const [activeTctView, setActiveTctView] = useState<'extract' | 'document' | 'report'>('extract');
 
     // ========== ÉTATS OLYMEL ==========
     const [olymelFiles, setOlymelFiles] = useState<File[]>([]);
@@ -245,9 +245,9 @@ export const App: React.FC = () => {
                     });
                     processableFiles.push({
                         id: `${file.name}-${Date.now()}`,
-                        file: file, // Explicit assignment
+                        file,
                         originalFileName: file.name,
-                        base64: base64, // Explicit assignment
+                        base64,
                         mimeType: file.type
                     });
                 }
