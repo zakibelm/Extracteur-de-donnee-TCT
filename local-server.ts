@@ -19,16 +19,58 @@ import { db } from './src/db';
 import * as schema from './src/db/schema';
 import { sql } from 'drizzle-orm';
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { EnvSchema, validateOrThrow } from './src/validation/schemas';
+
+// ========================================
+// VALIDATION DES VARIABLES D'ENVIRONNEMENT
+// ========================================
+const env = validateOrThrow(
+    EnvSchema,
+    {
+        DATABASE_URL: process.env.DATABASE_URL,
+        OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+        NODE_ENV: process.env.NODE_ENV || 'development',
+        PORT: process.env.PORT || '3002',
+        ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || 'http://localhost:3005',
+        SESSION_SECRET: process.env.SESSION_SECRET,
+        SENTRY_DSN: process.env.SENTRY_DSN || '',
+        ENABLE_MOCK_MODE: process.env.ENABLE_MOCK_MODE || 'false',
+        ENABLE_DEBUG_LOGS: process.env.ENABLE_DEBUG_LOGS || 'true',
+    },
+    '❌ Configuration environnement invalide'
+);
 
 const app = express();
-const PORT = 3002;
+const PORT = parseInt(env.PORT as string);
+
+// ========================================
+// SÉCURITÉ: CORS CONFIGURÉ CORRECTEMENT
+// ========================================
+const allowedOrigins = Array.isArray(env.ALLOWED_ORIGINS)
+    ? env.ALLOWED_ORIGINS
+    : [env.ALLOWED_ORIGINS as string];
 
 app.use(cors({
-    origin: '*',
+    origin: (origin, callback) => {
+        // Autorise les requêtes sans origin (Postman, curl, etc.) en dev
+        if (!origin && env.NODE_ENV === 'development') {
+            return callback(null, true);
+        }
+
+        // Vérifie si l'origin est dans la liste autorisée
+        if (origin && allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`⚠️ CORS: Origine refusée: ${origin}`);
+            callback(new Error(`Origine non autorisée: ${origin}`));
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400, // Cache preflight pendant 24h
 }));
+
 app.use(express.json({ limit: '50mb' }));
 
 // Chrome Private Network Access headers
@@ -37,20 +79,28 @@ app.use((req, res, next) => {
     next();
 });
 
-// Logging Middleware
-app.use((req, res, next) => {
-    console.log(`\n[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    const bodyStr = req.body ? JSON.stringify(req.body) : 'No body';
-    console.log('Body:', bodyStr.slice(0, 200) + (bodyStr.length > 200 ? '...' : ''));
-    next();
-});
+// Logging Middleware (uniquement si ENABLE_DEBUG_LOGS est activé)
+if (env.ENABLE_DEBUG_LOGS) {
+    app.use((req, res, next) => {
+        console.log(`\n[${new Date().toISOString()}] ${req.method} ${req.url}`);
+        console.log('Headers:', JSON.stringify(req.headers, null, 2));
+        const bodyStr = req.body ? JSON.stringify(req.body) : 'No body';
+        console.log('Body:', bodyStr.slice(0, 200) + (bodyStr.length > 200 ? '...' : ''));
+        next();
+    });
+}
 
 // DB Status Flag
-let isDbConnected = false;
+let isDbConnected = !env.ENABLE_MOCK_MODE;
 
 // Test DB Connection on Start
 (async () => {
+    if (env.ENABLE_MOCK_MODE) {
+        console.warn("⚠️ MOCK MODE ENABLED: Skipping DB connection");
+        isDbConnected = false;
+        return;
+    }
+
     try {
         console.log("Testing DB connection...");
         const result = await db.select({ count: sql`count(*)` }).from(schema.users);
@@ -58,7 +108,7 @@ let isDbConnected = false;
         isDbConnected = true;
     } catch (e) {
         console.error("❌ DB Connection Failed:", e);
-        console.warn("⚠️ RUNNING IN MOCK MODE: requests will bypass DB");
+        console.warn("⚠️ FALLING BACK TO MOCK MODE: requests will bypass DB");
         isDbConnected = false;
     }
 })();

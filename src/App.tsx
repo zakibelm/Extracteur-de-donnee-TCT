@@ -245,9 +245,9 @@ export const App: React.FC = () => {
                     });
                     processableFiles.push({
                         id: `${file.name}-${Date.now()}`,
-                        file,
+                        file: file, // Explicit assignment
                         originalFileName: file.name,
-                        base64,
+                        base64: base64, // Explicit assignment
                         mimeType: file.type
                     });
                 }

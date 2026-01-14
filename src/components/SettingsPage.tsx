@@ -73,13 +73,9 @@ export const SettingsPage: React.FC = () => {
         localStorage.setItem('adt_settings_prompt_olymel', olymelPrompt);
         localStorage.setItem('adt_settings_rag', String(enableRag));
 
-<<<<<<< HEAD
         // Also update the env variable in memory if possible or reload
         // Since we can't easily update process.env in the browser for the running app without reload context
         // We will just rely on localStorage being read by the service
-
-=======
->>>>>>> 2d17a1b6609500a20800b3347c1128e9b3f7901e
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
     };

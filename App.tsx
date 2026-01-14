@@ -79,27 +79,8 @@ export const App = () => {
 
     syncData();
   }, [user]); // Se déclenche quand l'utilisateur est défini (login ou restore)
-  try {
-    const rows = await gasService.fetchUserData(email);
-    if (rows.length > 0) {
-      const allRows = rows.flatMap(r => r.extracted_data.rows);
-      setUnifiedTable({ headers: TABLE_HEADERS, rows: allRows });
-      const results: ExtractedData[] = rows.map(d => ({
-        id: d.image_id,
-        fileName: d.image_id.split('-').slice(1).join('-'),
-        imageSrc: "https://via.placeholder.com/300x150/1e293b/e11d48?text=SCAN+ADT",
-        content: d.extracted_data,
-        status: Status.Success,
-        timestamp: new Date(d.timestamp).getTime()
-      }));
-      setExtractedResults(results);
-    }
-  } catch (err) {
-    setError("Problème de connexion aux serveurs ADT.");
-  } finally { setLoading(false); }
-};
 
-const handleDemoAccess = () => {
+  const handleDemoAccess = () => {
   setLoading(true);
   const demoUser: User = { email: 'demo@adt.logistics', name: 'Visiteur Démo', picture: '', numDome: 'DEMO99' };
   setTimeout(() => {
