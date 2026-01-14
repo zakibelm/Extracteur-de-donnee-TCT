@@ -63,16 +63,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onClose }) => 
   const [activeTab, setActiveTab] = useState<'api' | 'display' | 'notifications' | 'data' | 'about'>('api');
   const [showApiKey, setShowApiKey] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testError, setTestError] = useState<string>('');
 
   // Load settings from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem('edt_settings');
       if (saved) {
-        setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(saved) });
+        const parsed = JSON.parse(saved);
+        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
       }
     } catch (e) {
       console.error('Erreur chargement paramètres:', e);
+      // Si localStorage est corrompu, on le nettoie
+      localStorage.removeItem('edt_settings');
+      setTestError('Paramètres corrompus nettoyés. Veuillez réentrer votre clé API.');
+      setTestStatus('error');
     }
   }, []);
 
@@ -104,6 +111,38 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onClose }) => 
       localStorage.removeItem('edt_tct_unified_table');
       localStorage.removeItem('edt_olymel_unified_table');
       alert('✅ Toutes les données ont été supprimées.');
+    }
+  };
+
+  const testApiKey = async () => {
+    if (!settings.openrouterApiKey) {
+      setTestError('Veuillez entrer une clé API');
+      setTestStatus('error');
+      return;
+    }
+
+    setTestStatus('testing');
+    setTestError('');
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${settings.openrouterApiKey}`,
+          'HTTP-Referer': window.location.origin,
+        }
+      });
+
+      if (response.ok) {
+        setTestStatus('success');
+        setTimeout(() => setTestStatus('idle'), 3000);
+      } else {
+        const error = await response.json();
+        setTestError(error.error?.message || 'Clé API invalide');
+        setTestStatus('error');
+      }
+    } catch (error: any) {
+      setTestError(error.message || 'Erreur de connexion');
+      setTestStatus('error');
     }
   };
 
@@ -156,21 +195,49 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, onClose }) => 
                 (Obtenir une clé)
               </a>
             </label>
-            <div className="relative">
-              <input
-                type={showApiKey ? 'text' : 'password'}
-                value={settings.openrouterApiKey}
-                onChange={(e) => setSettings({ ...settings, openrouterApiKey: e.target.value })}
-                placeholder="sk-or-v1-..."
-                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono text-sm pr-10"
-              />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={settings.openrouterApiKey}
+                  onChange={(e) => setSettings({ ...settings, openrouterApiKey: e.target.value })}
+                  placeholder="sk-or-v1-..."
+                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono text-sm pr-10"
+                />
+                <button
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                >
+                  {showApiKey ? <Icons.EyeOff className="w-4 h-4" /> : <Icons.Eye className="w-4 h-4" />}
+                </button>
+              </div>
               <button
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                onClick={testApiKey}
+                disabled={testStatus === 'testing'}
+                className={`px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
+                  testStatus === 'success'
+                    ? 'bg-green-600 text-white'
+                    : testStatus === 'error'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                }`}
               >
-                {showApiKey ? <Icons.EyeOff className="w-4 h-4" /> : <Icons.Eye className="w-4 h-4" />}
+                {testStatus === 'testing' && <Icons.Loader className="w-4 h-4 animate-spin" />}
+                {testStatus === 'success' && <Icons.Check className="w-4 h-4" />}
+                {testStatus === 'idle' && 'Tester'}
+                {testStatus === 'error' && 'Erreur'}
               </button>
             </div>
+            {testError && (
+              <p className="text-xs text-red-400 mt-2 bg-red-900/20 border border-red-500/30 rounded p-2">
+                {testError}
+              </p>
+            )}
+            {testStatus === 'success' && (
+              <p className="text-xs text-green-400 mt-2 bg-green-900/20 border border-green-500/30 rounded p-2">
+                ✅ Clé API valide!
+              </p>
+            )}
             <p className="text-xs text-slate-500 mt-1">
               Vos données restent privées. La clé est stockée localement dans votre navigateur.
             </p>
