@@ -25,6 +25,8 @@ export interface SQLRow {
     nom_employe_complet: string;
     id_employe_confirm?: string;
     vehicule: string;
+    changement: string;  // Contiendra le numéro de véhicule par défaut
+    changement_par: string;  // Contiendra le numéro de véhicule par défaut
     classe_vehicule_affecte: string;
     autorisation: string;
     approuve: string;
@@ -120,6 +122,9 @@ export function validateAndConvertAIResponse(response: AIResponse): ValidationRe
                 nom_employe_complet: sqlRow.nom_employe_complet || '',
                 id_employe_confirm: sqlRow.id_employe_confirm || '',
                 vehicule: sqlRow.vehicule || '',
+                // Changement et changement_par prennent le numéro de véhicule par défaut
+                changement: sqlRow.changement || sqlRow.vehicule || '',
+                changement_par: sqlRow.changement_par || sqlRow.vehicule || '',
                 classe_vehicule_affecte: sqlRow.classe_vehicule_affecte || '',
                 autorisation: sqlRow.autorisation || '',
                 approuve: sqlRow.approuve || '',

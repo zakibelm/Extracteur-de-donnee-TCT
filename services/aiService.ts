@@ -78,17 +78,27 @@ export async function extractDataFromImage(
     const systemPrompt = `Tu es un extracteur de données logistiques de HAUTE PRÉCISION.
 
 TA MISSION:
-1. Analyse l'image du tableau de tournées ligne par ligne.
-2. Identifie TOUS les en-têtes de colonnes en lisant la première ligne du tableau.
-3. Pour CHAQUE ligne, extrais la valeur correspondant EXACTEMENT à chaque en-tête.
+Extrais ce tableau COLONNE PAR COLONNE en comptant les positions.
 
-STRUCTURE DES EN-TÊTES ATTENDUS (ORDRE EXACT):
-[
-  "Tournée", "Nom", "Déb tour", "Fin tour", "Cl véh",
-  "Employé", "Nom de l'employé", "Employé", "Véhicule",
-  "Cl véh aff", "Autoris", "Approuvé", "Retour",
-  "Adresse de début", "Adresse de fin"
-]
+ATTENTION CRITIQUE: Le tableau a 15 COLONNES EXACTEMENT.
+Tu DOIS lire chaque ligne de GAUCHE À DROITE en comptant les colonnes.
+
+STRUCTURE EXACTE DES 15 COLONNES:
+Colonne 1: "Tournée" (code comme TCT0028, TCT0004)
+Colonne 2: "Nom" (nom compagnie comme "TAXI COOP TERREBONNE")
+Colonne 3: "Déb tour" (heure de début comme 9:12, 9:57)
+Colonne 4: "Fin tour" (heure de fin comme 9:40, 11:20)
+Colonne 5: "Cl véh" (classe véhicule comme TAXI, MINIVAN)
+Colonne 6: "Employé" (ID employé PREMIER - comme 0450, 0379)
+Colonne 7: "Nom de l'employé" (nom complet - peut contenir virgules)
+Colonne 8: "Employé" (ID employé DEUXIÈME - souvent = colonne 6)
+Colonne 9: "Véhicule" (NUMÉRO de véhicule - comme 232, 134, 471)
+Colonne 10: "Cl véh aff" (classe affectée - comme TAXI, MINIVAN)
+Colonne 11: "Autoris" (autorisation - souvent vide)
+Colonne 12: "Approuvé" (checkmark ✓ ou vide)
+Colonne 13: "Retour" (territoire retour - souvent vide)
+Colonne 14: "Adresse de début" (adresse COMPLÈTE avec code postal)
+Colonne 15: "Adresse de fin" (adresse COMPLÈTE avec code postal)
 
 STRUCTURE JSON À RETOURNER:
 {
@@ -119,18 +129,28 @@ STRUCTURE JSON À RETOURNER:
   ]
 }
 
-RÈGLES CRITIQUES (ABSOLUES):
-1. ALIGNEMENT VERTICAL: Lis chaque cellule en alignant visuellement avec l'en-tête de sa colonne.
-2. PAS DE DÉCALAGE: La colonne 9 "Véhicule" doit contenir le numéro de véhicule (ex: 232, 0450) et NON un nom.
-3. COLONNES VIDES: Si vide, écris "value": "" mais crée la cellule.
-4. COLONNES DUPLIQUÉES: "Employé" apparaît 2 fois (colonnes 6 et 8) - crée 2 cellules.
-5. ADRESSES COMPLÈTES: Extrais l'adresse EN ENTIER avec code postal. Ne tronque JAMAIS.
-6. NOM EMPLOYÉ: Si la cellule contient "Nom, Prénom, ID", extrait UNIQUEMENT "Nom, Prénom".
-7. ORDRE EXACT: Chaque ligne doit avoir 15 cellules dans l'ordre ci-dessus.
+RÈGLES ABSOLUES:
+1. COMPTE LES COLONNES: Commence à colonne 1 (Tournée) et compte jusqu'à 15.
+2. NE SAUTE AUCUNE COLONNE: Même si vide, crée la cellule avec "value": "".
+3. COLONNE 9 = NUMÉRO: La colonne "Véhicule" doit contenir UN NUMÉRO (232, 134, 471), PAS un nom ou ID employé.
+4. ADRESSES COMPLÈTES: Colonnes 14-15 doivent avoir l'adresse avec code postal (ex: "3177 Napoléon BOUL Terrebonne J6X 4R7").
+5. NOM EMPLOYÉ (col 7): Extrait le nom sans ID. Si la cellule dit "Rezali, Karim, 0450", extrait "Rezali, Karim".
+6. DEUX COLONNES EMPLOYÉ: Colonne 6 ET colonne 8 contiennent l'ID employé (souvent identique).
 
-VÉRIFICATION:
-- Véhicule (col 9) = numéro (232, 0450, 0379)
-- Adresses (cols 14-15) = complètes avec code postal
+EXEMPLE LIGNE TCT0004 (VÉRIFICATION):
+Colonne 1: "TCT0004"
+Colonne 2: "TAXI COOP TERREBONNE"
+Colonne 3: "9:57"
+Colonne 4: "11:20"
+Colonne 5: "TAXI"
+Colonne 6: "0450" (ID employé)
+Colonne 7: "Rezali, Karim" (SANS le 0450 à la fin)
+Colonne 8: "0450" (ID employé confirmé)
+Colonne 9: "232" (NUMÉRO véhicule - PAS 0450!)
+Colonne 10: "MINIVAN"
+Colonne 11-13: "" (souvent vides)
+Colonne 14: "3177 Napoléon BOUL Terrebonne J6X 4R7"
+Colonne 15: "5455 De Gaspe AV Montreal H1L 1A8"
 
 Retourne UNIQUEMENT le JSON.`;
 
@@ -228,12 +248,14 @@ Retourne UNIQUEMENT le JSON.`;
                 row.nom_employe_complet || '',      // 6: Nom de l'employé
                 row.id_employe_confirm || '',       // 7: Employé (Confirm)
                 row.vehicule || '',                 // 8: Véhicule
-                row.classe_vehicule_affecte || '',  // 9: Cl véh aff
-                row.autorisation || '',             // 10: Autoris
-                row.approuve || '',                 // 11: Approuvé
-                row.retour || '',                   // 12: Retour
-                row.adresse_debut || '',            // 13: Adresse de début
-                row.adresse_fin || ''               // 14: Adresse de fin
+                row.changement || '',               // 9: Changement (défaut = véhicule)
+                row.changement_par || '',           // 10: Changement par (défaut = véhicule)
+                row.classe_vehicule_affecte || '',  // 11: Cl véh aff
+                row.autorisation || '',             // 12: Autoris
+                row.approuve || '',                 // 13: Approuvé
+                row.retour || '',                   // 14: Retour
+                row.adresse_debut || '',            // 15: Adresse de début
+                row.adresse_fin || ''               // 16: Adresse de fin
             ];
         });
 

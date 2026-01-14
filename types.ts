@@ -34,7 +34,8 @@ export interface SheetRow {
 export const TABLE_HEADERS = [
   "Tournée", "Nom", "Déb tour", "Fin tour", "Cl véh",
   "Employé", "Nom de l'employé", "Employé (Confirm)",
-  "Véhicule", "Cl véh aff", "Autoris", "Approuvé", "Retour",
+  "Véhicule", "Changement", "Changement par", "Cl véh aff",
+  "Autoris", "Approuvé", "Retour",
   "Adresse de début", "Adresse de fin"
 ];
 
