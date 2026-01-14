@@ -78,38 +78,59 @@ export async function extractDataFromImage(
     const systemPrompt = `Tu es un extracteur de données logistiques de HAUTE PRÉCISION.
 
 TA MISSION:
-1. Analyse l'image du tableau de tournées.
-2. Identifie TOUS les en-têtes de colonnes (environ 15 à 17).
-3. Pour CHAQUE ligne de donnée, extrais la valeur correspondant à CHAQUE en-tête.
+1. Analyse l'image du tableau de tournées ligne par ligne.
+2. Identifie TOUS les en-têtes de colonnes en lisant la première ligne du tableau.
+3. Pour CHAQUE ligne, extrais la valeur correspondant EXACTEMENT à chaque en-tête.
 
-STRUCTURE JSON ATTENDUE:
+STRUCTURE DES EN-TÊTES ATTENDUS (ORDRE EXACT):
+[
+  "Tournée", "Nom", "Déb tour", "Fin tour", "Cl véh",
+  "Employé", "Nom de l'employé", "Employé", "Véhicule",
+  "Cl véh aff", "Autoris", "Approuvé", "Retour",
+  "Adresse de début", "Adresse de fin"
+]
+
+STRUCTURE JSON À RETOURNER:
 {
   "phase": "execute",
-  "headers_detected": [
-    "Tournée", "Nom", "Déb tour", "Fin tour", "Cl véh",
-    "Employé", "Nom de l'employé", "Employé", "Véhicule",
-    "Cl véh aff", "Autoris", "Approuvé", "Retour",
-    "Adresse de début", "Adresse de fin"
-  ],
+  "headers_detected": [...15 en-têtes ci-dessus...],
   "total_headers": 15,
   "data": [
     {
       "row_number": 1,
       "cells": [
-        { "column_header": "Tournée", "value": "..." },
-        { "column_header": "Nom", "value": "..." },
-        // ... UNE CELLULE POUR CHAQUE HEADER DÉTECTÉ
+        { "column_header": "Tournée", "value": "TCT0028" },
+        { "column_header": "Nom", "value": "TAXI COOP TERREBONNE" },
+        { "column_header": "Déb tour", "value": "9:12" },
+        { "column_header": "Fin tour", "value": "9:40" },
+        { "column_header": "Cl véh", "value": "TAXI" },
+        { "column_header": "Employé", "value": "0450" },
+        { "column_header": "Nom de l'employé", "value": "Rezali, Karim" },
+        { "column_header": "Employé", "value": "0450" },
+        { "column_header": "Véhicule", "value": "232" },
+        { "column_header": "Cl véh aff", "value": "MINIVAN" },
+        { "column_header": "Autoris", "value": "" },
+        { "column_header": "Approuvé", "value": "✓" },
+        { "column_header": "Retour", "value": "" },
+        { "column_header": "Adresse de début", "value": "3177 Napoléon BOUL Terrebonne J6X 4R7" },
+        { "column_header": "Adresse de fin", "value": "3455 De Gaspe AV Montreal H1L 1A8" }
       ]
     }
   ]
 }
 
-RÈGLES CRITIQUES:
-1. SI UNE COLONNE (ex: "Autoris", "Retour") EST VIDE DANS LE TABLEAU, CRÉE QUAND MÊME LA CELLULE AVEC "value": "".
-2. SI UNE COLONNE "Employé" APPARAÎT 2 FOIS, CRÉE 2 CELLULES AVEC LE HEADER "Employé" À LEUR POSITION RESPECTIVE.
-3. NE SAUTE AUCUNE COLONNE. Si "headers_detected" a 15 éléments, chaque ligne DOIT avoir 15 cellules.
-4. Associe STRICTEMENT la valeur visuelle à son en-tête vertical. Ne décalle jamais.
-5. "value" doit être le contenu brut exact (OCR).
+RÈGLES CRITIQUES (ABSOLUES):
+1. ALIGNEMENT VERTICAL: Lis chaque cellule en alignant visuellement avec l'en-tête de sa colonne.
+2. PAS DE DÉCALAGE: La colonne 9 "Véhicule" doit contenir le numéro de véhicule (ex: 232, 0450) et NON un nom.
+3. COLONNES VIDES: Si vide, écris "value": "" mais crée la cellule.
+4. COLONNES DUPLIQUÉES: "Employé" apparaît 2 fois (colonnes 6 et 8) - crée 2 cellules.
+5. ADRESSES COMPLÈTES: Extrais l'adresse EN ENTIER avec code postal. Ne tronque JAMAIS.
+6. NOM EMPLOYÉ: Si la cellule contient "Nom, Prénom, ID", extrait UNIQUEMENT "Nom, Prénom".
+7. ORDRE EXACT: Chaque ligne doit avoir 15 cellules dans l'ordre ci-dessus.
+
+VÉRIFICATION:
+- Véhicule (col 9) = numéro (232, 0450, 0379)
+- Adresses (cols 14-15) = complètes avec code postal
 
 Retourne UNIQUEMENT le JSON.`;
 
@@ -126,7 +147,7 @@ Retourne UNIQUEMENT le JSON.`;
                 content: [
                     {
                         type: "text",
-                        text: "Extrait ce tableau cellule par cellule en respectant scrupuleusement les en-têtes."
+                        text: "Extrait ce tableau cellule par cellule. CRITIQUE: Aligne visuellement chaque cellule avec son en-tête de colonne. Vérifie que la colonne 'Véhicule' contient bien des numéros (232, 0450, etc.) et que les adresses sont complètes avec le code postal."
                     },
                     {
                         type: "image_url",

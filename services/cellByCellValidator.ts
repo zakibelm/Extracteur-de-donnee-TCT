@@ -25,8 +25,6 @@ export interface SQLRow {
     nom_employe_complet: string;
     id_employe_confirm?: string;
     vehicule: string;
-    changement?: string;
-    changement_par?: string;
     classe_vehicule_affecte: string;
     autorisation: string;
     approuve: string;
@@ -88,10 +86,6 @@ export function validateAndConvertAIResponse(response: AIResponse): ValidationRe
                 sqlRow.nom_employe_complet = val;
             } else if (header === 'vehicule' || header === 'veh') {
                 sqlRow.vehicule = val;
-            } else if (header.includes('chang') && !header.includes('par')) {
-                sqlRow.changement = val;
-            } else if (header.includes('chang') && header.includes('par')) {
-                sqlRow.changement_par = val;
             } else if (header.includes('cl') && header.includes('aff')) {
                 sqlRow.classe_vehicule_affecte = val;
             } else if (header.includes('auto') || header.includes('stationnement')) {
@@ -126,8 +120,6 @@ export function validateAndConvertAIResponse(response: AIResponse): ValidationRe
                 nom_employe_complet: sqlRow.nom_employe_complet || '',
                 id_employe_confirm: sqlRow.id_employe_confirm || '',
                 vehicule: sqlRow.vehicule || '',
-                changement: sqlRow.changement || '',
-                changement_par: sqlRow.changement_par || '',
                 classe_vehicule_affecte: sqlRow.classe_vehicule_affecte || '',
                 autorisation: sqlRow.autorisation || '',
                 approuve: sqlRow.approuve || '',
