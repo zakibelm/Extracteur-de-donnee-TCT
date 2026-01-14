@@ -158,7 +158,7 @@ export const App: React.FC = () => {
             return null;
         }
     });
-    const [activeTctView, setActiveTctView] = useState<'extract' | 'document' | 'report'>('extract');
+    const [activeTctView, setActiveTctView] = useState<'extract' | 'document' | 'report' | 'history'>('extract');
 
     // ========== ÉTATS OLYMEL ==========
     const [olymelFiles, setOlymelFiles] = useState<File[]>([]);

@@ -196,53 +196,23 @@ Retourne UNIQUEMENT le JSON.`;
         console.log(`✅ ${validationResult.validRows.length} lignes validées avec succès.`);
 
         // Convertir les données validées en format tableau pour l'UI
-        // On mappe les clés SQL du validateur aux index de TABLE_HEADERS de l'application
         const uiRows = validationResult.validRows.map(row => {
-            // Mapping Validator SQL Keys -> UI Array Index
-            // TABLE_HEADERS: [
-            // 0: "Tournée", 1: "Nom", 2: "Début tournée", 3: "Fin tournée", 4: "Classe véhicule", 
-            // 5: "Employé", 6: "Nom de l'employé", 7: "Véhicule", 8: "Changement", 9: "Changement par",
-            // 10: "Classe véhicule affecté", 11: "Stationnement", 12: "Approuvé", 13: "Territoire début",
-            // 14: "Adresse de début", 15: "Adresse de fin"
-            // ]
-
             return [
                 row.tournee || '',                  // 0: Tournée
                 row.nom_compagnie || '',            // 1: Nom
-                row.debut_tournee || '',            // 2: Début tournée
-                row.fin_tournee || '',              // 3: Fin tournée
-                row.classe_vehicule || '',          // 4: Classe véhicule
+                row.debut_tournee || '',            // 2: Déb tour
+                row.fin_tournee || '',              // 3: Fin tour
+                row.classe_vehicule || '',          // 4: Cl véh
                 row.id_employe || '',               // 5: Employé
                 row.nom_employe_complet || '',      // 6: Nom de l'employé
-                row.vehicule || '',                 // 7: Véhicule
-                row.changement || '',               // 8: Changement (Attention: SQL a idx 8 'changement' mais parfois 'employe_confirm' est là?)
-                // NON: UI TABLE_HEADERS index 7 est "Véhicule". Mon validator a 'id_employe_confirm' qui n'est pas dans TABLE_HEADERS direct pour affichage?
-                // Attends... TABLE_HEADERS a "Employé" à l'index 5.
-                // Regardons TABLE_HEADERS dans types.ts:
-                // export const TABLE_HEADERS = [
-                //   "Tournée", "Nom", "Début tournée", "Fin tournée", "Classe véhicule", "Employé",
-                //   "Nom de l'employé", "Véhicule", "Changement", "Changement par", ...
-                // ];
-                // Le viewer a [8] "Changement", [9] "Changement par".
-                // Le `row.id_employe_confirm` est la 2eme col employe, qui n'est PAS affichée dans le tableau final?
-                // Si le tableau source a 2 cols Employé, on garde laquelle? La première (col 5).
-                // La 2eme col Employé semble inutile pour l'affichage final si elle n'est pas dans TABLE_HEADERS.
-                // => On ignore id_employe_confirm pour l'array UI.
-
-                row.changement || '',               // 8: Changement
-                row.changement_par || '',           // 9: Changement par
-                row.classe_vehicule_affecte || '',  // 10: Classe véhicule affecté
-                row.autorisation || '',             // 11: Stationnement (Mappé à 'autorisation' dans le validator)
-                row.approuve || '',                 // 12: Approuvé
-                row.retour || '',                   // 13: Territoire début (Mappé à 'retour' dans le validator? "Territoire début" est souvent vide, "Retour" aussi...)
-                // UI index 13 est "Territoire début". Dans le validateur, j'ai mappé 'retour' -> 'retour'.
-                // Est-ce que 'Territoire début' est 'retour'? 
-                // Dans l'image user: Colonne 13 "Retour", Colonne 14 "Territoire début" (dans son schema manuel précédent).
-                // Mais dans mon validator: `else if (header.includes('retour') || header.includes('territ')) { sqlRow.retour = val; }`
-                // C'est un peu flou. Mais suivons le mapping basique.
-
-                row.adresse_debut || '',            // 14: Adresse de début
-                row.adresse_fin || ''               // 15: Adresse de fin
+                row.id_employe_confirm || '',       // 7: Employé (Confirm)
+                row.vehicule || '',                 // 8: Véhicule
+                row.classe_vehicule_affecte || '',  // 9: Cl véh aff
+                row.autorisation || '',             // 10: Autoris
+                row.approuve || '',                 // 11: Approuvé
+                row.retour || '',                   // 12: Retour
+                row.adresse_debut || '',            // 13: Adresse de début
+                row.adresse_fin || ''               // 14: Adresse de fin
             ];
         });
 

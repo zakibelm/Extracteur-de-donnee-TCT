@@ -1,42 +1,38 @@
 import React, { useMemo } from 'react';
-import { TableData } from '../types';
+import { ExtractedData, Status } from '../types';
 import { Button } from './Button';
 import { Icons } from './Icons';
 
-interface ReportViewProps {
-    tableData: TableData | null;
+interface HistoryViewProps {
+    extractedData: ExtractedData[];
     onPrint: (headers: string[], rows: string[][]) => void;
     onDownloadPdf: (headers: string[], rows: string[][]) => void;
 }
 
-export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDownloadPdf }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ extractedData, onPrint, onDownloadPdf }) => {
 
-    // Détermination des colonnes et filtrage
-    const { headers, filteredRows, changementParIndex } = useMemo(() => {
-        if (!tableData) return { headers: [], filteredRows: [], changementParIndex: -1 };
+    // Flatten all data from all files into a single table
+    const { headers, rows } = useMemo(() => {
+        if (!extractedData || extractedData.length === 0) return { headers: [], rows: [] };
 
-        const changementParIdx = tableData.headers.indexOf('Changement par');
+        const successfulData = extractedData.filter(d => d.status === Status.Success && d.content);
 
-        // Si la colonne n'existe pas ou s'il n'y a pas de données
-        if (changementParIdx === -1) {
-            return { headers: tableData.headers, filteredRows: [], changementParIndex: -1 };
-        }
+        if (successfulData.length === 0) return { headers: [], rows: [] };
 
-        // Filtrer pour ne garder que les lignes où "Changement par" n'est pas vide
-        const rows = tableData.rows.filter(row => {
-            const val = row[changementParIdx];
-            return val && val.trim() !== '';
-        });
+        // Use headers from the first successful extraction
+        const masterHeaders = successfulData[0].content!.headers;
+
+        // Concatenate all rows
+        const allRows = successfulData.flatMap(d => d.content!.rows);
 
         return {
-            headers: tableData.headers,
-            filteredRows: rows,
-            changementParIndex: changementParIdx
+            headers: masterHeaders,
+            rows: allRows
         };
-    }, [tableData]);
+    }, [extractedData]);
 
-    if (!tableData) {
-        return <div className="p-8 text-center text-slate-400">Aucune donnée à afficher.</div>;
+    if (!extractedData || extractedData.length === 0) {
+        return <div className="p-8 text-center text-slate-400">Aucune extraction effectuée.</div>;
     }
 
     return (
@@ -46,20 +42,20 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                     <div>
                         <h2 className="text-lg font-bold text-emerald-400 flex items-center">
                             <Icons.ClipboardList className="mr-2 h-5 w-5" />
-                            Rapport des Modifications (24h)
+                            Historique des Données (Extraction Brute)
                         </h2>
                         <p className="text-sm text-slate-400">
-                            Affiche uniquement les modifications apportées aux tours.
+                            Affiche les données telles qu'elles ont été extraites, sans modification.
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button onClick={() => onDownloadPdf(headers, filteredRows)} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3" disabled={filteredRows.length === 0}>
+                        <Button onClick={() => onDownloadPdf(headers, rows)} className="bg-red-600 hover:bg-red-700 text-sm py-2 px-3" disabled={rows.length === 0}>
                             <Icons.FilePdf className="mr-2" /> PDF
                         </Button>
                         <Button
-                            onClick={() => onPrint(headers, filteredRows)}
+                            onClick={() => onPrint(headers, rows)}
                             className="bg-slate-500 hover:bg-slate-600 text-sm py-2 px-3"
-                            disabled={filteredRows.length === 0}
+                            disabled={rows.length === 0}
                         >
                             <Icons.Print className="mr-2" /> Imprimer
                         </Button>
@@ -80,23 +76,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredRows.length > 0 ? (
-                                filteredRows.map((row, rowIndex) => (
+                            {rows.length > 0 ? (
+                                rows.map((row, rowIndex) => (
                                     <tr key={rowIndex} className="border-t border-slate-700 hover:bg-slate-700/50 bg-slate-800/20">
-                                        {row.map((cell, cellIndex) => {
-                                            if (cellIndex === changementParIndex) {
-                                                return (
-                                                    <td key={cellIndex} className="p-2 text-sky-400 font-bold whitespace-nowrap bg-sky-900/10">
-                                                        {cell}
-                                                    </td>
-                                                );
-                                            }
-                                            return (
-                                                <td key={cellIndex} className="p-2 text-slate-300 whitespace-nowrap">
-                                                    {cell}
-                                                </td>
-                                            );
-                                        })}
+                                        {row.map((cell, cellIndex) => (
+                                            <td key={cellIndex} className="p-2 text-slate-300 whitespace-nowrap">
+                                                {cell}
+                                            </td>
+                                        ))}
                                     </tr>
                                 ))
                             ) : (
@@ -104,7 +91,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                                     <td colSpan={headers.length > 0 ? headers.length : 1} className="text-center p-12">
                                         <div className="flex flex-col items-center justify-center text-slate-500">
                                             <Icons.CheckCircle className="w-12 h-12 mb-3 text-slate-600" />
-                                            <p className="text-lg font-medium">Aucune modification enregistrée</p>
+                                            <p className="text-lg font-medium">Aucune donnée brute disponible</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -114,7 +101,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                 </div>
             </div>
             <div className="flex-shrink-0 p-2 bg-slate-800/50 border-t border-slate-700 text-right text-sm text-slate-400">
-                Total modifications : {filteredRows.length}
+                Total lignes : {rows.length}
             </div>
         </div>
     );
