@@ -59,6 +59,99 @@ export async function validateOpenRouterKey(key: string): Promise<boolean> {
 }
 
 /**
+ * Normalise les différents formats de réponse JSON de l'IA
+ */
+function normalizeAIResponse(data: any): AIResponse {
+    console.log('🔄 Normalisation du format JSON...', Object.keys(data));
+
+    // Format attendu : { phase: "execute", headers_detected: [...], data: [...] }
+    if (data.phase && data.data) {
+        console.log('✅ Format standard détecté');
+        return data as AIResponse;
+    }
+
+    // Format alternatif 1 : { tournees: [...] } ou { rows: [...] }
+    if (data.tournees || data.rows) {
+        console.log('🔄 Conversion du format alternatif (tournees/rows)');
+        const rawRows = data.tournees || data.rows;
+
+        const normalizedData: AIResponse = {
+            phase: 'execute',
+            headers_detected: TABLE_HEADERS,
+            total_headers: TABLE_HEADERS.length,
+            data: []
+        };
+
+        rawRows.forEach((row: any, index: number) => {
+            const cells: Array<{ column_header: string; value: string }> = [];
+
+            // Fonction helper pour récupérer la valeur depuis différentes clés possibles
+            const getValue = (keys: string[]) => {
+                for (const key of keys) {
+                    if (row[key] !== undefined) return String(row[key] || '');
+                }
+                return '';
+            };
+
+            // Mapper chaque colonne avec toutes les variantes possibles de noms de clés
+            cells.push({ column_header: 'Tournée', value: getValue(['tournee', 'Tournée']) });
+            cells.push({ column_header: 'Nom', value: getValue(['nom', 'Nom', 'nom_compagnie']) });
+            cells.push({ column_header: 'Déb tour', value: getValue(['deb_tour', 'debut_tour', 'Déb tour']) });
+            cells.push({ column_header: 'Fin tour', value: getValue(['fin_tour', 'Fin tour']) });
+            cells.push({ column_header: 'Cl véh', value: getValue(['cl_veh', 'classe_vehicule', 'Cl véh']) });
+            cells.push({ column_header: 'Employé', value: getValue(['employe', 'id_employe', 'Employé']) });
+            cells.push({ column_header: 'Nom de l\'employé', value: getValue(['nom_employe', 'nom_de_l_employe', 'Nom de l\'employé']) });
+            cells.push({ column_header: 'Employé (Confirm)', value: getValue(['employe_confirm', 'Employé (Confirm)']) });
+            cells.push({ column_header: 'Véhicule', value: getValue(['vehicule', 'Véhicule']) });
+            cells.push({ column_header: 'Cl véh aff', value: getValue(['cl_veh_aff', 'classe_vehicule_affecte', 'Cl véh aff']) });
+            cells.push({ column_header: 'Autoris', value: getValue(['autoris', 'autorisation', 'Autoris']) });
+            cells.push({ column_header: 'Approuvé', value: getValue(['approuve', 'Approuvé']) });
+            cells.push({ column_header: 'Retour', value: getValue(['retour', 'Retour']) });
+            cells.push({ column_header: 'Adresse de début', value: getValue(['adresse_debut', 'adresse_de_debut', 'Adresse de début']) });
+            cells.push({ column_header: 'Adresse de fin', value: getValue(['adresse_fin', 'adresse_de_fin', 'Adresse de fin']) });
+
+            normalizedData.data.push({
+                row_number: index + 1,
+                cells: cells
+            });
+        });
+
+        console.log(`✅ Normalisé ${normalizedData.data.length} lignes depuis format alternatif`);
+        return normalizedData;
+    }
+
+    // Format alternatif 2 : { headers: [...], rows: [[...]] }
+    if (data.headers && Array.isArray(data.rows)) {
+        console.log('🔄 Conversion du format headers/rows tableau');
+        const normalizedData: AIResponse = {
+            phase: 'execute',
+            headers_detected: data.headers,
+            total_headers: data.headers.length,
+            data: []
+        };
+
+        data.rows.forEach((row: string[], index: number) => {
+            const cells = row.map((value, colIndex) => ({
+                column_header: data.headers[colIndex] || `Colonne ${colIndex + 1}`,
+                value: String(value || '')
+            }));
+
+            normalizedData.data.push({
+                row_number: index + 1,
+                cells: cells
+            });
+        });
+
+        console.log(`✅ Normalisé ${normalizedData.data.length} lignes depuis format tableau`);
+        return normalizedData;
+    }
+
+    // Si aucun format reconnu, lever une erreur
+    console.error('❌ Format JSON non reconnu:', Object.keys(data));
+    throw new Error(`Format JSON non reconnu. Clés trouvées: ${Object.keys(data).join(', ')}. Le modèle IA doit retourner un format avec 'phase' et 'data', ou 'tournees', ou 'headers' et 'rows'.`);
+}
+
+/**
  * Extrait les données via OpenRouter API - MODE CELL-BY-CELL STRICT
  */
 export async function extractDataFromImage(
@@ -209,17 +302,28 @@ Retourne UNIQUEMENT le JSON.`;
             throw new Error('Réponse vide ou invalide de l\'IA');
         }
 
-        const jsonContent = result.choices[0].message.content;
-        console.log('📥 JSON reçu:', jsonContent.substring(0, 200) + '...');
+        let jsonContent = result.choices[0].message.content;
+        console.log('📥 Contenu brut reçu:', jsonContent.substring(0, 300) + '...');
+
+        // Extraire le JSON s'il y a du texte avant/après
+        const jsonMatch = jsonContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            jsonContent = jsonMatch[0];
+            console.log('✂️ JSON extrait:', jsonContent.substring(0, 200) + '...');
+        }
 
         // Parser le JSON
-        let aiData: AIResponse;
+        let aiData: any;
         try {
             aiData = JSON.parse(jsonContent);
         } catch (e) {
-            console.error("Erreur parsing JSON:", e);
-            throw new Error("L'IA n'a pas retourné un JSON valide.");
+            console.error("❌ Erreur parsing JSON:", e);
+            console.error("Contenu reçu:", jsonContent.substring(0, 500));
+            throw new Error("L'IA n'a pas retourné un JSON valide. Vérifiez la console pour plus de détails.");
         }
+
+        // Normaliser le format si l'IA a retourné un format différent
+        aiData = normalizeAIResponse(aiData);
 
         // Logger pour debug
         if (aiData.data && aiData.data.length > 0) {
