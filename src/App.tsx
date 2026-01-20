@@ -308,7 +308,7 @@ export const App: React.FC = () => {
         setTctGlobalStatus(Status.Idle);
     };
 
-    const handleTctGenerateResults = () => {
+    const handleTctGenerateResults = async () => {
         const unified = buildUnifiedTable(tctExtractedData);
         if (unified) {
             setTctUnifiedTable(unified);
@@ -317,6 +317,64 @@ export const App: React.FC = () => {
                 localStorage.setItem('edt_tct_unified_table', JSON.stringify(unified));
             } catch (e) {
                 console.warn("Stockage local saturé (TCT)", e);
+            }
+
+            // Sauvegarder dans n8n
+            if (currentUser) {
+                try {
+                    console.log('[TCT] Sauvegarde dans n8n...');
+
+                    // Préparer les données du document
+                    const documentData = {
+                        filename: tctFiles.map(f => f.name).join(', '),
+                        upload_date: new Date().toISOString(),
+                        status: 'success' as const,
+                        user_id: currentUser.numDome,
+                        extracted_count: unified.rows.length
+                    };
+
+                    // Préparer les données des tournées
+                    const tourneesData = unified.rows.map((row: string[]) => ({
+                        tournee: row[0] || '',
+                        nom: row[1] || '',
+                        deb_tour: row[2] || '',
+                        fin_tour: row[3] || '',
+                        cl_veh: row[4] || '',
+                        employe: row[5] || '',
+                        nom_employe: row[6] || '',
+                        employe_confirm: row[7] || '',
+                        vehicule: row[8] || '',
+                        cl_veh_aff: row[9] || '',
+                        autoris: row[10] || '',
+                        approuve: row[11] || '',
+                        retour: row[12] || '',
+                        adresse_debut: row[13] || '',
+                        adresse_fin: row[14] || ''
+                    }));
+
+                    // Appeler l'API pour sauvegarder dans n8n
+                    const response = await fetch('/api/save-to-n8n', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            document: documentData,
+                            tournees: tourneesData,
+                            user_id: currentUser.numDome
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        console.log('[TCT] Sauvegarde n8n réussie:', result.documentId);
+                    } else {
+                        console.warn('[TCT] Échec sauvegarde n8n:', await response.text());
+                    }
+                } catch (error) {
+                    console.error('[TCT] Erreur sauvegarde n8n:', error);
+                    // Ne pas bloquer l'utilisateur si n8n échoue
+                }
             }
         } else {
             setTctError("Aucune donnée valide à afficher.");

@@ -1,0 +1,165 @@
+{
+  "name": "TCTN - Save Extraction to Data Tables",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tct-upload-document",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Receive Extraction",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "tct-upload-document"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tct_documents",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "filename": "={{ $json.document.filename }}",
+            "file_url": "={{ $json.document.file_url || null }}",
+            "upload_date": "={{ $json.document.upload_date }}",
+            "status": "={{ $json.document.status }}",
+            "user_id": "={{ $json.user_id }}",
+            "extracted_count": "={{ $json.document.extracted_count }}"
+          }
+        },
+        "options": {
+          "queryBatching": "independently"
+        }
+      },
+      "id": "insert-document",
+      "name": "Insert Document",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "neon-db",
+          "name": "Neon PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO tct_tournees (document_id, tournee, nom, deb_tour, fin_tour, cl_veh, employe, nom_employe, employe_confirm, vehicule, cl_veh_aff, autoris, approuve, retour, adresse_debut, adresse_fin)\nVALUES\n{{ $json.tournees.map((t, i) => `({{ $('Insert Document').item.json.id }}, '${t.tournee}', '${t.nom}', '${t.deb_tour}', '${t.fin_tour}', '${t.cl_veh}', '${t.employe}', '${t.nom_employe}', '${t.employe_confirm}', '${t.vehicule}', '${t.cl_veh_aff}', '${t.autoris}', '${t.approuve}', '${t.retour}', '${t.adresse_debut}', '${t.adresse_fin}')`).join(',\\n') }}",
+        "options": {}
+      },
+      "id": "insert-tournees",
+      "name": "Insert Tournées",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 300],
+      "credentials": {
+        "postgres": {
+          "id": "neon-db",
+          "name": "Neon PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tct_history",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "document_id": "={{ $('Insert Document').item.json.id }}",
+            "action": "extraction_completed",
+            "status": "success",
+            "message": "={{ 'Document ' + $json.document.filename + ' traité avec ' + $json.tournees.length + ' tournées' }}",
+            "execution_time_ms": "={{ Date.now() - new Date($json.timestamp).getTime() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-history",
+      "name": "Log History",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [850, 300],
+      "credentials": {
+        "postgres": {
+          "id": "neon-db",
+          "name": "Neon PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"document_id\": $('Insert Document').item.json.id, \"tournees_saved\": $json.tournees.length } }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Extraction": {
+      "main": [[{
+        "node": "Insert Document",
+        "type": "main",
+        "index": 0
+      }]]
+    },
+    "Insert Document": {
+      "main": [[{
+        "node": "Insert Tournées",
+        "type": "main",
+        "index": 0
+      }]]
+    },
+    "Insert Tournées": {
+      "main": [[{
+        "node": "Log History",
+        "type": "main",
+        "index": 0
+      }]]
+    },
+    "Log History": {
+      "main": [[{
+        "node": "Webhook Response",
+        "type": "main",
+        "index": 0
+      }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-20T02:00:00.000Z",
+  "versionId": "1"
+}
