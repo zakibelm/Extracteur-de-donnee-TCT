@@ -253,7 +253,7 @@ CRITICAL RULES:
             });
         });
 
-        return { entries: rows, headers: headers, raw_text: initialRawText, metadata: (currentEntries as any).metadata };
+        return { rows: rows, headers: headers, entries: rows, raw_text: initialRawText, metadata: (currentEntries as any).metadata };
 
     } catch (error: any) {
         console.error("AI Error:", error);
