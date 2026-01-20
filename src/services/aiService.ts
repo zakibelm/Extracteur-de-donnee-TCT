@@ -35,10 +35,12 @@ export const TCT_TABLE_HEADERS = [
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function callAI(base64Image: string, mimeType: string, prompt: string, systemInstruction: string, documentType: string, temperature: number = 0.1): Promise<string> {
-    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+    // Récupérer la clé API depuis localStorage (paramètres de l'app)
+    const apiKey = localStorage.getItem('adt_settings_apikey') || import.meta.env.VITE_OPENROUTER_API_KEY;
+    const model = localStorage.getItem('adt_settings_model') || 'anthropic/claude-3.5-sonnet';
 
     if (!apiKey) {
-        throw new Error("Clé API manquante (VITE_OPENROUTER_API_KEY). Vérifiez votre configuration.");
+        throw new Error("Clé API manquante. Veuillez configurer votre clé API dans les Paramètres.");
     }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -50,7 +52,7 @@ async function callAI(base64Image: string, mimeType: string, prompt: string, sys
             "X-Title": "Extracteur TCT"
         },
         body: JSON.stringify({
-            "model": "anthropic/claude-3.5-sonnet", // Updated to Sonnet 3.5 as preferred
+            "model": model, // Utiliser le modèle configuré dans les paramètres
             "messages": [
                 {
                     "role": "system",
