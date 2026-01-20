@@ -171,24 +171,34 @@ CRITICAL RULES:
         const cleanText = initialRawText.replace(/```(csv|ma?rkdown)?/gi, '').replace(/```/g, '').trim();
         const lines = cleanText.split(/\r?\n/).filter(line => line.trim() !== '');
 
-        if (lines.length > 1) {
-            const separator = isOlymel ? '|' : ';';
+        if (lines.length > 0) {
+            // Détecter automatiquement le séparateur utilisé par l'IA
+            const firstLine = lines[0];
+            let separator = ';';
+            if (firstLine.includes('|')) separator = '|';
+            else if (firstLine.includes(',')) separator = ',';
+            else if (firstLine.includes(';')) separator = ';';
 
-            // Extract Headers from First Line
-            const detectedHeaders = lines[0].split(separator).map(h => h.trim().replace(/^"|"$/g, ''));
-            console.log("Detected Headers:", detectedHeaders);
+            console.log("Detected separator:", separator);
 
-            // Parse Rows
-            for (let i = 1; i < lines.length; i++) {
+            // Pour TCT, la première ligne est déjà une ligne de données, pas un header
+            // Utiliser les headers prédéfinis
+            const detectedHeaders = headers;
+            console.log("Using predefined headers:", detectedHeaders);
+
+            // Parse Rows (commencer à 0 car pas de ligne de header)
+            for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
                 const parts = line.split(separator).map(p => p.trim().replace(/^"|"$/g, ''));
 
-                // Basic validation
-                if (parts.length >= Math.max(2, detectedHeaders.length - 2)) {
+                // Basic validation - au moins 5 colonnes pour TCT
+                if (parts.length >= 5) {
                     const entry: any = {};
-                    detectedHeaders.forEach((h, index) => {
-                        entry[h] = parts[index] || "";
-                        entry[`_col_${index}`] = parts[index] || "";
+                    parts.forEach((value, index) => {
+                        if (detectedHeaders[index]) {
+                            entry[detectedHeaders[index]] = value;
+                        }
+                        entry[`_col_${index}`] = value;
                     });
                     currentEntries.push(entry);
                 }
