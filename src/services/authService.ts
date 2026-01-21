@@ -1,79 +1,162 @@
+import { supabase } from '../lib/supabaseClient';
 import { User } from '../types';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthResponse {
-    user?: any;
-    error?: string;
+    success: boolean;
+    user?: User | null;
     message?: string;
 }
 
+// Convertir l'utilisateur Supabase en User de l'application
+function toAppUser(supabaseUser: SupabaseUser): User {
+    return {
+        id: supabaseUser.id,
+        numDome: supabaseUser.user_metadata?.numDome || supabaseUser.id,
+        idEmploye: supabaseUser.user_metadata?.employeeId || '',
+        email: supabaseUser.email || '',
+        telephone: supabaseUser.user_metadata?.telephone || '',
+        role: supabaseUser.user_metadata?.role || 'driver',
+        isAdmin: supabaseUser.user_metadata?.role === 'admin'
+    };
+}
+
 export const authService = {
-    async login(employeeId: string, password: string): Promise<User> {
-        const response = await fetch('/api/auth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'login', employeeId, password })
-        });
+    // Connexion avec email et mot de passe
+    async login(email: string, password: string): Promise<User> {
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
 
-        const data: AuthResponse = await response.json();
+            if (error) throw error;
+            if (!data.user) throw new Error('Données utilisateur invalides');
 
-        if (!response.ok) {
-            throw new Error(data.error || 'Erreur de connexion');
+            const user = toAppUser(data.user);
+            console.log('[Auth] Connexion réussie:', user.email);
+            return user;
+        } catch (error: any) {
+            console.error('[Auth] Erreur connexion:', error);
+            throw new Error(error.message || 'Email ou mot de passe incorrect');
         }
-
-        if (!data.user) {
-            throw new Error('Données utilisateur invalides');
-        }
-
-        return {
-            id: data.user.id,
-            numDome: data.user.num_dome || '',
-            idEmploye: data.user.id_employe || '',
-            email: data.user.email,
-            telephone: data.user.telephone,
-            role: data.user.role,
-            isAdmin: data.user.role === 'admin'
-        };
     },
 
-    async signup(numDome: string, employeeId: string, email: string, password: string, accountType: 'admin' | 'driver', telephone: string): Promise<User> {
-        const response = await fetch('/api/auth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'signup',
-                numDome,
-                employeeId,
+    // Inscription avec email et mot de passe
+    async signup(
+        numDome: string,
+        employeeId: string,
+        email: string,
+        password: string,
+        accountType: 'admin' | 'driver',
+        telephone: string
+    ): Promise<User> {
+        try {
+            const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
-                accountType,
-                telephone
-            })
+                options: {
+                    data: {
+                        numDome,
+                        employeeId,
+                        telephone,
+                        role: accountType,
+                        name: email.split('@')[0]
+                    },
+                    emailRedirectTo: `${window.location.origin}/auth/callback`
+                }
+            });
+
+            if (error) throw error;
+            if (!data.user) throw new Error('Données utilisateur invalides après inscription');
+
+            const user = toAppUser(data.user);
+            console.log('[Auth] Inscription réussie:', user.email);
+            return user;
+        } catch (error: any) {
+            console.error('[Auth] Erreur inscription:', error);
+            throw new Error(error.message || 'Erreur lors de l\'inscription');
+        }
+    },
+
+    // Déconnexion
+    async logout(): Promise<void> {
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            console.log('[Auth] Déconnexion réussie');
+        } catch (error: any) {
+            console.error('[Auth] Erreur déconnexion:', error);
+            throw new Error(error.message || 'Erreur lors de la déconnexion');
+        }
+    },
+
+    // Réinitialisation du mot de passe
+    async resetPassword(email: string): Promise<AuthResponse> {
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/auth/reset-password`
+            });
+
+            if (error) throw error;
+
+            return {
+                success: true,
+                message: 'Un email de réinitialisation a été envoyé à votre adresse'
+            };
+        } catch (error: any) {
+            console.error('[Auth] Erreur réinitialisation:', error);
+            return {
+                success: false,
+                message: error.message || 'Erreur lors de l\'envoi de l\'email'
+            };
+        }
+    },
+
+    // Mettre à jour le mot de passe
+    async updatePassword(newPassword: string): Promise<AuthResponse> {
+        try {
+            const { error } = await supabase.auth.updateUser({
+                password: newPassword
+            });
+
+            if (error) throw error;
+
+            return {
+                success: true,
+                message: 'Mot de passe mis à jour avec succès'
+            };
+        } catch (error: any) {
+            console.error('[Auth] Erreur mise à jour mot de passe:', error);
+            return {
+                success: false,
+                message: error.message || 'Erreur lors de la mise à jour du mot de passe'
+            };
+        }
+    },
+
+    // Récupérer l'utilisateur actuel
+    async getCurrentUser(): Promise<User | null> {
+        try {
+            const { data: { user }, error } = await supabase.auth.getUser();
+
+            if (error) throw error;
+            if (!user) return null;
+
+            return toAppUser(user);
+        } catch (error) {
+            console.error('[Auth] Erreur récupération utilisateur:', error);
+            return null;
+        }
+    },
+
+    // Écouter les changements d'état d'authentification
+    onAuthStateChange(callback: (user: User | null) => void) {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            const user = session?.user ? toAppUser(session.user) : null;
+            callback(user);
         });
 
-        const data: AuthResponse = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || "Erreur d'inscription");
-        }
-
-        // Usually signup returns the user, or requires immediate login. 
-        // Our API returns { user: ... }
-        if (!data.user) {
-            throw new Error('Données utilisateur invalides après inscription');
-        }
-
-        // Since the API might return mixed casing depending on how strict we are, 
-        // let's ensure we map the response from the DB (if data.user has snake_case keys) 
-        // or adhere to the input values if data.user is sparse.
-
-        return {
-            id: data.user.id,
-            numDome: data.user.num_dome || numDome,
-            idEmploye: data.user.id_employe || employeeId,
-            email: data.user.email || email,
-            telephone: data.user.telephone || telephone,
-            role: data.user.role,
-            isAdmin: data.user.role === 'admin'
-        };
+        return subscription;
     }
 };

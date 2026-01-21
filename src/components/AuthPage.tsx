@@ -8,7 +8,7 @@ interface AuthPageProps {
 }
 
 type AccountType = 'admin' | 'driver';
-type AuthMode = 'login' | 'signup';
+type AuthMode = 'login' | 'signup' | 'reset';
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   console.log('🔐 AuthPage is rendering...');
@@ -16,7 +16,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   const [accountType, setAccountType] = useState<AccountType>('admin');
 
   // Login fields
-  const [loginEmployeeId, setLoginEmployeeId] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [password, setPassword] = useState('');
 
   // Signup fields
@@ -26,21 +26,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   const [signupPassword, setSignupPassword] = useState('');
   const [telephone, setTelephone] = useState('');
 
+  // Reset password field
+  const [resetEmail, setResetEmail] = useState('');
+
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
 
     if (mode === 'login') {
-      if (!loginEmployeeId.trim() || !password.trim()) {
+      if (!loginEmail.trim() || !password.trim()) {
         setError('Veuillez remplir tous les champs obligatoires');
         return;
       }
-    } else {
+    } else if (mode === 'signup') {
       if (!numDome.trim() || !employeeId.trim() || !email.trim() || !signupPassword.trim() || !telephone.trim()) {
         setError('Veuillez remplir tous les champs obligatoires');
+        return;
+      }
+    } else if (mode === 'reset') {
+      if (!resetEmail.trim()) {
+        setError('Veuillez entrer votre adresse email');
         return;
       }
     }
@@ -48,11 +58,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     setIsLoading(true);
 
     try {
-      let user: User;
       if (mode === 'login') {
-        user = await authService.login(loginEmployeeId.trim(), password.trim());
-      } else {
-        user = await authService.signup(
+        const user = await authService.login(loginEmail.trim(), password.trim());
+        localStorage.setItem('edt_user', JSON.stringify(user));
+        onLogin(user);
+      } else if (mode === 'signup') {
+        const user = await authService.signup(
           numDome.trim(),
           employeeId.trim(),
           email.trim(),
@@ -60,12 +71,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
           accountType,
           telephone.trim()
         );
+        setSuccess('Inscription réussie ! Vérifiez votre email pour confirmer votre compte.');
+        setTimeout(() => {
+          setMode('login');
+          setSuccess(null);
+        }, 3000);
+      } else if (mode === 'reset') {
+        const result = await authService.resetPassword(resetEmail.trim());
+        if (result.success) {
+          setSuccess(result.message || 'Un email de réinitialisation a été envoyé.');
+          setTimeout(() => {
+            setMode('login');
+            setSuccess(null);
+          }, 3000);
+        } else {
+          setError(result.message || 'Erreur lors de l\'envoi de l\'email');
+        }
       }
-
-      // Success
-      localStorage.setItem('edt_user', JSON.stringify(user));
-      onLogin(user);
-
     } catch (err: any) {
       setError(err.message || 'Une erreur est survenue');
     } finally {
@@ -121,6 +143,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
               </div>
             )}
 
+            {/* Success Message */}
+            {success && (
+              <div className="bg-emerald-500/10 border border-emerald-500/50 rounded-lg p-3 flex items-start gap-2 text-emerald-200 text-xs animate-in fade-in slide-in-from-top-2">
+                <CheckCircle size={14} className="mt-0.5 flex-shrink-0" />
+                <span>{success}</span>
+              </div>
+            )}
+
             {/* Account Type Selection - Only for Signup */}
             {mode === 'signup' && (
               <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
@@ -165,17 +195,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             {/* LOGIN FORM */}
             {mode === 'login' && (
               <div className="space-y-3 pt-2">
-                {/* ID Employé */}
+                {/* Email */}
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <CreditCard size={18} className="text-slate-400 group-focus-within:text-emerald-400 transition-colors" />
+                    <Mail size={18} className="text-slate-400 group-focus-within:text-emerald-400 transition-colors" />
                   </div>
                   <input
-                    type="text"
-                    value={loginEmployeeId}
-                    onChange={(e) => setLoginEmployeeId(e.target.value)}
-                    placeholder="ID Employé"
-                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm font-mono"
+                    type="email"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="Adresse email"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm"
                     required
                   />
                 </div>
@@ -193,6 +223,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm"
                     required
                   />
+                </div>
+
+                {/* Forgot Password Link */}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => { setMode('reset'); setError(null); setSuccess(null); }}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                  >
+                    Mot de passe oublié ?
+                  </button>
                 </div>
               </div>
             )}
@@ -278,17 +319,55 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
               </div>
             )}
 
+            {/* PASSWORD RESET FORM */}
+            {mode === 'reset' && (
+              <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-2">
+                <p className="text-sm text-slate-400 mb-4">
+                  Entrez votre adresse email pour recevoir un lien de réinitialisation de mot de passe.
+                </p>
+
+                {/* Email */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail size={18} className="text-slate-400 group-focus-within:text-amber-400 transition-colors" />
+                  </div>
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="Adresse email"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all text-sm"
+                    required
+                  />
+                </div>
+
+                {/* Back to Login Link */}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => { setMode('login'); setError(null); setSuccess(null); }}
+                    className="text-xs text-slate-400 hover:text-slate-300 transition-colors"
+                  >
+                    Retour à la connexion
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="pt-2">
               <button
                 type="submit"
                 disabled={isLoading}
-                className={`w-full py-2.5 text-sm font-bold uppercase tracking-wide text-white rounded-lg shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''} ${mode === 'login'
-                  ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-900/20'
-                  : 'bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 shadow-cyan-900/20'
-                  }`}
+                className={`w-full py-2.5 text-sm font-bold uppercase tracking-wide text-white rounded-lg shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''} ${
+                  mode === 'login'
+                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-900/20'
+                    : mode === 'signup'
+                    ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 shadow-cyan-900/20'
+                    : 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 shadow-amber-900/20'
+                }`}
               >
                 {isLoading && <Loader size={16} className="animate-spin" />}
-                {mode === 'login' ? 'Se connecter' : "Créer un compte"}
+                {mode === 'login' ? 'Se connecter' : mode === 'signup' ? "Créer un compte" : "Envoyer le lien"}
               </button>
               <p className="text-center text-[10px] text-slate-600 mt-3">
                 En continuant, vous acceptez les conditions d'utilisation de Taxi Coop Terrebonne.

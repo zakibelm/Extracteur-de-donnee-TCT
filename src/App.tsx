@@ -133,10 +133,54 @@ export const App: React.FC = () => {
 
     // Auth State
     const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [authLoading, setAuthLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     // Section active (TCT ou Olymel ou Settings)
     const [activeSection, setActiveSection] = useState<'tct' | 'olymel' | 'settings'>('tct');
+
+    // ========== AUTH INITIALIZATION ==========
+    // Écouter les changements d'authentification Supabase au démarrage
+    useEffect(() => {
+        let isMounted = true;
+
+        const initializeAuth = async () => {
+            try {
+                // Importer le service d'authentification
+                const { authService } = await import('./services/authService');
+
+                // Récupérer l'utilisateur actuel si connecté
+                const user = await authService.getCurrentUser();
+                if (isMounted) {
+                    setCurrentUser(user);
+                    setAuthLoading(false);
+                }
+
+                // Écouter les changements d'état d'authentification
+                const subscription = authService.onAuthStateChange((user) => {
+                    if (isMounted) {
+                        setCurrentUser(user);
+                        console.log('[Auth] État changé:', user ? user.email : 'Non connecté');
+                    }
+                });
+
+                return () => {
+                    subscription.unsubscribe();
+                };
+            } catch (error) {
+                console.error('[Auth] Erreur initialisation:', error);
+                if (isMounted) {
+                    setAuthLoading(false);
+                }
+            }
+        };
+
+        initializeAuth();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     // Accordion State (Hoisted from Sidebar for persistence)
     const [isTctOpen, setIsTctOpen] = useState(true);
@@ -191,9 +235,15 @@ export const App: React.FC = () => {
         setCurrentUser(user);
     };
 
-    const handleLogout = () => {
-        setCurrentUser(null);
-        // Optionnel : réinitialiser tout
+    const handleLogout = async () => {
+        try {
+            const { authService } = await import('./services/authService');
+            await authService.logout();
+            setCurrentUser(null);
+            console.log('[Auth] Déconnexion réussie');
+        } catch (error) {
+            console.error('[Auth] Erreur déconnexion:', error);
+        }
     };
 
     // ========== HANDLERS TCT ==========
