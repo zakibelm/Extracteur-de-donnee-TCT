@@ -1,0 +1,158 @@
+{
+  "name": "TCTN - Save Extraction Data Claude",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tct-upload-document",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Webhook - Receive Extraction",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "tct-upload-document"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log des données reçues\nconsole.log('[TCT Webhook] Données reçues:', $input.item.json);\n\n// Extraire et valider les données\nconst inputData = $input.item.json;\n\nif (!inputData.document || !inputData.tournees || !inputData.user_id) {\n  throw new Error('Missing required fields: document, tournees, or user_id');\n}\n\nconst document = inputData.document;\nconst tournees = inputData.tournees;\nconst userId = inputData.user_id;\n\nconsole.log(`[TCT Webhook] Document: ${document.filename}, Tournées: ${tournees.length}, User: ${userId}`);\n\n// Retourner les données formatées pour PostgreSQL\nreturn {\n  json: {\n    // Document data\n    filename: document.filename,\n    file_url: document.file_url || null,\n    upload_date: document.upload_date,\n    status: document.status,\n    user_id: userId,\n    extracted_count: document.extracted_count,\n    // Tournées array\n    tournees: tournees,\n    // Metadata\n    timestamp: inputData.timestamp || new Date().toISOString(),\n    received_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Parse and Validate Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simuler l'insertion du document (retourner un ID fictif)\n// IMPORTANT: Remplacer ce node par un vrai INSERT PostgreSQL\n\nconst documentId = Math.floor(Math.random() * 10000) + 1;\n\nconsole.log(`[TCT Webhook] Document ID simulé: ${documentId}`);\n\nreturn {\n  json: {\n    ...($input.item.json),\n    document_id: documentId,\n    inserted_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "Simulate Insert Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "notes": "⚠️ REMPLACER PAR: PostgreSQL INSERT INTO tct_documents"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simuler l'insertion des tournées\n// IMPORTANT: Remplacer ce node par un vrai INSERT PostgreSQL\n\nconst documentId = $input.item.json.document_id;\nconst tournees = $input.item.json.tournees;\n\nconsole.log(`[TCT Webhook] Insertion de ${tournees.length} tournées pour document ${documentId}`);\n\n// Préparer les tournées avec document_id\nconst tourneesWithDocId = tournees.map((t, index) => ({\n  document_id: documentId,\n  tournee: t.tournee || '',\n  nom: t.nom || '',\n  deb_tour: t.deb_tour || '',\n  fin_tour: t.fin_tour || '',\n  cl_veh: t.cl_veh || '',\n  employe: t.employe || '',\n  nom_employe: t.nom_employe || '',\n  employe_confirm: t.employe_confirm || '',\n  vehicule: t.vehicule || '',\n  cl_veh_aff: t.cl_veh_aff || '',\n  autoris: t.autoris || '',\n  approuve: t.approuve || '',\n  retour: t.retour || '',\n  adresse_debut: t.adresse_debut || '',\n  adresse_fin: t.adresse_fin || '',\n  row_number: index + 1\n}));\n\nconsole.log('[TCT Webhook] Tournées prêtes pour insertion');\n\nreturn {\n  json: {\n    document_id: documentId,\n    filename: $input.item.json.filename,\n    tournees_inserted: tourneesWithDocId.length,\n    tournees_data: tourneesWithDocId,\n    timestamp: $input.item.json.timestamp\n  }\n};"
+      },
+      "id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+      "name": "Simulate Insert Tournees",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "notes": "⚠️ REMPLACER PAR: PostgreSQL INSERT INTO tct_tournees (bulk insert)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log l'événement dans l'historique\n// IMPORTANT: Remplacer ce node par un vrai INSERT PostgreSQL\n\nconst documentId = $input.item.json.document_id;\nconst tourneesCount = $input.item.json.tournees_inserted;\nconst executionTime = Date.now() - new Date($input.item.json.timestamp).getTime();\n\nconsole.log(`[TCT Webhook] Historique: Document ${documentId} traité en ${executionTime}ms`);\n\nreturn {\n  json: {\n    document_id: documentId,\n    action: 'extraction_saved',\n    status: 'success',\n    message: `Document ${$input.item.json.filename} traité avec ${tourneesCount} tournées`,\n    execution_time_ms: executionTime,\n    created_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
+      "name": "Log to History",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ],
+      "notes": "⚠️ REMPLACER PAR: PostgreSQL INSERT INTO tct_history"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  \"success\": true,\n  \"document_id\": $json.document_id,\n  \"tournees_saved\": $('Simulate Insert Tournees').item.json.tournees_inserted,\n  \"message\": \"Extraction sauvegardée avec succès\",\n  \"execution_time_ms\": $json.execution_time_ms,\n  \"timestamp\": $json.created_at\n} }}",
+        "options": {}
+      },
+      "id": "f6a7b8c9-d0e1-2345-f012-456789012345",
+      "name": "Webhook Response - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Extraction": {
+      "main": [
+        [
+          {
+            "node": "Parse and Validate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse and Validate Data": {
+      "main": [
+        [
+          {
+            "node": "Simulate Insert Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate Insert Document": {
+      "main": [
+        [
+          {
+            "node": "Simulate Insert Tournees",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate Insert Tournees": {
+      "main": [
+        [
+          {
+            "node": "Log to History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to History": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-20T02:30:00.000Z",
+  "versionId": "1"
+}
