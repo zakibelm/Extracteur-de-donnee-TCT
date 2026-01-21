@@ -319,10 +319,13 @@ export const App: React.FC = () => {
                 console.warn("Stockage local saturé (TCT)", e);
             }
 
-            // Sauvegarder dans n8n
+            // Sauvegarder dans Supabase
             if (currentUser) {
                 try {
-                    console.log('[TCT] Sauvegarde dans n8n...');
+                    console.log('[TCT] Sauvegarde dans Supabase...');
+
+                    // Importer le service Supabase
+                    const { saveExtractionToSupabase } = await import('./services/supabaseService');
 
                     // Préparer les données du document
                     const documentData = {
@@ -352,28 +355,21 @@ export const App: React.FC = () => {
                         adresse_fin: row[14] || ''
                     }));
 
-                    // Appeler l'API pour sauvegarder dans n8n
-                    const response = await fetch('/api/save-to-n8n', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            document: documentData,
-                            tournees: tourneesData,
-                            user_id: currentUser.numDome
-                        })
+                    // Sauvegarder dans Supabase
+                    const result = await saveExtractionToSupabase({
+                        document: documentData,
+                        tournees: tourneesData,
+                        user_id: currentUser.numDome
                     });
 
-                    if (response.ok) {
-                        const result = await response.json();
-                        console.log('[TCT] Sauvegarde n8n réussie:', result.documentId);
-                    } else {
-                        console.warn('[TCT] Échec sauvegarde n8n:', await response.text());
-                    }
+                    console.log('[TCT] Sauvegarde Supabase réussie:', {
+                        documentId: result.documentId,
+                        tourneesCount: result.tourneesCount,
+                        executionTime: result.executionTime + 'ms'
+                    });
                 } catch (error) {
-                    console.error('[TCT] Erreur sauvegarde n8n:', error);
-                    // Ne pas bloquer l'utilisateur si n8n échoue
+                    console.error('[TCT] Erreur sauvegarde Supabase:', error);
+                    // Ne pas bloquer l'utilisateur si Supabase échoue
                 }
             }
         } else {
