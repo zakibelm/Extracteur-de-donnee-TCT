@@ -1,0 +1,98 @@
+{
+  "name": "TCTN - 7. Get Historique",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "tctn-get-historique",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-get-historique",
+      "name": "Webhook - Get Historique",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "tctn-get-historique"
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "returnAll": true,
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REMPLACER_PAR_ID_TABLE_HISTORIQUE",
+          "cachedResultName": "historique_modifications"
+        }
+      },
+      "id": "datatable-get-historique",
+      "name": "DataTable - Get Historique",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Trier les modifications du plus récent au plus ancien\nconst items = $input.all();\n\nconst sorted = items.sort((a, b) => {\n  const dateA = new Date(a.json.date_modification || 0);\n  const dateB = new Date(b.json.date_modification || 0);\n  return dateB.getTime() - dateA.getTime();\n});\n\nreturn sorted;"
+      },
+      "id": "code-sort",
+      "name": "Code - Trier par Date DESC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-historique",
+      "name": "Respond - Historique",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Get Historique": {
+      "main": [
+        [
+          {
+            "node": "DataTable - Get Historique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DataTable - Get Historique": {
+      "main": [
+        [
+          {
+            "node": "Code - Trier par Date DESC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Trier par Date DESC": {
+      "main": [
+        [
+          {
+            "node": "Respond - Historique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [],
+  "pinData": {}
+}

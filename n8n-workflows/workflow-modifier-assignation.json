@@ -1,0 +1,173 @@
+{
+  "name": "TCTN - 6. Modifier Assignation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "PUT",
+        "path": "tctn-modifier-assignation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-modifier",
+      "name": "Webhook - Modifier Assignation",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "tctn-modifier-assignation"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validation et préparation des données\nconst payload = $input.item.json;\n\nif (!payload.id || !payload.nouvelle_valeur || !payload.modifie_par) {\n  throw new Error('Champs requis: id, nouvelle_valeur, modifie_par');\n}\n\nreturn {\n  id: payload.id,\n  tournee: payload.tournee || '',\n  employe: payload.employe || '',\n  ancienne_valeur: payload.ancienne_valeur || '',\n  nouvelle_valeur: payload.nouvelle_valeur,\n  modifie_par: payload.modifie_par,\n  date_modification: payload.date_modification || new Date().toISOString()\n};"
+      },
+      "id": "code-validation",
+      "name": "Code - Validation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REMPLACER_PAR_ID_TABLE_DOCUMENT_FINAL",
+          "cachedResultName": "document_final"
+        },
+        "matchingColumns": ["id"],
+        "fieldsToUpdate": {
+          "fields": [
+            {
+              "column": "changement",
+              "value": "={{ $json.nouvelle_valeur }}"
+            },
+            {
+              "column": "changement_par",
+              "value": "={{ $json.modifie_par }}"
+            },
+            {
+              "column": "updated_at",
+              "value": "={{ $json.date_modification }}"
+            }
+          ]
+        }
+      },
+      "id": "datatable-update",
+      "name": "DataTable - Update Document Final",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REMPLACER_PAR_ID_TABLE_HISTORIQUE",
+          "cachedResultName": "historique_modifications"
+        },
+        "fieldsToInsert": {
+          "fields": [
+            {
+              "column": "document_final_id",
+              "value": "={{ $('Code - Validation').item.json.id }}"
+            },
+            {
+              "column": "tournee",
+              "value": "={{ $('Code - Validation').item.json.tournee }}"
+            },
+            {
+              "column": "employe",
+              "value": "={{ $('Code - Validation').item.json.employe }}"
+            },
+            {
+              "column": "ancienne_valeur",
+              "value": "={{ $('Code - Validation').item.json.ancienne_valeur }}"
+            },
+            {
+              "column": "nouvelle_valeur",
+              "value": "={{ $('Code - Validation').item.json.nouvelle_valeur }}"
+            },
+            {
+              "column": "modifie_par",
+              "value": "={{ $('Code - Validation').item.json.modifie_par }}"
+            },
+            {
+              "column": "date_modification",
+              "value": "={{ $('Code - Validation').item.json.date_modification }}"
+            }
+          ]
+        }
+      },
+      "id": "datatable-insert-historique",
+      "name": "DataTable - Insert Historique",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, message: 'Modification enregistrée', id: $('Code - Validation').item.json.id } }}"
+      },
+      "id": "respond-success",
+      "name": "Respond - Succès",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Modifier Assignation": {
+      "main": [
+        [
+          {
+            "node": "Code - Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Validation": {
+      "main": [
+        [
+          {
+            "node": "DataTable - Update Document Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DataTable - Update Document Final": {
+      "main": [
+        [
+          {
+            "node": "DataTable - Insert Historique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DataTable - Insert Historique": {
+      "main": [
+        [
+          {
+            "node": "Respond - Succès",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [],
+  "pinData": {}
+}

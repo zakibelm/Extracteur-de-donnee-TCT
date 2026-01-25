@@ -1,0 +1,77 @@
+{
+  "name": "TCTN - 5. Get Document Final",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "tctn-get-document-final",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-get-doc-final",
+      "name": "Webhook - Get Document Final",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "tctn-get-document-final"
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "returnAll": true,
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REMPLACER_PAR_ID_TABLE_DOCUMENT_FINAL",
+          "cachedResultName": "document_final"
+        }
+      },
+      "id": "datatable-get-doc-final",
+      "name": "DataTable - Get Document Final",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-doc-final",
+      "name": "Respond - Document Final",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Get Document Final": {
+      "main": [
+        [
+          {
+            "node": "DataTable - Get Document Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DataTable - Get Document Final": {
+      "main": [
+        [
+          {
+            "node": "Respond - Document Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [],
+  "pinData": {}
+}

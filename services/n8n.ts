@@ -4,19 +4,30 @@ import { User } from '../components/AuthPage';
 
 const CONFIG_KEY = 'adt_n8n_config';
 
-// Webhooks par défaut fournis
-export const DEFAULT_LOGIN_WEBHOOK = 'https://n8n.srv679767.hstgr.cloud/webhook-test/tctn-login';
-export const DEFAULT_REGISTER_WEBHOOK = 'https://n8n.srv679767.hstgr.cloud/webhook-test/tctn-register';
-export const DEFAULT_GET_TOURNEES_WEBHOOK = 'https://n8n.srv679767.hstgr.cloud/webhook-test/tctn-get-tournees';
-export const DEFAULT_SYNC_TOURNEES_WEBHOOK = 'https://n8n.srv679767.hstgr.cloud/webhook-test/tctn-upload-document-final';
-export const DEFAULT_CHANGE_REQUEST_WEBHOOK = 'https://n8n.srv679767.hstgr.cloud/webhook-test/tctn-demande-changement';
+// Webhooks par défaut - Production URLs
+const N8N_BASE_URL = 'https://n8n.srv679767.hstgr.cloud/webhook';
+
+export const DEFAULT_LOGIN_WEBHOOK = `${N8N_BASE_URL}/tctn-login`;
+export const DEFAULT_REGISTER_WEBHOOK = `${N8N_BASE_URL}/tctn-register`;
+export const DEFAULT_GET_TOURNEES_WEBHOOK = `${N8N_BASE_URL}/tctn-get-tournees`;
+export const DEFAULT_SYNC_TOURNEES_WEBHOOK = `${N8N_BASE_URL}/tctn-upload-document-final`;
+export const DEFAULT_CHANGE_REQUEST_WEBHOOK = `${N8N_BASE_URL}/tctn-demande-changement`;
+
+// Nouveaux webhooks pour le flux document_final et historique
+export const DEFAULT_GET_DOCUMENT_FINAL_WEBHOOK = `${N8N_BASE_URL}/tctn-get-document-final`;
+export const DEFAULT_MODIFIER_ASSIGNATION_WEBHOOK = `${N8N_BASE_URL}/tctn-modifier-assignation`;
+export const DEFAULT_GET_HISTORIQUE_WEBHOOK = `${N8N_BASE_URL}/tctn-get-historique`;
 
 interface N8nConfig {
     usersWebhook: string;       // GET: Liste utilisateurs
     registerWebhook: string;    // POST: Création compte
-    getTourneesWebhook: string; // GET: Récupération des tournées
+    getTourneesWebhook: string; // GET: Récupération des tournées (données brutes)
     syncTourneesWebhook: string;// POST: Synchronisation/Sauvegarde des tournées
     changeRequestWebhook: string;// POST: Log/Notification d'un changement unitaire
+    // Nouveaux endpoints pour le flux 3 tableaux
+    getDocumentFinalWebhook: string;    // GET: Récupération du document final (copie modifiable)
+    modifierAssignationWebhook: string; // PUT: Modifier une assignation dans document_final
+    getHistoriqueWebhook: string;       // GET: Récupération de l'historique des modifications
 }
 
 export const getN8nConfig = (): N8nConfig | null => {
@@ -29,7 +40,10 @@ export const getN8nConfig = (): N8nConfig | null => {
                 registerWebhook: parsed.registerWebhook || DEFAULT_REGISTER_WEBHOOK,
                 getTourneesWebhook: parsed.getTourneesWebhook || DEFAULT_GET_TOURNEES_WEBHOOK,
                 syncTourneesWebhook: parsed.syncTourneesWebhook || DEFAULT_SYNC_TOURNEES_WEBHOOK,
-                changeRequestWebhook: parsed.changeRequestWebhook || DEFAULT_CHANGE_REQUEST_WEBHOOK
+                changeRequestWebhook: parsed.changeRequestWebhook || DEFAULT_CHANGE_REQUEST_WEBHOOK,
+                getDocumentFinalWebhook: parsed.getDocumentFinalWebhook || DEFAULT_GET_DOCUMENT_FINAL_WEBHOOK,
+                modifierAssignationWebhook: parsed.modifierAssignationWebhook || DEFAULT_MODIFIER_ASSIGNATION_WEBHOOK,
+                getHistoriqueWebhook: parsed.getHistoriqueWebhook || DEFAULT_GET_HISTORIQUE_WEBHOOK
             };
         }
         return null;
@@ -228,7 +242,7 @@ export const sendChangeRequest = async (changeData: {
 }): Promise<void> => {
     const config = getN8nConfig();
     const url = config?.changeRequestWebhook || DEFAULT_CHANGE_REQUEST_WEBHOOK;
-    
+
     if (!url) return;
 
     await apiCall(url, 'POST', {
@@ -236,4 +250,114 @@ export const sendChangeRequest = async (changeData: {
         timestamp: new Date().toISOString(),
         ...changeData
     });
+};
+
+// --- DOCUMENT FINAL (Copie modifiable des tournées) ---
+
+export interface DocumentFinalRow {
+    id: string;
+    tournee: string;
+    heure_debut: string;
+    heure_fin: string;
+    Compagnie: string;
+    classification: string;
+    emp_numero: string;
+    emp_nom: string;
+    vehicule: string;
+    type_vehicule: string;
+    autoris: boolean;
+    approuve: boolean;
+    retour: boolean;
+    adress_debut: string;
+    adress_fin: string;
+    changement: string;
+    changement_par: string | null;
+    user_session: string | null;
+    updated_at: string;
+    tournees_id: string;
+}
+
+/**
+ * Récupère le document final (copie modifiable des tournées)
+ */
+export const fetchDocumentFinal = async (): Promise<DocumentFinalRow[]> => {
+    const config = getN8nConfig();
+    const url = config?.getDocumentFinalWebhook || DEFAULT_GET_DOCUMENT_FINAL_WEBHOOK;
+
+    if (!url) return [];
+
+    try {
+        const data = await apiCall(url, 'GET');
+        return Array.isArray(data) ? data : (data.data || data.rows || []);
+    } catch (e) {
+        console.warn("Impossible de récupérer le document final", e);
+        return [];
+    }
+};
+
+/**
+ * Modifie une assignation dans le document final
+ * Met à jour la ligne ET enregistre dans l'historique
+ */
+export const modifierAssignation = async (modification: {
+    id: string;                  // ID de la ligne dans document_final
+    tournee: string;             // Référence tournée
+    employe: string;             // Employé concerné
+    ancienne_valeur: string;     // Valeur avant modification
+    nouvelle_valeur: string;     // Nouvelle valeur
+    modifie_par: string;         // Utilisateur qui modifie
+}): Promise<{ success: boolean; message?: string }> => {
+    const config = getN8nConfig();
+    const url = config?.modifierAssignationWebhook || DEFAULT_MODIFIER_ASSIGNATION_WEBHOOK;
+
+    if (!url) {
+        return { success: false, message: "Webhook non configuré" };
+    }
+
+    try {
+        const result = await apiCall(url, 'PUT', {
+            ...modification,
+            date_modification: new Date().toISOString()
+        });
+        return { success: true, ...result };
+    } catch (e: any) {
+        console.error("Erreur lors de la modification", e);
+        return { success: false, message: e.message };
+    }
+};
+
+// --- HISTORIQUE DES MODIFICATIONS ---
+
+export interface HistoriqueModification {
+    id: string;
+    document_final_id: string;
+    tournee: string;
+    employe: string;
+    ancienne_valeur: string;
+    nouvelle_valeur: string;
+    modifie_par: string;
+    date_modification: string;
+}
+
+/**
+ * Récupère l'historique des modifications (trié du plus récent au plus ancien)
+ */
+export const fetchHistoriqueModifications = async (): Promise<HistoriqueModification[]> => {
+    const config = getN8nConfig();
+    const url = config?.getHistoriqueWebhook || DEFAULT_GET_HISTORIQUE_WEBHOOK;
+
+    if (!url) return [];
+
+    try {
+        const data = await apiCall(url, 'GET');
+        const historique = Array.isArray(data) ? data : (data.data || data.rows || []);
+
+        // Trier par date_modification décroissante (plus récent en premier)
+        return historique.sort((a: HistoriqueModification, b: HistoriqueModification) => {
+            return new Date(b.date_modification).getTime() - new Date(a.date_modification).getTime();
+        });
+    } catch (e) {
+        console.warn("Impossible de récupérer l'historique des modifications", e);
+        return [];
+    }
 };
