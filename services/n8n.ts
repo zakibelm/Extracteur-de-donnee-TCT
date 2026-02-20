@@ -17,6 +17,7 @@ export const DEFAULT_CHANGE_REQUEST_WEBHOOK = `${N8N_BASE_URL}/tctn-demande-chan
 export const DEFAULT_GET_DOCUMENT_FINAL_WEBHOOK = `${N8N_BASE_URL}/tctn-get-document-final`;
 export const DEFAULT_MODIFIER_ASSIGNATION_WEBHOOK = `${N8N_BASE_URL}/tctn-modifier-assignation`;
 export const DEFAULT_GET_HISTORIQUE_WEBHOOK = `${N8N_BASE_URL}/tctn-get-historique`;
+export const DEFAULT_EXTRACT_WEBHOOK = `${N8N_BASE_URL}/tct-extract`;
 
 interface N8nConfig {
     usersWebhook: string;       // GET: Liste utilisateurs
@@ -28,6 +29,7 @@ interface N8nConfig {
     getDocumentFinalWebhook: string;    // GET: Récupération du document final (copie modifiable)
     modifierAssignationWebhook: string; // PUT: Modifier une assignation dans document_final
     getHistoriqueWebhook: string;       // GET: Récupération de l'historique des modifications
+    extractWebhook: string;             // POST: Extraction IA via Backend n8n
 }
 
 export const getN8nConfig = (): N8nConfig | null => {
@@ -43,7 +45,8 @@ export const getN8nConfig = (): N8nConfig | null => {
                 changeRequestWebhook: parsed.changeRequestWebhook || DEFAULT_CHANGE_REQUEST_WEBHOOK,
                 getDocumentFinalWebhook: parsed.getDocumentFinalWebhook || DEFAULT_GET_DOCUMENT_FINAL_WEBHOOK,
                 modifierAssignationWebhook: parsed.modifierAssignationWebhook || DEFAULT_MODIFIER_ASSIGNATION_WEBHOOK,
-                getHistoriqueWebhook: parsed.getHistoriqueWebhook || DEFAULT_GET_HISTORIQUE_WEBHOOK
+                getHistoriqueWebhook: parsed.getHistoriqueWebhook || DEFAULT_GET_HISTORIQUE_WEBHOOK,
+                extractWebhook: parsed.extractWebhook || DEFAULT_EXTRACT_WEBHOOK
             };
         }
         return null;
@@ -361,3 +364,33 @@ export const fetchHistoriqueModifications = async (): Promise<HistoriqueModifica
         return [];
     }
 };
+
+/**
+ * Envoie une image au backend n8n pour extraction IA complète
+ * centralise l'IA et la sauvegarde en un seul appel.
+ */
+export const extractDocumentViaN8n = async (
+    base64Image: string, 
+    userDome: string, 
+    section: 'tct' | 'olymel'
+): Promise<TableData> => {
+    const config = getN8nConfig();
+    const url = config?.extractWebhook || DEFAULT_EXTRACT_WEBHOOK;
+
+    console.info(`[N8n] Déclenchement de l'extraction intelligente via ${url}`);
+
+    const result = await apiCall(url, 'POST', {
+        image: base64Image,
+        user_dome: userDome,
+        section: section,
+        timestamp: new Date().toISOString()
+    });
+
+    if (result.headers && result.rows) {
+        return result as TableData;
+    }
+
+    // Si le résultat est brut, on essaie de le reformater comme fetchTournees
+    throw new Error("Format de réponse n8n invalide pour l'extraction.");
+};
+

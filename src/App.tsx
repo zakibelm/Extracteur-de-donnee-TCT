@@ -10,7 +10,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { ExtractedData, Status, TableData, User } from './types';
-import { extractDataFromImage } from './services/aiService';
+import { extractDocumentViaN8n } from './services/n8n';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { AuthPage } from './components/AuthPage';
@@ -328,7 +328,8 @@ export const App: React.FC = () => {
                     return newArr;
                 });
 
-                const content = await extractDataFromImage(pFile.base64, pFile.mimeType, 'tct');
+                // APPEL AU BACKEND N8N AU LIEU DE AISERVICE
+                const content = await extractDocumentViaN8n(pFile.base64, currentUser?.numDome || 'inconnu', 'tct');
                 const status = content.headers[0] === 'Erreur' ? Status.Error : Status.Success;
 
                 setTctExtractedData(prev => {
