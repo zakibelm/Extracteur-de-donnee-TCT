@@ -6,7 +6,16 @@ export enum Status {
   Error = 'error',
 }
 
+export interface DocumentMetadata {
+  schedule_date?: string;
+  tournees_attribuees?: number;
+  tournees_simultanees?: number;
+  heure_de_pointe?: string;
+  tournees_en_retard?: number;
+}
+
 export interface TableData {
+  metadata?: DocumentMetadata;
   headers: string[];
   rows: string[][];
 }

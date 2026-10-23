@@ -1,3 +1,4 @@
+import { DocumentMetadata } from '../types';
 import { supabase, TctDocument, TctTournee, TctHistory } from '../lib/supabaseClient';
 
 export interface SaveExtractionPayload {
@@ -16,17 +17,17 @@ export interface SaveExtractionPayload {
         cl_veh: string;
         employe: string;
         nom_employe: string;
-        employe_confirm: string;
         vehicule: string;
         cl_veh_aff: string;
-        autoris: string;
+        stationnement: string;
         approuve: string;
-        retour: string;
+        territoire_debut: string;
         adresse_debut: string;
         adresse_fin: string;
     }>;
     user_id: string;
     request_id: string;
+    metadata?: DocumentMetadata;
 }
 
 export async function saveExtractionToSupabase(payload: SaveExtractionPayload) {
@@ -40,6 +41,7 @@ export async function saveExtractionToSupabase(payload: SaveExtractionPayload) {
         p_filename: payload.document.filename,
         p_upload_date: payload.document.upload_date,
         p_tournees: payload.tournees,
+        p_metadata: payload.metadata || {},
     });
     if (error) throw new Error('Sauvegarde impossible. Vérifiez la configuration et réessayez.');
     return data as { success: boolean; documentId: number; tourneesCount: number; executionTime: number };

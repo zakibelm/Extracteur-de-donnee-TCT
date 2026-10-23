@@ -1,3 +1,4 @@
+import { PROJECT_URL, PROJECT_PUBLISHABLE_KEY } from '../src/config/supabase';
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest } from '@vercel/node';
 
@@ -13,8 +14,8 @@ export function requireAdminRole(user: { app_metadata?: Record<string, unknown> 
 export async function requireAdmin(req: VercelRequest) {
     const authorization = req.headers.authorization;
     if (!authorization?.startsWith('Bearer ')) throw new HttpError(401, 'Authentification requise.');
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_ANON_KEY;
+    const url = process.env.SUPABASE_URL || PROJECT_URL;
+    const key = process.env.SUPABASE_ANON_KEY || PROJECT_PUBLISHABLE_KEY;
     if (!url || !key) throw new HttpError(503, 'Authentification serveur non configurée.');
     const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: { user }, error } = await client.auth.getUser(authorization.slice(7));

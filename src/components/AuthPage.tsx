@@ -159,10 +159,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     <Mail size={18} className="text-slate-400 group-focus-within:text-emerald-400 transition-colors" />
                   </div>
                   <input
-                    type="email"
+                    type="text"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="Adresse email"
+                    placeholder="Courriel ou identifiant (203)"
                     className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-sm"
                     required
                   />

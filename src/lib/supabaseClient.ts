@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://nmmmlsgvhupzdunclcvj.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbW1sc2d2aHVwemR1bmNsY3ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc0MTcxNTEsImV4cCI6MjA1Mjk5MzE1MX0.VYqW_-_jfhm5tNjGDJjEE71LGOM0LEixr2WqfKDUuoE';
+import { PROJECT_URL, PROJECT_PUBLISHABLE_KEY } from '../config/supabase';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || PROJECT_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || PROJECT_PUBLISHABLE_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -26,12 +28,11 @@ export interface TctTournee {
     cl_veh: string;
     employe: string;
     nom_employe: string;
-    employe_confirm: string;
     vehicule: string;
     cl_veh_aff: string;
-    autoris: string;
+    stationnement: string;
     approuve: string;
-    retour: string;
+    territoire_debut: string;
     adresse_debut: string;
     adresse_fin: string;
     created_at?: string;

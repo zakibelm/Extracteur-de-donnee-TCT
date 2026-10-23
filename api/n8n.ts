@@ -1,3 +1,4 @@
+import { TCT_EXTRACTION_INSTRUCTIONS } from '../server/extractionPrompt';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin, HttpError } from '../server/auth';
 import { validateTable, TCT_HEADERS } from '../src/utils/table';
@@ -23,7 +24,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': secret },
             body: JSON.stringify({ image, section, mimeType, user_id: user.id,
-                user_dome: user.user_metadata?.numDome || '', timestamp: new Date().toISOString() }),
+                user_dome: user.user_metadata?.numDome || '', timestamp: new Date().toISOString(),
+                ...(section === 'tct' ? { extraction_instructions: TCT_EXTRACTION_INSTRUCTIONS } : {}) }),
             signal: AbortSignal.timeout(110_000),
             redirect: 'error',
         });

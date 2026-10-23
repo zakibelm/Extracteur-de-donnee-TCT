@@ -25,7 +25,7 @@ npm run check
 ```
 
 Ce contrôle exécute TypeScript, les tests et le build de production. Les tests SQL
-utilisent PostgreSQL embarqué (PGlite) : alignement des 15 champs, droits, absence de
+utilisent PostgreSQL embarqué (PGlite) : alignement des 14 champs, droits, absence de
 doublons lors d'une nouvelle tentative et annulation complète en cas d'erreur.
 Les tests ne font aucun appel aux services de production.
 
@@ -61,3 +61,11 @@ Voir [DEPLOYMENT.md](DEPLOYMENT.md) **avant mise en production** : migration SQL
 attribution des rôles, variables Vercel, protection du webhook n8n et test réel.
 L'exactitude OCR n'est pas mesurée par les tests du code. Un jeu de documents annotés
 reste nécessaire avant d'annoncer un pourcentage de précision.
+
+## Modèle TCT réel (14 colonnes)
+
+Voir `TCT_SOURCE_SCHEMA.md` pour le mapping établi à partir du modèle fourni.
+La base dédiée est `extracteur-tct` en région Canada. La configuration publique par
+défaut se trouve dans `src/config/supabase.ts`; les variables d'environnement restent prioritaires.
+Le compte demandé accepte `203` ou son courriel. Le mot de passe est vérifié par
+Supabase Auth et n'est jamais inscrit dans le dépôt.

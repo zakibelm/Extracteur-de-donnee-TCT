@@ -36,7 +36,7 @@ Les anciens webhooks publics encore actifs doivent être désactivés ou protég
 indépendamment : un changement Git ne peut pas les sécuriser sur le serveur n8n.
 
 Le workflow doit recevoir `{image, mimeType, section, user_id, user_dome, timestamp}`
-et retourner `{headers: string[], rows: string[][]}`. Pour TCT, les 15 en-têtes doivent
+et retourner `{headers: string[], rows: string[][]}`. Pour TCT, les 14 en-têtes doivent
 correspondre exactement à `TCT_HEADERS` dans `src/utils/table.ts`. Il ne doit pas
 sauvegarder lui-même une deuxième copie des tournées : l'application utilise la RPC.
 Prévoir un budget de temps suffisant pour le workflow et la fonction Vercel selon
@@ -61,3 +61,17 @@ Ne jamais mettre de clé `service_role` dans les variables `VITE_*`.
 
 Les services distants et la précision OCR doivent être validés avec les vrais
 comptes/documents; les tests automatisés utilisent uniquement des données synthétiques.
+
+## Base dédiée et schéma du modèle réel
+
+Projet : `csypcxkpipafxrjaborn` (`extracteur-tct`, Canada).
+Nouvelle base vide : exécuter `supabase/bootstrap.sql`, `supabase/security.sql`,
+puis `supabase/migrations/20261023_tct_source_14_columns.sql`.
+Base existante déjà stabilisée v1 : appliquer seulement la migration additive
+`20261023_tct_source_14_columns.sql`. Elle conserve les colonnes et données historiques.
+La configuration publique par défaut vise la nouvelle base; retirer ou actualiser
+les anciennes variables Vercel Supabase si elles visent un projet précédent.
+Aucun mot de passe utilisateur ne doit être ajouté à Git ou aux variables VITE_*.
+
+Contrôle sécurité Supabase : activer la protection contre les mots de passe compromis
+si disponible sur le plan. Voir https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection.

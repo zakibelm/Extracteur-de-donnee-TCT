@@ -7,7 +7,7 @@ let db: PGlite;
 const userId = '11111111-1111-4111-8111-111111111111';
 const requestId = '22222222-2222-4222-8222-222222222222';
 const fields = ['tournee','nom','deb_tour','fin_tour','cl_veh','employe','nom_employe',
-    'employe_confirm','vehicule','cl_veh_aff','autoris','approuve','retour','adresse_debut','adresse_fin'];
+    'vehicule','cl_veh_aff','stationnement','approuve','territoire_debut','adresse_debut','adresse_fin'];
 const row = Object.fromEntries(fields.map(key => [key, key]));
 
 beforeAll(async () => {
@@ -20,11 +20,12 @@ beforeAll(async () => {
         CREATE FUNCTION auth.jwt() RETURNS JSONB LANGUAGE sql STABLE AS
         $$ SELECT coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
         CREATE FUNCTION auth.role() RETURNS TEXT LANGUAGE sql STABLE AS $$ SELECT current_user::text $$;`);
-    await db.exec(readFileSync('supabase/migration-complete.sql', 'utf8'));
+    await db.exec(readFileSync('supabase/bootstrap.sql', 'utf8'));
     await db.exec(`GRANT USAGE ON SCHEMA auth, public TO anon, authenticated;
         GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
         GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;`);
-    await db.exec(readFileSync('supabase/migrations/20261023_stabilize_extractions.sql', 'utf8'));
+    await db.exec(readFileSync('supabase/security.sql', 'utf8'));
+    await db.exec(readFileSync('supabase/migrations/20261023_tct_source_14_columns.sql', 'utf8'));
     await db.query(`INSERT INTO auth.users VALUES ($1, 'test@example.test', '{"role":"admin"}')`, [userId]);
     await db.exec(`SET ROLE authenticated;`);
     await db.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [userId]);
@@ -39,7 +40,7 @@ it('creates a driver profile even when signup metadata asks for admin', async ()
     const result = await db.query<{ role: string; is_admin: boolean }>('SELECT role, is_admin FROM users WHERE id=$1', [userId]);
     expect(result.rows[0]).toEqual({ role: 'driver', is_admin: false });
 });
-it('saves the document, all 15 fields and audit history atomically without duplicate retries', async () => {
+it('saves the document, all 14 fields and audit history atomically without duplicate retries', async () => {
     const first = await save();
     const second = await save();
     expect(second.rows).toEqual(first.rows);

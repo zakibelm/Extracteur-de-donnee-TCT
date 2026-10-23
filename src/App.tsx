@@ -11,7 +11,7 @@ import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { ExtractedData, Status, TableData, User } from './types';
 import { mapConcurrent } from './utils/concurrency';
-import { buildUnifiedTable, validateTable, TCT_HEADERS } from './utils/table';
+import { buildUnifiedTable, validateTable, TCT_HEADERS, toTctRecords } from './utils/table';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { extractDocumentViaN8n } from './services/n8n';
 import { jsPDF } from "jspdf";
@@ -383,30 +383,15 @@ export const App: React.FC = () => {
                         };
 
                         // Préparer les données des tournées
-                        const tourneesData = unified.rows.map((row: string[]) => ({
-                            tournee: row[0] || '',
-                            nom: row[1] || '',
-                            deb_tour: row[2] || '',
-                            fin_tour: row[3] || '',
-                            cl_veh: row[4] || '',
-                            employe: row[5] || '',
-                            nom_employe: row[6] || '',
-                            employe_confirm: row[7] || '',
-                            vehicule: row[8] || '',
-                            cl_veh_aff: row[9] || '',
-                            autoris: row[10] || '',
-                            approuve: row[11] || '',
-                            retour: row[12] || '',
-                            adresse_debut: row[13] || '',
-                            adresse_fin: row[14] || ''
-                        }));
+                        const tourneesData = toTctRecords(unified);
 
                         // Sauvegarder dans Supabase
                         const result = await saveExtractionToSupabase({
                             document: documentData,
                             tournees: tourneesData,
                             user_id: currentUser.id,
-                            request_id: saveRequestId.current
+                            request_id: saveRequestId.current,
+                            metadata: unified.metadata
                         });
 
                         console.log('[TCT] Sauvegarde Supabase réussie:', {

@@ -1,3 +1,4 @@
+import { resolveLoginIdentifier } from '../config/supabase';
 import { supabase } from '../lib/supabaseClient';
 import { User } from '../types';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
@@ -26,7 +27,7 @@ export const authService = {
     async login(email: string, password: string): Promise<User> {
         try {
             const { data, error } = await supabase.auth.signInWithPassword({
-                email,
+                email: resolveLoginIdentifier(email),
                 password
             });
 
