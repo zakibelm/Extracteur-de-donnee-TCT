@@ -1,3 +1,4 @@
+vi.mock('./visionModels', () => ({ requireVisionModel: vi.fn().mockResolvedValue({ supportedParameters: ['temperature', 'response_format'], maxCompletionTokens: 12000 }) }));
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 vi.mock('./auth', async importOriginal => {
@@ -72,6 +73,6 @@ it('reports insufficient credits without exposing provider details or keys', asy
     vi.mocked(fetch).mockResolvedValue(new Response('private provider detail', { status: 402 }));
     const res = await run();
     expect(res.status).toHaveBeenCalledWith(502);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('crédits') }));
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringMatching(/crédits/i) }));
     expect(JSON.stringify(res.json.mock.calls)).not.toContain('test-key');
 });
