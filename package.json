@@ -10,7 +10,8 @@
     "api:dev": "node --env-file=.env.local --import tsx local-server.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run check:server && npm run build",
+    "check:server": "tsc -p tsconfig.server.json && node scripts/check-server-runtime.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

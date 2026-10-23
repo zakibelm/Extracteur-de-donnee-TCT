@@ -1,7 +1,7 @@
-import { TCT_EXTRACTION_INSTRUCTIONS } from '../server/extractionPrompt';
+import { TCT_EXTRACTION_INSTRUCTIONS } from '../server/extractionPrompt.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAdmin, HttpError } from '../server/auth';
-import { validateTable, TCT_HEADERS } from '../src/utils/table';
+import { requireAdmin, HttpError } from '../server/auth.js';
+import { validateTable, TCT_HEADERS } from '../src/utils/table.js';
 
 export const config = { api: { bodyParser: { sizeLimit: '4mb' } } };
 
