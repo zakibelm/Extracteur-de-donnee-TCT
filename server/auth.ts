@@ -1,4 +1,4 @@
-import { PROJECT_URL, PROJECT_PUBLISHABLE_KEY } from '../src/config/supabase';
+import { PROJECT_URL, PROJECT_PUBLISHABLE_KEY } from '../src/config/supabase.js';
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest } from '@vercel/node';
 

@@ -1,4 +1,4 @@
-import { requireAdmin, HttpError } from '../server/auth';
+import { requireAdmin, HttpError } from '../server/auth.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
 

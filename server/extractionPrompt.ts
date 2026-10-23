@@ -1,4 +1,4 @@
-import { TCT_HEADERS } from '../src/utils/table';
+import { TCT_HEADERS } from '../src/utils/table.js';
 
 export const TCT_EXTRACTION_INSTRUCTIONS = `Extrais uniquement les lignes visibles du tableau TCT.
 Ce modèle possède exactement 14 colonnes, dans cet ordre : ${JSON.stringify(TCT_HEADERS)}.

@@ -1,4 +1,4 @@
-import { ExtractedData, Status, TableData } from '../types';
+import { ExtractedData, Status, TableData } from '../types.js';
 
 export function validateTable(input: unknown, expectedHeaders?: readonly string[]): TableData {
     const table = input as TableData;
