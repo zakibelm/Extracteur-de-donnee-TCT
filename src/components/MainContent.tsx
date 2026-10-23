@@ -6,7 +6,7 @@ import { Icons } from './Icons';
 import { ExtractedData, Status, TableData } from '../types';
 import { FinalDocumentView } from './FinalDocumentView';
 import { CalendarView } from './CalendarView';
-import { User } from './AuthPage';
+import { User } from '../types';
 import { ReportView } from './ReportView';
 import { SettingsPage } from './SettingsPage';
 
@@ -97,7 +97,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                         </div>
                     )}
 
-                    {tctError && <p className="text-red-400 my-4 text-center p-4 bg-red-900/20 border border-red-500/30 rounded-md">{tctError}</p>}
 
                     <h2 className="text-base font-bold text-center mb-4 text-slate-300">Extraction TCT par Fichier</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
@@ -137,7 +136,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                         </div>
                     )}
 
-                    {olymelError && <p className="text-red-400 my-4 text-center p-4 bg-red-900/20 border border-red-500/30 rounded-md">{olymelError}</p>}
 
                     <h2 className="text-base font-bold text-center mb-4 text-slate-300">Extraction Olymel par Fichier</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
@@ -264,6 +262,12 @@ export const MainContent: React.FC<MainContentProps> = ({
                         )}
                     </nav>
                 </div>
+                )}
+
+                {(activeSection === 'tct' ? tctError : activeSection === 'olymel' ? olymelError : null) && (
+                    <p role="alert" className="text-red-400 mb-3 p-3 bg-red-900/20 border border-red-500/30 rounded-md">
+                        {activeSection === 'tct' ? tctError : olymelError}
+                    </p>
                 )}
 
                 {/* Contenu selon section et vue active - Scrollable */}

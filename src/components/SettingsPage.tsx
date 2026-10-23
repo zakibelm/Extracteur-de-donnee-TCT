@@ -1,3 +1,4 @@
+import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { Icons } from './Icons';
 import { Button } from './Button';
@@ -11,7 +12,8 @@ export const SettingsPage: React.FC = () => {
     const [showSuccess, setShowSuccess] = useState(false);
 
     useEffect(() => {
-        const storedApiKey = localStorage.getItem('adt_settings_apikey') || '';
+        const storedApiKey = '';
+        localStorage.removeItem('adt_settings_apikey');
         const storedModel = localStorage.getItem('adt_settings_model') || 'google/gemini-2.0-flash-exp:free';
         const storedTctPrompt = localStorage.getItem('adt_settings_prompt_tct') || '';
         const storedOlymelPrompt = localStorage.getItem('adt_settings_prompt_olymel') || '';
@@ -38,11 +40,14 @@ export const SettingsPage: React.FC = () => {
         setTestMessage('');
 
         try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('Session expirée.');
             const response = await fetch('/api/extract', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-API-Key': apiKey,
+                    Authorization: `Bearer ${session.access_token}`,
                     'X-Model': selectedModel
                 },
                 body: JSON.stringify({
@@ -67,7 +72,7 @@ export const SettingsPage: React.FC = () => {
     };
 
     const handleSave = () => {
-        localStorage.setItem('adt_settings_apikey', apiKey);
+        // The key stays in memory for this optional connectivity test only.
         localStorage.setItem('adt_settings_model', selectedModel);
         localStorage.setItem('adt_settings_prompt_tct', tctPrompt);
         localStorage.setItem('adt_settings_prompt_olymel', olymelPrompt);

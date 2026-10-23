@@ -217,8 +217,8 @@ export function validateOrThrow<T>(
 
   if (!result.success) {
     // Compatible avec Zod v4
-    const errorDetails = result.error?.errors
-      ? result.error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+    const errorDetails = result.error?.issues
+      ? result.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
       : String(result.error);
 
     throw new Error(errorMessage || `Validation failed: ${errorDetails}`);

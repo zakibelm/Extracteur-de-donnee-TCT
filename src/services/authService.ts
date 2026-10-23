@@ -1,3 +1,4 @@
+import { resolveLoginIdentifier } from '../config/supabase';
 import { supabase } from '../lib/supabaseClient';
 import { User } from '../types';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
@@ -9,15 +10,15 @@ interface AuthResponse {
 }
 
 // Convertir l'utilisateur Supabase en User de l'application
-function toAppUser(supabaseUser: SupabaseUser): User {
+export function toAppUser(supabaseUser: SupabaseUser): User {
     return {
         id: supabaseUser.id,
         numDome: supabaseUser.user_metadata?.numDome || supabaseUser.id,
         idEmploye: supabaseUser.user_metadata?.employeeId || '',
         email: supabaseUser.email || '',
         telephone: supabaseUser.user_metadata?.telephone || '',
-        role: supabaseUser.user_metadata?.role || 'driver',
-        isAdmin: supabaseUser.user_metadata?.role === 'admin'
+        role: supabaseUser.app_metadata?.role || 'driver',
+        isAdmin: supabaseUser.app_metadata?.role === 'admin'
     };
 }
 
@@ -26,7 +27,7 @@ export const authService = {
     async login(email: string, password: string): Promise<User> {
         try {
             const { data, error } = await supabase.auth.signInWithPassword({
-                email,
+                email: resolveLoginIdentifier(email),
                 password
             });
 
@@ -60,7 +61,7 @@ export const authService = {
                         numDome,
                         employeeId,
                         telephone,
-                        role: accountType,
+                        role: 'driver',
                         name: email.split('@')[0]
                     },
                     emailRedirectTo: `${window.location.origin}/auth/callback`

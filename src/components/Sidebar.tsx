@@ -4,7 +4,7 @@ import { FileUploader } from './FileUploader';
 import { Button } from './Button';
 import { Icons } from './Icons';
 import { Status } from '../types';
-import { User } from './AuthPage';
+import { User } from '../types';
 
 interface SidebarProps {
     isSidebarOpen: boolean;

@@ -7,7 +7,7 @@ import {
     List, ChevronRight, ChevronDown, AlertCircle, CheckSquare, X,
     FileText, Printer, ScanLine, CalendarDays, Columns, GripVertical
 } from 'lucide-react';
-import { User as UserType } from './AuthPage';
+import { User as UserType } from '../types';
 
 interface CalendarViewProps {
     tableData: TableData | null;

@@ -246,7 +246,7 @@ export class CircuitBreaker {
       if (this.failureCount >= this.failureThreshold) {
         this.state = 'open';
         console.error(
-          `🔴 Circuit breaker: ${this.state === 'half-open' ? 'HALF-OPEN' : 'CLOSED'} -> OPEN ` +
+          `🔴 Circuit breaker: échecs -> OPEN ` +
           `(${this.failureCount} échecs)`
         );
       }
