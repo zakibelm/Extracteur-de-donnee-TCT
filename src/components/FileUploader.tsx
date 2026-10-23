@@ -1,122 +1,41 @@
-
-import React, { useCallback, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Icons } from './Icons';
+import { normalizeUploads, UPLOAD_ACCEPT } from '../utils/uploads';
 
 interface FileUploaderProps {
-  onFileChange: (files: File[]) => void;
-  id?: string;
-  showFileList?: boolean; // Nouvelle prop pour contrôler l'affichage de la liste
+    onFileChange: (files: File[]) => void;
+    id?: string;
+    showFileList?: boolean;
 }
 
 export const FileUploader: React.FC<FileUploaderProps> = ({ onFileChange, id = 'dropzone-file', showFileList = true }) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const [fileNames, setFileNames] = useState<string[]>([]);
-  const [clickCount, setClickCount] = useState(0);
-  const [changeCount, setChangeCount] = useState(0);
-  const [lastAction, setLastAction] = useState<string>('En attente...');
-
-  const acceptedFileTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf'];
-
-  const filterFiles = (files: File[]): File[] => {
-    return files.filter(file => acceptedFileTypes.includes(file.type));
-  };
-
-  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    setLastAction('📦 Drop détecté!');
-    const droppedFiles: File[] = Array.from(e.dataTransfer.files);
-    const validFiles = filterFiles(droppedFiles);
-    if (validFiles.length > 0) {
-      setFileNames(validFiles.map((f: File) => f.name));
-      onFileChange(validFiles);
-      setChangeCount(prev => prev + 1);
-      setLastAction(`✅ ${validFiles.length} fichier(s) uploadé(s) via DROP`);
-    }
-  }, [onFileChange]);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles: File[] = Array.from(e.target.files || []);
-    setChangeCount(prev => prev + 1);
-    setLastAction(`⚡ onChange DÉCLENCHÉ! ${selectedFiles.length} fichiers bruts`);
-
-    console.log(`📁 [FileUploader id="${id}"] File input changed. Raw files:`, selectedFiles.length);
-    const validFiles = filterFiles(selectedFiles);
-    console.log(`✅ [FileUploader id="${id}"] Valid files after filter:`, validFiles.length, validFiles.map(f => f.name));
-
-    if (validFiles.length > 0) {
-      setFileNames(validFiles.map((f: File) => f.name));
-      onFileChange(validFiles);
-      setLastAction(`✅ ${validFiles.length} fichier(s) VALIDE(S) envoyé(s) au parent`);
-      console.log(`🚀 [FileUploader id="${id}"] Calling onFileChange with`, validFiles.length, 'files');
-    } else {
-      setLastAction(`❌ Aucun fichier valide (types acceptés: PNG, JPG, PDF)`);
-    }
-
-    // Réinitialise pour permettre la sélection du même fichier à nouveau
-    e.target.value = '';
-  };
-
-  const handleClick = () => {
-    setClickCount(prev => prev + 1);
-    setLastAction(`👆 Zone CLIQUÉE! (click #${clickCount + 1})`);
-    document.getElementById(id)?.click();
-  };
-
-  return (
-    <div>
-
-      <div
-        onClick={handleClick}
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        className={`flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer transition-colors duration-300
-          ${isDragging ? 'border-emerald-400 bg-slate-700' : 'border-slate-600 bg-slate-800 hover:bg-slate-700'}`}
-      >
-        <Icons.UploadCloud className={`w-10 h-10 mb-3 ${isDragging ? 'text-emerald-400' : 'text-slate-400'}`} />
-        <p className="mb-2 text-sm text-slate-400">
-          <span className="font-semibold text-emerald-400">Cliquez pour télécharger</span> ou glissez-déposez
-        </p>
-        <p className="text-xs text-slate-500">Images (PNG, JPG) ou PDF</p>
-      </div>
-
-      <input
-        id={id}
-        type="file"
-        className="hidden"
-        multiple
-        accept={acceptedFileTypes.join(',')}
-        onChange={handleFileSelect}
-      />
-
-      {showFileList && fileNames.length > 0 && (
-        <div className="mt-4 text-sm text-slate-300">
-          <h4 className="font-semibold">Fichiers sélectionnés:</h4>
-          <ul className="list-disc list-inside pl-2 mt-1 max-h-24 overflow-y-auto">
-            {fileNames.map((name, index) => <li key={index}>{name}</li>)}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
+    const input = useRef<HTMLInputElement>(null);
+    const [dragging, setDragging] = useState(false);
+    const [names, setNames] = useState<string[]>([]);
+    const [errors, setErrors] = useState<string[]>([]);
+    const select = (files: File[]) => {
+        if (!files.length) return; // Cancelling preserves the previous selection.
+        const result = normalizeUploads(files);
+        setErrors(result.errors);
+        if (result.files.length) {
+            setNames(result.files.map(file => file.name));
+            onFileChange(result.files);
+        }
+    };
+    return <div>
+        <button type="button" onClick={() => input.current?.click()}
+            onDragOver={event => { event.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={event => { event.preventDefault(); setDragging(false); select(Array.from(event.dataTransfer.files)); }}
+            className={`flex flex-col items-center justify-center w-full min-h-40 p-4 border-2 border-dashed rounded-lg ${dragging ? 'border-emerald-400 bg-slate-700' : 'border-slate-600 bg-slate-800 hover:bg-slate-700'}`}>
+            <Icons.UploadCloud className="w-9 h-9 mb-3 text-emerald-400" />
+            <span className="text-sm font-semibold text-emerald-400">Choisir un document</span>
+            <span className="text-xs text-slate-400 mt-2">PNG, JPG, WEBP ou PDF — 50 Mo maximum</span>
+        </button>
+        <input ref={input} id={id} aria-label="Document à analyser" type="file" className="hidden" multiple
+            accept={UPLOAD_ACCEPT} onChange={event => { select(Array.from(event.currentTarget.files || [])); event.currentTarget.value = ''; }} />
+        {errors.length > 0 && <p role="alert" className="text-xs text-red-300 mt-2 whitespace-pre-line">{errors.join('\n')}</p>}
+        {showFileList && names.length > 0 && <ul className="text-xs text-slate-300 mt-2">{names.map((name, i) => <li key={i}>{name}</li>)}</ul>}
+        {names.length > 0 && <p role="status" className="text-xs text-emerald-300 mt-2">Document prêt. Cliquez sur « Lancer » pour analyser.</p>}
+    </div>;
 };

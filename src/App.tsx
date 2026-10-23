@@ -1,3 +1,5 @@
+import { readFileAsBase64 } from './utils/uploads';
+import { setExtractionKey } from './services/extractionSettings';
 
 /**
  * <summary>
@@ -105,6 +107,46 @@ const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64'
     return successfulPages;
 };
 
+    class GlobalErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
+        constructor(props: { children: React.ReactNode }) {
+            super(props);
+            this.state = { hasError: false, error: null };
+        }
+
+        static getDerivedStateFromError(error: Error) {
+            return { hasError: true, error };
+        }
+
+        componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+            console.error("Uncaught Error:", error, errorInfo);
+        }
+
+        render() {
+            if (this.state.hasError) {
+                return (
+                    <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-red-500 p-8">
+                        <h1 className="text-3xl font-bold mb-4">Une erreur critique est survenue</h1>
+                        <div className="bg-slate-800 p-6 rounded-lg border border-red-500/50 max-w-2xl w-full">
+                            <p className="text-xl text-white mb-4">Message d'erreur :</p>
+                            <pre className="text-sm bg-black/50 p-4 rounded overflow-auto whitespace-pre-wrap font-mono">
+                                {this.state.error?.toString()}
+                            </pre>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="mt-6 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                            >
+                                Recharger l'application
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return this.props.children;
+        }
+    }
+
+
 export const App: React.FC = () => {
     console.log('🚀 App component is rendering...');
 
@@ -194,6 +236,7 @@ export const App: React.FC = () => {
         localStorage.removeItem('edt_olymel_unified_table');
         localStorage.removeItem('edt_user');
         localStorage.removeItem('adt_settings_apikey');
+        setExtractionKey('');
         setTctUnifiedTable(null);
         setOlymelUnifiedTable(null);
         setTctExtractedData([]);
@@ -262,25 +305,11 @@ export const App: React.FC = () => {
                 if (file.type === 'application/pdf') {
                     const pageImages = await processPdf(file);
                     for (const page of pageImages) {
-                        const base64 = await new Promise<string>((resolve) => {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                                const result = reader.result as string;
-                                resolve(result.split(',')[1]);
-                            };
-                            reader.readAsDataURL(page.file);
-                        });
+                        const base64 = await readFileAsBase64(page.file);
                         processableFiles.push({ ...page, base64, mimeType: 'image/jpeg' });
                     }
                 } else {
-                    const base64 = await new Promise<string>((resolve) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            const result = reader.result as string;
-                            resolve(result.split(',')[1]);
-                        };
-                        reader.readAsDataURL(file);
-                    });
+                    const base64 = await readFileAsBase64(file);
                     processableFiles.push({
                         id: `${file.name}-${Date.now()}`,
                         file,
@@ -340,7 +369,7 @@ export const App: React.FC = () => {
                     if (run !== tctRun.current) return prev;
                     const newArr = [...prev];
                     if (newArr[index]) {
-                        newArr[index].content = { headers: ['Erreur'], rows: [['Echec extraction']] };
+                        newArr[index].content = { headers: ['Erreur'], rows: [[e instanceof Error ? e.message : 'Échec extraction']] };
                         newArr[index].status = Status.Error;
                     }
                     return newArr;
@@ -471,25 +500,11 @@ export const App: React.FC = () => {
                 if (file.type === 'application/pdf') {
                     const pageImages = await processPdf(file);
                     for (const page of pageImages) {
-                        const base64 = await new Promise<string>((resolve) => {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                                const result = reader.result as string;
-                                resolve(result.split(',')[1]);
-                            };
-                            reader.readAsDataURL(page.file);
-                        });
+                        const base64 = await readFileAsBase64(page.file);
                         processableFiles.push({ ...page, base64, mimeType: 'image/jpeg' });
                     }
                 } else {
-                    const base64 = await new Promise<string>((resolve) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            const result = reader.result as string;
-                            resolve(result.split(',')[1]);
-                        };
-                        reader.readAsDataURL(file);
-                    });
+                    const base64 = await readFileAsBase64(file);
                     processableFiles.push({
                         id: `${file.name}-${Date.now()}`,
                         file,
@@ -548,7 +563,7 @@ export const App: React.FC = () => {
                     if (run !== olymelRun.current) return prev;
                     const newArr = [...prev];
                     if (newArr[index]) {
-                        newArr[index].content = { headers: ['Erreur'], rows: [['Echec extraction']] };
+                        newArr[index].content = { headers: ['Erreur'], rows: [[e instanceof Error ? e.message : 'Échec extraction']] };
                         newArr[index].status = Status.Error;
                     }
                     return newArr;
@@ -668,45 +683,6 @@ export const App: React.FC = () => {
     // =========================================================
     // ERROR BOUNDARY (CRITICAL FOR DEBUGGING BLACK SCREENS)
     // =========================================================
-    class GlobalErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
-        constructor(props: { children: React.ReactNode }) {
-            super(props);
-            this.state = { hasError: false, error: null };
-        }
-
-        static getDerivedStateFromError(error: Error) {
-            return { hasError: true, error };
-        }
-
-        componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-            console.error("Uncaught Error:", error, errorInfo);
-        }
-
-        render() {
-            if (this.state.hasError) {
-                return (
-                    <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-red-500 p-8">
-                        <h1 className="text-3xl font-bold mb-4">Une erreur critique est survenue</h1>
-                        <div className="bg-slate-800 p-6 rounded-lg border border-red-500/50 max-w-2xl w-full">
-                            <p className="text-xl text-white mb-4">Message d'erreur :</p>
-                            <pre className="text-sm bg-black/50 p-4 rounded overflow-auto whitespace-pre-wrap font-mono">
-                                {this.state.error?.toString()}
-                            </pre>
-                            <button
-                                onClick={() => window.location.reload()}
-                                className="mt-6 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-                            >
-                                Recharger l'application
-                            </button>
-                        </div>
-                    </div>
-                );
-            }
-
-            return this.props.children;
-        }
-    }
-
     // ... existing component ...
 
     console.log('✅ User logged in, showing main app');

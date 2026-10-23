@@ -75,3 +75,16 @@ Aucun mot de passe utilisateur ne doit être ajouté à Git ou aux variables VIT
 
 Contrôle sécurité Supabase : activer la protection contre les mots de passe compromis
 si disponible sur le plan. Voir https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection.
+
+## Import et analyse des documents
+
+Les fichiers Android dont le fournisseur ne renseigne pas le type MIME sont reconnus
+par leur extension PNG/JPG/WEBP/PDF, puis normalisés. Les fichiers vides, trop volumineux
+ou non pris en charge affichent une erreur. Une sélection valide reste visible;
+l'utilisateur clique ensuite sur Lancer TCT/Olymel pour analyser.
+
+Le service utilise le webhook n8n lorsqu'il est configuré. À défaut, il peut appeler
+OpenRouter avec OPENROUTER_API_KEY côté serveur, ou avec la clé fournie dans Paramètres.
+La clé de l'interface reste uniquement en mémoire pour l'onglet et est effacée à la
+déconnexion ou au rechargement. Aucun moteur non configuré ne simule une extraction.
+Les réponses et erreurs du moteur sont validées et affichées à l'utilisateur.

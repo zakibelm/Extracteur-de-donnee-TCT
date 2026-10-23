@@ -1,3 +1,4 @@
+import { getExtractionKey, setExtractionKey, getExtractionModel } from '../services/extractionSettings';
 import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { Icons } from './Icons';
@@ -5,16 +6,16 @@ import { Button } from './Button';
 
 export const SettingsPage: React.FC = () => {
     const [apiKey, setApiKey] = useState('');
-    const [selectedModel, setSelectedModel] = useState('google/gemini-2.0-flash-exp:free');
+    const [selectedModel, setSelectedModel] = useState('openai/gpt-4o-mini');
     const [tctPrompt, setTctPrompt] = useState('');
     const [olymelPrompt, setOlymelPrompt] = useState('');
     const [enableRag, setEnableRag] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
 
     useEffect(() => {
-        const storedApiKey = '';
+        const storedApiKey = getExtractionKey();
         localStorage.removeItem('adt_settings_apikey');
-        const storedModel = localStorage.getItem('adt_settings_model') || 'google/gemini-2.0-flash-exp:free';
+        const storedModel = getExtractionModel();
         const storedTctPrompt = localStorage.getItem('adt_settings_prompt_tct') || '';
         const storedOlymelPrompt = localStorage.getItem('adt_settings_prompt_olymel') || '';
         const storedRag = localStorage.getItem('adt_settings_rag') === 'true';
@@ -72,7 +73,7 @@ export const SettingsPage: React.FC = () => {
     };
 
     const handleSave = () => {
-        // The key stays in memory for this optional connectivity test only.
+        setExtractionKey(apiKey);
         localStorage.setItem('adt_settings_model', selectedModel);
         localStorage.setItem('adt_settings_prompt_tct', tctPrompt);
         localStorage.setItem('adt_settings_prompt_olymel', olymelPrompt);
@@ -137,7 +138,7 @@ export const SettingsPage: React.FC = () => {
                             </p>
                         )}
                         <p className="text-xs text-slate-500 mt-1.5">
-                            Cette clé est stockée localement dans votre navigateur et utilisée pour toutes les requêtes d'extraction.
+                            Cette clé active l’analyse pour cet onglet. Elle est effacée à la déconnexion ou au rechargement.
                         </p>
                     </div>
 
@@ -151,7 +152,7 @@ export const SettingsPage: React.FC = () => {
                             onChange={(e) => setSelectedModel(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm appearance-none"
                         >
-                            <option value="google/gemini-2.0-flash-exp:free">Google Gemini 2.0 Flash (Gratuit)</option>
+                            <option value="openai/gpt-4o-mini">OpenAI GPT-4o Mini</option>
                             <option value="google/gemini-pro-1.5">Google Gemini Pro 1.5</option>
                             <option value="openai/gpt-4o">OpenAI GPT-4o</option>
                             <option value="anthropic/claude-3.5-sonnet">Anthropic Claude 3.5 Sonnet</option>

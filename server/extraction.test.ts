@@ -52,3 +52,26 @@ it('does not report backend failures as success', async () => {
     const res = await run();
     expect(res.status).toHaveBeenCalledWith(502);
 });
+it('uses OpenRouter when n8n is not configured and a server key is available', async () => {
+    vi.stubEnv('N8N_EXTRACT_WEBHOOK', ''); vi.stubEnv('N8N_WEBHOOK_SECRET', '');
+    vi.stubEnv('OPENROUTER_API_KEY', 'test-key');
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ headers: TCT_HEADERS, rows: [] }) }, finish_reason: 'stop' }] }), { status: 200 }));
+    const res = await run();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://openrouter.ai/api/v1/chat/completions');
+});
+it('explains how to configure analysis if neither service nor API key is present', async () => {
+    vi.stubEnv('N8N_EXTRACT_WEBHOOK', ''); vi.stubEnv('N8N_WEBHOOK_SECRET', ''); vi.stubEnv('OPENROUTER_API_KEY', '');
+    const res = await run();
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('Paramètres') }));
+    expect(fetch).not.toHaveBeenCalled();
+});
+it('reports insufficient credits without exposing provider details or keys', async () => {
+    vi.stubEnv('N8N_EXTRACT_WEBHOOK', ''); vi.stubEnv('N8N_WEBHOOK_SECRET', ''); vi.stubEnv('OPENROUTER_API_KEY', 'test-key');
+    vi.mocked(fetch).mockResolvedValue(new Response('private provider detail', { status: 402 }));
+    const res = await run();
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('crédits') }));
+    expect(JSON.stringify(res.json.mock.calls)).not.toContain('test-key');
+});
