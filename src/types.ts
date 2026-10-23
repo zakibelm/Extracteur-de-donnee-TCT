@@ -60,7 +60,7 @@ export const AGENT_DETAILS: { [key: string]: { name: string; description: string
 };
 
 export interface User {
-  id?: number;
+  id: string;
   numDome: string;
   idEmploye: string;
   email?: string;

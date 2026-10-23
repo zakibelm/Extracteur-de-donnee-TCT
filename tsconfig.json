@@ -11,7 +11,8 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "vite/client"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
@@ -20,10 +21,27 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": [
-        "./*"
+        "./src/*"
       ]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "api/**/*.ts",
+    "server/**/*.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "local-server.ts"
+  ],
+  "exclude": [
+    "src/db",
+    "src/components/SettingsView.tsx",
+    "src/components/AuthForm.tsx",
+    "src/services/aiService.ts",
+    "src/services/n8nService.ts",
+    "src/test/setup.ts"
+  ]
 }

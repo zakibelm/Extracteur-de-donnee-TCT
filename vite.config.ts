@@ -1,11 +1,10 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', '');
+export default defineConfig(() => {
   return {
     css: {
       postcss: {
@@ -20,21 +19,13 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1',
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:3005',
+          target: 'http://127.0.0.1:3002',
           changeOrigin: true,
-          configure: (proxy, options) => {
-            // Simuler les fonctions serverless localement
-            proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log('[Proxy] Redirecting:', req.url);
-            });
-          }
+
         }
       }
     },
     plugins: [react()],
-    define: {
-      'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY)
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

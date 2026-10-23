@@ -1,3 +1,4 @@
+import { requireAdmin, HttpError } from '../server/auth';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
 
@@ -68,9 +69,9 @@ function normalizeAIResponse(response: any): any {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, X-Model');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, X-Model');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -81,6 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    await requireAdmin(req);
     const apiKey = req.headers['x-api-key'] as string;
     const model = req.headers['x-model'] as string || 'gpt-4-vision-preview';
     const { prompt, image, temperature = 0.1 } = req.body;
@@ -152,9 +154,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   } catch (error: any) {
     console.error('API Error:', error);
-    return res.status(500).json({
-      error: error.message || 'Internal server error',
-      details: error.response?.data || error.stack
+    return res.status(error instanceof HttpError ? error.status : 502).json({
+      error: error instanceof HttpError ? error.message : 'Service IA indisponible.'
     });
   }
 }

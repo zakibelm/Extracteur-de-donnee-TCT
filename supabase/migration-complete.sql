@@ -105,9 +105,7 @@ CREATE POLICY "Admins can view all profiles"
 ON users FOR SELECT
 USING (
     EXISTS (
-        SELECT 1 FROM users
-        WHERE users.id = auth.uid()
-        AND users.is_admin = true
+        SELECT 1 WHERE (auth.jwt()->'app_metadata'->>'role') = 'admin'
     )
 );
 
@@ -216,8 +214,8 @@ BEGIN
         COALESCE(NEW.raw_user_meta_data->>'employeeId', ''),
         NEW.email,
         COALESCE(NEW.raw_user_meta_data->>'telephone', ''),
-        COALESCE(NEW.raw_user_meta_data->>'role', 'driver'),
-        COALESCE((NEW.raw_user_meta_data->>'role')::text = 'admin', false)
+        'driver',
+        false
     );
     RETURN NEW;
 END;

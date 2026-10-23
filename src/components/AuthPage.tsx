@@ -13,7 +13,7 @@ type AuthMode = 'login' | 'signup' | 'reset';
 export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   console.log('🔐 AuthPage is rendering...');
   const [mode, setMode] = useState<AuthMode>('login');
-  const [accountType, setAccountType] = useState<AccountType>('admin');
+  const [accountType, setAccountType] = useState<AccountType>('driver');
 
   // Login fields
   const [loginEmail, setLoginEmail] = useState('');
@@ -60,7 +60,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
     try {
       if (mode === 'login') {
         const user = await authService.login(loginEmail.trim(), password.trim());
-        localStorage.setItem('edt_user', JSON.stringify(user));
         onLogin(user);
       } else if (mode === 'signup') {
         const user = await authService.signup(
@@ -148,47 +147,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
               <div className="bg-emerald-500/10 border border-emerald-500/50 rounded-lg p-3 flex items-start gap-2 text-emerald-200 text-xs animate-in fade-in slide-in-from-top-2">
                 <CheckCircle size={14} className="mt-0.5 flex-shrink-0" />
                 <span>{success}</span>
-              </div>
-            )}
-
-            {/* Account Type Selection - Only for Signup */}
-            {mode === 'signup' && (
-              <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
-                <button
-                  type="button"
-                  onClick={() => setAccountType('admin')}
-                  className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'admin'
-                    ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-100'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
-                    }`}
-                >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'admin' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
-                    <UserIcon size={16} />
-                  </div>
-                  <div className="text-left">
-                    <div className={`text-xs font-bold ${accountType === 'admin' ? 'text-emerald-400' : 'text-slate-300'}`}>Répartition</div>
-                    <div className="text-[10px] opacity-70">Accès total</div>
-                  </div>
-                  {accountType === 'admin' && <CheckCircle size={14} className="ml-auto text-emerald-500" />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAccountType('driver')}
-                  className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${accountType === 'driver'
-                    ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-100'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
-                    }`}
-                >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${accountType === 'driver' ? 'bg-cyan-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
-                    <Car size={16} />
-                  </div>
-                  <div className="text-left">
-                    <div className={`text-xs font-bold ${accountType === 'driver' ? 'text-cyan-400' : 'text-slate-300'}`}>Conducteur</div>
-                    <div className="text-[10px] opacity-70">Routes</div>
-                  </div>
-                  {accountType === 'driver' && <CheckCircle size={14} className="ml-auto text-cyan-500" />}
-                </button>
               </div>
             )}
 

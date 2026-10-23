@@ -26,114 +26,23 @@ export interface SaveExtractionPayload {
         adresse_fin: string;
     }>;
     user_id: string;
+    request_id: string;
 }
 
 export async function saveExtractionToSupabase(payload: SaveExtractionPayload) {
-    const startTime = Date.now();
-
-    try {
-        console.log('[Supabase] Sauvegarde extraction...', {
-            filename: payload.document.filename,
-            tournees_count: payload.tournees.length,
-            user_id: payload.user_id
-        });
-
-        // 1. Insérer le document
-        const { data: documentData, error: documentError } = await supabase
-            .from('tct_documents')
-            .insert({
-                filename: payload.document.filename,
-                upload_date: payload.document.upload_date,
-                status: payload.document.status,
-                user_id: payload.user_id,
-                extracted_count: payload.document.extracted_count
-            })
-            .select('id')
-            .single();
-
-        if (documentError) {
-            console.error('[Supabase] Erreur insertion document:', documentError);
-            throw documentError;
-        }
-
-        const documentId = documentData.id;
-        console.log('[Supabase] Document inséré avec ID:', documentId);
-
-        // 2. Insérer les tournées
-        const tourneesWithDocId = payload.tournees.map(t => ({
-            document_id: documentId,
-            tournee: t.tournee,
-            nom: t.nom,
-            deb_tour: t.deb_tour,
-            fin_tour: t.fin_tour,
-            cl_veh: t.cl_veh,
-            employe: t.employe,
-            nom_employe: t.nom_employe,
-            employe_confirm: t.employe_confirm,
-            vehicule: t.vehicule,
-            cl_veh_aff: t.cl_veh_aff,
-            autoris: t.autoris,
-            approuve: t.approuve,
-            retour: t.retour,
-            adresse_debut: t.adresse_debut,
-            adresse_fin: t.adresse_fin
-        }));
-
-        const { error: tourneesError } = await supabase
-            .from('tct_tournees')
-            .insert(tourneesWithDocId);
-
-        if (tourneesError) {
-            console.error('[Supabase] Erreur insertion tournées:', tourneesError);
-            throw tourneesError;
-        }
-
-        console.log('[Supabase] Tournées insérées:', tourneesWithDocId.length);
-
-        // 3. Logger dans l'historique
-        const executionTime = Date.now() - startTime;
-        const { error: historyError } = await supabase
-            .from('tct_history')
-            .insert({
-                document_id: documentId,
-                action: 'extraction_saved',
-                status: 'success',
-                message: `Document ${payload.document.filename} traité avec ${payload.tournees.length} tournées`,
-                execution_time_ms: executionTime
-            });
-
-        if (historyError) {
-            console.warn('[Supabase] Erreur log historique (non bloquant):', historyError);
-        }
-
-        console.log('[Supabase] Sauvegarde complète réussie en', executionTime, 'ms');
-
-        return {
-            success: true,
-            documentId,
-            tourneesCount: tourneesWithDocId.length,
-            executionTime
-        };
-
-    } catch (error: any) {
-        console.error('[Supabase] Erreur sauvegarde:', error);
-
-        // Logger l'erreur dans l'historique
-        try {
-            await supabase
-                .from('tct_history')
-                .insert({
-                    action: 'extraction_failed',
-                    status: 'error',
-                    message: error?.message || 'Erreur inconnue',
-                    execution_time_ms: Date.now() - startTime
-                });
-        } catch (logError) {
-            console.warn('[Supabase] Impossible de logger l\'erreur:', logError);
-        }
-
-        throw error;
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) throw new Error('Session expirée. Reconnectez-vous.');
+    if (payload.user_id !== user.id || payload.document.user_id !== user.id) {
+        throw new Error('Identité de sauvegarde invalide.');
     }
+    const { data, error } = await supabase.rpc('save_tct_extraction', {
+        p_request_id: payload.request_id,
+        p_filename: payload.document.filename,
+        p_upload_date: payload.document.upload_date,
+        p_tournees: payload.tournees,
+    });
+    if (error) throw new Error('Sauvegarde impossible. Vérifiez la configuration et réessayez.');
+    return data as { success: boolean; documentId: number; tourneesCount: number; executionTime: number };
 }
 
 // Fonction pour récupérer les documents d'un utilisateur

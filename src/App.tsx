@@ -5,18 +5,21 @@
  * Chaque section a ses propres états, handlers et localStorage
  * </summary>
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { ExtractedData, Status, TableData, User } from './types';
+import { mapConcurrent } from './utils/concurrency';
+import { buildUnifiedTable, validateTable, TCT_HEADERS } from './utils/table';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { extractDocumentViaN8n } from './services/n8n';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { AuthPage } from './components/AuthPage';
 
 // Set worker path for pdf.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface ProcessableFile {
     id: string;
@@ -85,14 +88,15 @@ const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64'
 
     console.log(`📖 PDF chargé: ${pdf.numPages} pages détectées`);
 
-    const pagePromises = Array.from({ length: pdf.numPages }, (_, i) => processPage(pdf, i + 1, pdfFile.name));
-    const pageResults = await Promise.all(pagePromises);
+    if (pdf.numPages > 50) throw new Error('Maximum 50 pages par PDF. Séparez le document.');
+    const pageResults = await mapConcurrent(Array.from({ length: pdf.numPages }, (_, i) => i + 1),
+        2, page => processPage(pdf, page, pdfFile.name));
 
     const successfulPages = pageResults.filter((result): result is Omit<ProcessableFile, 'base64' | 'mimeType'> => result !== null);
     const failedCount = pdf.numPages - successfulPages.length;
 
     if (failedCount > 0) {
-        console.warn(`⚠️ ${failedCount} page(s) n'ont pas pu être converties sur ${pdf.numPages}`);
+        throw new Error(`${failedCount} page(s) PDF non converties. Réessayez avec un document plus petit.`);
     }
 
     console.log(`✅ ${successfulPages.length}/${pdf.numPages} pages converties avec succès`);
@@ -101,36 +105,13 @@ const processPdf = async (pdfFile: File): Promise<Omit<ProcessableFile, 'base64'
     return successfulPages;
 };
 
-const buildUnifiedTable = (extractedData: ExtractedData[]): TableData | null => {
-    const validData = extractedData.filter(d => d.status === Status.Success && d.content && d.content.rows.length > 0);
-    if (validData.length === 0) return null;
-
-    const masterHeaders = validData[0].content!.headers;
-    const vehiculeIndex = masterHeaders.findIndex(h => h.toLowerCase().includes('véhicule'));
-
-    const allRows = validData.flatMap(data => {
-        return data.content!.rows.map(row => {
-            const newRow = [...row];
-            if (vehiculeIndex !== -1) {
-                const vehiculeVal = newRow[vehiculeIndex] || "";
-                newRow.splice(vehiculeIndex + 1, 0, vehiculeVal, "");
-            }
-            return newRow;
-        });
-    });
-
-    const uniqueRows = Array.from(new Set(allRows.map(row => JSON.stringify(row))))
-        .map(str => JSON.parse(str as string) as string[]);
-
-    return {
-        headers: masterHeaders,
-        rows: uniqueRows,
-    };
-};
-
 export const App: React.FC = () => {
     console.log('🚀 App component is rendering...');
 
+    const saveRequestId = useRef(crypto.randomUUID());
+    const saving = useRef(false);
+    const tctRun = useRef(0);
+    const olymelRun = useRef(0);
     // Auth State
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
@@ -143,6 +124,7 @@ export const App: React.FC = () => {
     // Écouter les changements d'authentification Supabase au démarrage
     useEffect(() => {
         let isMounted = true;
+        let unsubscribe: (() => void) | undefined;
 
         const initializeAuth = async () => {
             try {
@@ -164,9 +146,8 @@ export const App: React.FC = () => {
                     }
                 });
 
-                return () => {
-                    subscription.unsubscribe();
-                };
+                if (!isMounted) subscription.unsubscribe();
+                else unsubscribe = () => subscription.unsubscribe();
             } catch (error) {
                 console.error('[Auth] Erreur initialisation:', error);
                 if (isMounted) {
@@ -179,6 +160,7 @@ export const App: React.FC = () => {
 
         return () => {
             isMounted = false;
+            unsubscribe?.();
         };
     }, []);
 
@@ -194,14 +176,7 @@ export const App: React.FC = () => {
     const [tctExtractedData, setTctExtractedData] = useState<ExtractedData[]>([]);
     const [tctGlobalStatus, setTctGlobalStatus] = useState<Status>(Status.Idle);
     const [tctError, setTctError] = useState<string | null>(null);
-    const [tctUnifiedTable, setTctUnifiedTable] = useState<TableData | null>(() => {
-        try {
-            const saved = localStorage.getItem('edt_tct_unified_table');
-            return saved ? JSON.parse(saved) : null;
-        } catch (e) {
-            return null;
-        }
-    });
+    const [tctUnifiedTable, setTctUnifiedTable] = useState<TableData | null>(null);
     const [activeTctView, setActiveTctView] = useState<'extract' | 'document' | 'report'>('extract');
 
     // ========== ÉTATS OLYMEL ==========
@@ -209,15 +184,24 @@ export const App: React.FC = () => {
     const [olymelExtractedData, setOlymelExtractedData] = useState<ExtractedData[]>([]);
     const [olymelGlobalStatus, setOlymelGlobalStatus] = useState<Status>(Status.Idle);
     const [olymelError, setOlymelError] = useState<string | null>(null);
-    const [olymelUnifiedTable, setOlymelUnifiedTable] = useState<TableData | null>(() => {
-        try {
-            const saved = localStorage.getItem('edt_olymel_unified_table');
-            return saved ? JSON.parse(saved) : null;
-        } catch (e) {
-            return null;
-        }
-    });
+    const [olymelUnifiedTable, setOlymelUnifiedTable] = useState<TableData | null>(null);
     const [activeOlymelView, setActiveOlymelView] = useState<'extract' | 'calendar' | 'report'>('extract');
+
+    useEffect(() => {
+        tctRun.current++;
+        olymelRun.current++;
+        localStorage.removeItem('edt_tct_unified_table');
+        localStorage.removeItem('edt_olymel_unified_table');
+        localStorage.removeItem('edt_user');
+        localStorage.removeItem('adt_settings_apikey');
+        setTctUnifiedTable(null);
+        setOlymelUnifiedTable(null);
+        setTctExtractedData([]);
+        setOlymelExtractedData([]);
+        setTctFiles([]);
+        setOlymelFiles([]);
+        saveRequestId.current = crypto.randomUUID();
+    }, [currentUser?.id]);
 
     // Effet pour basculer les non-admins vers la vue document
     useEffect(() => {
@@ -248,6 +232,8 @@ export const App: React.FC = () => {
 
     // ========== HANDLERS TCT ==========
     const handleTctFileChange = (selectedFiles: File[]) => {
+        tctRun.current++;
+        saveRequestId.current = crypto.randomUUID();
         setTctFiles(selectedFiles);
         setTctExtractedData([]);
         setTctError(null);
@@ -259,8 +245,10 @@ export const App: React.FC = () => {
     };
 
     const handleTctExtractData = async () => {
-        if (tctFiles.length === 0) return;
+        if (!currentUser?.isAdmin || tctFiles.length === 0) return;
 
+        saveRequestId.current = crypto.randomUUID();
+        const run = ++tctRun.current;
         setTctGlobalStatus(Status.Processing);
         setTctExtractedData([]);
         setTctError(null);
@@ -304,11 +292,13 @@ export const App: React.FC = () => {
             }
         } catch (e) {
             console.error("Erreur pré-traitement TCT", e);
-            setTctError("Erreur lors de la préparation des fichiers.");
+            if (run !== tctRun.current) return;
+            setTctError(e instanceof Error ? e.message : "Erreur lors de la préparation des fichiers.");
             setTctGlobalStatus(Status.Error);
             return;
         }
 
+        if (run !== tctRun.current) return;
         setTctGlobalStatus(Status.AiProcessing);
 
         const initialDataState = processableFiles.map(f => ({
@@ -320,19 +310,22 @@ export const App: React.FC = () => {
         }));
         setTctExtractedData(initialDataState);
 
-        const promises = processableFiles.map(async (pFile, index) => {
+        const promises = mapConcurrent(processableFiles, 2, async (pFile, index) => {
             try {
+                if (run !== tctRun.current) return { status: Status.Error };
                 setTctExtractedData(prev => {
+                    if (run !== tctRun.current) return prev;
                     const newArr = [...prev];
                     if (newArr[index]) newArr[index].status = Status.AiProcessing;
                     return newArr;
                 });
 
                 // APPEL AU BACKEND N8N AU LIEU DE AISERVICE
-                const content = await extractDocumentViaN8n(pFile.base64, currentUser?.numDome || 'inconnu', 'tct');
+                const content = await extractDocumentViaN8n(pFile.base64, 'tct', pFile.mimeType);
                 const status = content.headers[0] === 'Erreur' ? Status.Error : Status.Success;
 
                 setTctExtractedData(prev => {
+                    if (run !== tctRun.current) return prev;
                     const newArr = [...prev];
                     if (newArr[index]) {
                         newArr[index].content = content;
@@ -344,6 +337,7 @@ export const App: React.FC = () => {
                 return { status };
             } catch (e) {
                 setTctExtractedData(prev => {
+                    if (run !== tctRun.current) return prev;
                     const newArr = [...prev];
                     if (newArr[index]) {
                         newArr[index].content = { headers: ['Erreur'], rows: [['Echec extraction']] };
@@ -355,86 +349,88 @@ export const App: React.FC = () => {
             }
         });
 
-        await Promise.all(promises);
-        setTctGlobalStatus(Status.Idle);
+        await promises;
+        if (run === tctRun.current) setTctGlobalStatus(Status.Idle);
     };
 
     const handleTctGenerateResults = async () => {
-        const unified = buildUnifiedTable(tctExtractedData);
-        if (unified) {
-            setTctUnifiedTable(unified);
-            setActiveTctView('document');
-            try {
-                localStorage.setItem('edt_tct_unified_table', JSON.stringify(unified));
-            } catch (e) {
-                console.warn("Stockage local saturé (TCT)", e);
-            }
+        if (saving.current) return;
+        saving.current = true;
+        setTctError(null);
+        try {
+            if (tctExtractedData.some(d => d.status !== Status.Success)) throw new Error('Extraction incomplète. Relancez les fichiers en erreur avant de sauvegarder.');
+            const unified = buildUnifiedTable(tctExtractedData);
+            if (unified) {
+                validateTable(unified, TCT_HEADERS);
+                setTctUnifiedTable(unified);
 
-            // Sauvegarder dans Supabase
-            if (currentUser) {
-                try {
-                    console.log('[TCT] Sauvegarde dans Supabase...');
 
-                    // Importer le service Supabase
-                    const { saveExtractionToSupabase } = await import('./services/supabaseService');
+                // Sauvegarder dans Supabase
+                if (currentUser) {
+                    try {
+                        console.log('[TCT] Sauvegarde dans Supabase...');
 
-                    // Préparer les données du document
-                    const documentData = {
-                        filename: tctFiles.map(f => f.name).join(', '),
-                        upload_date: new Date().toISOString(),
-                        status: 'success' as const,
-                        user_id: currentUser.numDome,
-                        extracted_count: unified.rows.length
-                    };
+                        // Importer le service Supabase
+                        const { saveExtractionToSupabase } = await import('./services/supabaseService');
 
-                    // Préparer les données des tournées
-                    const tourneesData = unified.rows.map((row: string[]) => ({
-                        tournee: row[0] || '',
-                        nom: row[1] || '',
-                        deb_tour: row[2] || '',
-                        fin_tour: row[3] || '',
-                        cl_veh: row[4] || '',
-                        employe: row[5] || '',
-                        nom_employe: row[6] || '',
-                        employe_confirm: row[7] || '',
-                        vehicule: row[8] || '',
-                        cl_veh_aff: row[9] || '',
-                        autoris: row[10] || '',
-                        approuve: row[11] || '',
-                        retour: row[12] || '',
-                        adresse_debut: row[13] || '',
-                        adresse_fin: row[14] || ''
-                    }));
+                        // Préparer les données du document
+                        const documentData = {
+                            filename: tctFiles.map(f => f.name).join(', '),
+                            upload_date: new Date().toISOString(),
+                            status: 'success' as const,
+                            user_id: currentUser.id,
+                            extracted_count: unified.rows.length
+                        };
 
-                    // Sauvegarder dans Supabase
-                    const result = await saveExtractionToSupabase({
-                        document: documentData,
-                        tournees: tourneesData,
-                        user_id: currentUser.numDome
-                    });
+                        // Préparer les données des tournées
+                        const tourneesData = unified.rows.map((row: string[]) => ({
+                            tournee: row[0] || '',
+                            nom: row[1] || '',
+                            deb_tour: row[2] || '',
+                            fin_tour: row[3] || '',
+                            cl_veh: row[4] || '',
+                            employe: row[5] || '',
+                            nom_employe: row[6] || '',
+                            employe_confirm: row[7] || '',
+                            vehicule: row[8] || '',
+                            cl_veh_aff: row[9] || '',
+                            autoris: row[10] || '',
+                            approuve: row[11] || '',
+                            retour: row[12] || '',
+                            adresse_debut: row[13] || '',
+                            adresse_fin: row[14] || ''
+                        }));
 
-                    console.log('[TCT] Sauvegarde Supabase réussie:', {
-                        documentId: result.documentId,
-                        tourneesCount: result.tourneesCount,
-                        executionTime: result.executionTime + 'ms'
-                    });
-                } catch (error) {
-                    console.error('[TCT] Erreur sauvegarde Supabase:', error);
-                    // Ne pas bloquer l'utilisateur si Supabase échoue
+                        // Sauvegarder dans Supabase
+                        const result = await saveExtractionToSupabase({
+                            document: documentData,
+                            tournees: tourneesData,
+                            user_id: currentUser.id,
+                            request_id: saveRequestId.current
+                        });
+
+                        console.log('[TCT] Sauvegarde Supabase réussie:', {
+                            documentId: result.documentId,
+                            tourneesCount: result.tourneesCount,
+                            executionTime: result.executionTime + 'ms'
+                        });
+                    } catch (error) {
+                        console.error('[TCT] Erreur sauvegarde Supabase:', error);
+                        throw new Error('Résultat non sauvegardé. Vérifiez la connexion puis réessayez.');
+                    }
                 }
+            } else {
+                setTctError("Aucune donnée valide à afficher.");
             }
-        } else {
-            setTctError("Aucune donnée valide à afficher.");
-        }
+            if (unified && currentUser) setActiveTctView('document');
+        } catch (error) {
+            setTctError(error instanceof Error ? error.message : 'Erreur de sauvegarde.');
+        } finally { saving.current = false; }
     };
 
     const handleTctTableUpdate = (newTable: TableData) => {
         setTctUnifiedTable(newTable);
-        try {
-            localStorage.setItem('edt_tct_unified_table', JSON.stringify(newTable));
-        } catch (e) {
-            console.warn("Erreur sauvegarde update TCT", e);
-        }
+
     };
 
     const handleTctDeleteResult = (id: string) => {
@@ -445,11 +441,7 @@ export const App: React.FC = () => {
             const newTable = buildUnifiedTable(updatedData);
             if (newTable) {
                 setTctUnifiedTable(newTable);
-                try {
-                    localStorage.setItem('edt_tct_unified_table', JSON.stringify(newTable));
-                } catch (e) {
-                    console.warn("Impossible de sauvegarder après suppression TCT", e);
-                }
+
             } else {
                 setTctUnifiedTable(null);
                 localStorage.removeItem('edt_tct_unified_table');
@@ -462,6 +454,7 @@ export const App: React.FC = () => {
 
     // ========== HANDLERS OLYMEL ==========
     const handleOlymelFileChange = (selectedFiles: File[]) => {
+        olymelRun.current++;
         setOlymelChangeEventCount(prev => prev + 1);
         console.log('🔵 [OLYMEL] handleOlymelFileChange called with', selectedFiles.length, 'files:', selectedFiles.map(f => f.name));
         console.log('🔵 [OLYMEL] Event count now:', olymelChangeEventCount + 1);
@@ -477,8 +470,9 @@ export const App: React.FC = () => {
 
     const handleOlymelExtractData = async () => {
         console.log('🟢 [OLYMEL] handleOlymelExtractData called. Files count:', olymelFiles.length);
-        if (olymelFiles.length === 0) return;
+        if (!currentUser?.isAdmin || olymelFiles.length === 0) return;
 
+        const run = ++olymelRun.current;
         setOlymelGlobalStatus(Status.Processing);
         setOlymelExtractedData([]);
         setOlymelError(null);
@@ -522,11 +516,13 @@ export const App: React.FC = () => {
             }
         } catch (e) {
             console.error("Erreur pré-traitement Olymel", e);
-            setOlymelError("Erreur lors de la préparation des fichiers.");
+            if (run !== olymelRun.current) return;
+            setOlymelError(e instanceof Error ? e.message : "Erreur lors de la préparation des fichiers.");
             setOlymelGlobalStatus(Status.Error);
             return;
         }
 
+        if (run !== olymelRun.current) return;
         setOlymelGlobalStatus(Status.AiProcessing);
 
         const initialDataState = processableFiles.map(f => ({
@@ -538,18 +534,21 @@ export const App: React.FC = () => {
         }));
         setOlymelExtractedData(initialDataState);
 
-        const promises = processableFiles.map(async (pFile, index) => {
+        const promises = mapConcurrent(processableFiles, 2, async (pFile, index) => {
             try {
+                if (run !== olymelRun.current) return { status: Status.Error };
                 setOlymelExtractedData(prev => {
+                    if (run !== olymelRun.current) return prev;
                     const newArr = [...prev];
                     if (newArr[index]) newArr[index].status = Status.AiProcessing;
                     return newArr;
                 });
 
-                const content = await extractDataFromImage(pFile.base64, pFile.mimeType, 'olymel');
+                const content = await extractDocumentViaN8n(pFile.base64, 'olymel', pFile.mimeType);
                 const status = content.headers[0] === 'Erreur' ? Status.Error : Status.Success;
 
                 setOlymelExtractedData(prev => {
+                    if (run !== olymelRun.current) return prev;
                     const newArr = [...prev];
                     if (newArr[index]) {
                         newArr[index].content = content;
@@ -561,6 +560,7 @@ export const App: React.FC = () => {
                 return { status };
             } catch (e) {
                 setOlymelExtractedData(prev => {
+                    if (run !== olymelRun.current) return prev;
                     const newArr = [...prev];
                     if (newArr[index]) {
                         newArr[index].content = { headers: ['Erreur'], rows: [['Echec extraction']] };
@@ -572,32 +572,29 @@ export const App: React.FC = () => {
             }
         });
 
-        await Promise.all(promises);
-        setOlymelGlobalStatus(Status.Idle);
+        await promises;
+        if (run === olymelRun.current) setOlymelGlobalStatus(Status.Idle);
     };
 
     const handleOlymelGenerateResults = () => {
-        const unified = buildUnifiedTable(olymelExtractedData);
-        if (unified) {
-            setOlymelUnifiedTable(unified);
-            setActiveOlymelView('calendar');
-            try {
-                localStorage.setItem('edt_olymel_unified_table', JSON.stringify(unified));
-            } catch (e) {
-                console.warn("Stockage local saturé (Olymel)", e);
+        try {
+            if (olymelExtractedData.some(d => d.status !== Status.Success)) throw new Error('Extraction incomplète. Relancez les fichiers en erreur.');
+            const unified = buildUnifiedTable(olymelExtractedData);
+            if (unified) {
+                setOlymelUnifiedTable(unified);
+                setActiveOlymelView('calendar');
+
+            } else {
+                setOlymelError("Aucune donnée valide à afficher.");
             }
-        } else {
-            setOlymelError("Aucune donnée valide à afficher.");
+        } catch (error) {
+            setOlymelError(error instanceof Error ? error.message : 'Tableau invalide.');
         }
     };
 
     const handleOlymelTableUpdate = (newTable: TableData) => {
         setOlymelUnifiedTable(newTable);
-        try {
-            localStorage.setItem('edt_olymel_unified_table', JSON.stringify(newTable));
-        } catch (e) {
-            console.warn("Erreur sauvegarde update Olymel", e);
-        }
+
     };
 
     const handleOlymelDeleteResult = (id: string) => {
@@ -608,11 +605,7 @@ export const App: React.FC = () => {
             const newTable = buildUnifiedTable(updatedData);
             if (newTable) {
                 setOlymelUnifiedTable(newTable);
-                try {
-                    localStorage.setItem('edt_olymel_unified_table', JSON.stringify(newTable));
-                } catch (e) {
-                    console.warn("Impossible de sauvegarder après suppression Olymel", e);
-                }
+
             } else {
                 setOlymelUnifiedTable(null);
                 localStorage.removeItem('edt_olymel_unified_table');
