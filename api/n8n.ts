@@ -1,3 +1,4 @@
+import { extractWithOpenRouter } from '../server/openRouterExtraction.js';
 import { TCT_EXTRACTION_INSTRUCTIONS } from '../server/extractionPrompt.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin, HttpError } from '../server/auth.js';
@@ -17,20 +18,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         const webhook = process.env.N8N_EXTRACT_WEBHOOK;
         const secret = process.env.N8N_WEBHOOK_SECRET;
-        if (!webhook || !secret || new URL(webhook).protocol !== 'https:') {
-            throw new HttpError(503, 'Extraction serveur non configurée.');
+        let raw;
+        if (webhook && secret && new URL(webhook).protocol === 'https:') {
+            const response = await fetch(webhook, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': secret },
+                body: JSON.stringify({ image, section, mimeType, user_id: user.id,
+                    user_dome: user.user_metadata?.numDome || '', timestamp: new Date().toISOString(),
+                    ...(section === 'tct' ? { extraction_instructions: TCT_EXTRACTION_INSTRUCTIONS } : {}) }),
+                signal: AbortSignal.timeout(110_000), redirect: 'error',
+            });
+            if (!response.ok) throw new HttpError(502, 'Service extraction indisponible. Réessayez.');
+            raw = await response.json();
+        } else {
+            const key = process.env.OPENROUTER_API_KEY || req.headers['x-api-key'];
+            if (typeof key !== 'string' || !key.trim()) {
+                throw new HttpError(503, 'Analyse non configurée. Ouvrez Paramètres, ajoutez votre clé OpenRouter puis cliquez sur Sauvegarder.');
+            }
+            raw = await extractWithOpenRouter({ image, section, mimeType, model: req.body.model }, key.trim());
         }
-        const response = await fetch(webhook, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': secret },
-            body: JSON.stringify({ image, section, mimeType, user_id: user.id,
-                user_dome: user.user_metadata?.numDome || '', timestamp: new Date().toISOString(),
-                ...(section === 'tct' ? { extraction_instructions: TCT_EXTRACTION_INSTRUCTIONS } : {}) }),
-            signal: AbortSignal.timeout(110_000),
-            redirect: 'error',
-        });
-        if (!response.ok) throw new HttpError(502, 'Service extraction indisponible. Réessayez.');
-        const raw = await response.json();
         let result;
         try { result = validateTable(raw, section === 'tct' ? TCT_HEADERS : undefined); }
         catch { throw new HttpError(502, 'Le service a retourné un tableau mal aligné.'); }

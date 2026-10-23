@@ -99,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 {tctFiles.length > 0 && (
                                     <div className="mb-3 p-3 bg-green-900/30 border-2 border-green-500 rounded-lg">
                                         <h4 className="text-green-200 font-bold text-sm mb-1.5">
-                                            📁 Fichiers TCT uploadés ({tctFiles.length})
+                                            📁 Documents TCT sélectionnés ({tctFiles.length})
                                         </h4>
                                         <ul className="space-y-0.5">
                                             {tctFiles.map((file, index) => (
@@ -118,10 +118,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 {tctFiles.length > 0 && (
                                     <Button
                                         onClick={onTctExtractData}
-                                        disabled={tctGlobalStatus === Status.Processing}
+                                        disabled={(tctGlobalStatus === Status.Processing || tctGlobalStatus === Status.AiProcessing)}
                                         className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-md transform hover:scale-[1.02] transition-all"
                                     >
-                                        {tctGlobalStatus === Status.Processing ? (
+                                        {(tctGlobalStatus === Status.Processing || tctGlobalStatus === Status.AiProcessing) ? (
                                             <>
                                                 <Icons.Loader className="animate-spin mr-2" />
                                                 Traitement TCT...
@@ -163,7 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 {olymelFiles.length > 0 && (
                                     <div className="mb-3 p-3 bg-green-900/30 border-2 border-green-500 rounded-lg">
                                         <h4 className="text-green-200 font-bold text-sm mb-1.5">
-                                            📁 Fichiers Olymel uploadés ({olymelFiles.length})
+                                            📁 Documents Olymel sélectionnés ({olymelFiles.length})
                                         </h4>
                                         <ul className="space-y-0.5">
                                             {olymelFiles.map((file, index) => (
@@ -182,10 +182,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 {olymelFiles.length > 0 && (
                                     <Button
                                         onClick={onOlymelExtractData}
-                                        disabled={olymelGlobalStatus === Status.Processing}
+                                        disabled={(olymelGlobalStatus === Status.Processing || olymelGlobalStatus === Status.AiProcessing)}
                                         className="w-full bg-cyan-600 hover:bg-cyan-700 shadow-md transform hover:scale-[1.02] transition-all"
                                     >
-                                        {olymelGlobalStatus === Status.Processing ? (
+                                        {(olymelGlobalStatus === Status.Processing || olymelGlobalStatus === Status.AiProcessing) ? (
                                             <>
                                                 <Icons.Loader className="animate-spin mr-2" />
                                                 Traitement Olymel...
