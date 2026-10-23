@@ -3,8 +3,9 @@ import { createServer } from 'node:http';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import extractionHandler from './api/n8n';
 import testHandler from './api/extract';
+import modelsHandler from './api/models';
 
-const handlers = { '/api/n8n': extractionHandler, '/api/extract': testHandler };
+const handlers = { '/api/n8n': extractionHandler, '/api/extract': testHandler, '/api/models': modelsHandler };
 const port = Number(process.env.PORT || 3002);
 
 // Same handlers as Vercel. No simulated login or simulated successful writes.
