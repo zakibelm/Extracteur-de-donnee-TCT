@@ -41,3 +41,13 @@ it('reloads more than the default 1000-row API page without silently truncating 
     vi.mocked(supabase.from).mockImplementation((table: string) => ({ select: () => table === 'tct_documents' ? docQuery : rowQuery }) as never);
     expect((await getSavedExtraction('owner', 42)).table.rows).toHaveLength(1001);
 });
+
+it('reloads all 16 source columns instead of the old projection',async()=>{
+ const document={filename:'source16.jpg',extracted_count:1,source_metadata:{source_layout:'dispatch_16',schedule_code:'20261018',schedule_date:'2026-10-18'}};
+ const row={...Object.fromEntries(TCT_FIELDS.map(field=>[field,''])),employe:'0536',employe_affecte:'0536',vehicule:'430',cl_veh_aff:'TAXI',autoris:'',retour:'Non',statut_fdr:''};
+ const docQuery={eq:vi.fn().mockReturnThis(),single:vi.fn().mockResolvedValue({data:document,error:null})};
+ const rowQuery={eq:vi.fn().mockReturnThis(),order:vi.fn().mockReturnThis(),range:vi.fn().mockResolvedValue({data:[row],error:null})};
+ vi.mocked(supabase.from).mockImplementation((table:string)=>({select:()=>table==='tct_documents'?docQuery:rowQuery}) as never);
+ const saved=await getSavedExtraction('owner',42);
+ expect(saved.table.headers).toHaveLength(16);expect(saved.table.rows[0][7]).toBe('0536');expect(saved.table.rows[0][8]).toBe('430');expect(saved.table.rows[0][9]).toBe('TAXI');
+});

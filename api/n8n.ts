@@ -2,7 +2,7 @@ import { extractWithOpenRouter } from '../server/openRouterExtraction.js';
 import { TCT_EXTRACTION_INSTRUCTIONS } from '../server/extractionPrompt.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin, HttpError } from '../server/auth.js';
-import { validateTable, TCT_HEADERS } from '../src/utils/table.js';
+import { validateTable, validateTctTable, normalizeTctExtraction } from '../src/utils/table.js';
 
 export const config = { api: { bodyParser: { sizeLimit: '4mb' } } };
 
@@ -39,8 +39,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             raw = await extractWithOpenRouter({ image, section, mimeType, model: req.body.model }, key.trim());
         }
         let result;
-        try { result = validateTable(raw, section === 'tct' ? TCT_HEADERS : undefined); }
-        catch { throw new HttpError(502, 'Le service a retourné un tableau mal aligné.'); }
+        try { result = section === 'tct' ? normalizeTctExtraction(raw) : validateTable(raw); }
+        catch (error) { throw new HttpError(502, error instanceof Error ? `Extraction à vérifier : ${error.message}` : 'Structure du document non reconnue.'); }
         return res.status(200).json(result);
     } catch (error) {
         return res.status(error instanceof HttpError ? error.status : 502).json({

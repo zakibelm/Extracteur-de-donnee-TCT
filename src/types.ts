@@ -8,6 +8,11 @@ export enum Status {
 
 export interface DocumentMetadata {
   schedule_date?: string;
+  schedule_code?: string;
+  source_layout?: 'dispatch_14' | 'dispatch_16';
+  schema_version?: number;
+  review_required?: boolean;
+  review_reason?: string;
   tournees_attribuees?: number;
   tournees_simultanees?: number;
   heure_de_pointe?: string;

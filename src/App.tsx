@@ -446,7 +446,7 @@ export const App: React.FC = () => {
             });
             if (isCurrent()) {
                 setTctSaveStatus('saved');
-                setTctSaveMessage(`${result.tourneesCount} lignes enregistrées · Document nº ${result.documentId}. Vous pouvez le retrouver dans l’historique.`);
+                setTctSaveMessage(`${result.tourneesCount} lignes enregistrées (contenu à vérifier) · Document nº ${result.documentId}. Vous pouvez le retrouver dans l’historique.`);
                 setHistoryRefresh(value => value + 1);
             }
         } catch (error) {
@@ -485,7 +485,7 @@ export const App: React.FC = () => {
         setTctUnifiedTable(result.table); setTctDocumentName(result.filename);
         setTctSaveStatus('saved'); setTctSaveMessage(`Document nº ${id} rechargé depuis votre compte · ${result.table.rows.length} lignes.`);
         saveRequestId.current = crypto.randomUUID();
-        setTctError(null); setActiveSection('tct'); setActiveTctView('document');
+        setTctError(result.table.metadata?.review_required ? (result.table.metadata.review_reason || 'Ancien résultat à réanalyser : colonnes potentiellement décalées.') : null); setActiveSection('tct'); setActiveTctView('document');
         if (window.matchMedia('(max-width: 1023px)').matches) setIsSidebarOpen(false);
     };
 
@@ -663,6 +663,8 @@ export const App: React.FC = () => {
 
     // ========== HANDLERS COMMUNS ==========
     const handlePrint = (headers: string[], rows: string[][]) => {
+        const safe = (value: string) => value.replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[character]!));
+        const sourceDate = activeSection === 'tct' ? tctUnifiedTable?.metadata?.schedule_date : undefined;
         const printWindow = window.open('', '', 'height=600,width=800');
         if (printWindow) {
             printWindow.document.write('<html><head><title>Impression - ADT</title>');
@@ -677,17 +679,18 @@ export const App: React.FC = () => {
             `);
             printWindow.document.write('</style></head><body>');
             printWindow.document.write('<h1>ADT - Rapport d\'Extraction</h1>');
-            printWindow.document.write(`<div class="meta">Généré le ${new Date().toLocaleString()} par ${currentUser?.numDome || 'Inconnu'}</div>`);
+            printWindow.document.write(`<div class="meta">Généré le ${new Date().toLocaleString()} par ${safe(currentUser?.numDome || 'Inconnu')}</div>`);
+            if (sourceDate) printWindow.document.write(`<div class="meta">Horaire source : ${safe(sourceDate)}</div>`);
             printWindow.document.write('<table>');
 
             printWindow.document.write('<thead><tr>');
-            headers.forEach(h => printWindow.document.write(`<th>${h}</th>`));
+            headers.forEach(h => printWindow.document.write(`<th>${safe(h)}</th>`));
             printWindow.document.write('</tr></thead>');
 
             printWindow.document.write('<tbody>');
             rows.forEach(row => {
                 printWindow.document.write('<tr>');
-                row.forEach(cell => printWindow.document.write(`<td>${cell}</td>`));
+                row.forEach(cell => printWindow.document.write(`<td>${safe(cell)}</td>`));
                 printWindow.document.write('</tr>');
             });
             printWindow.document.write('</tbody></table>');
@@ -707,10 +710,12 @@ export const App: React.FC = () => {
         doc.setTextColor(100);
         doc.text(`Généré le : ${new Date().toLocaleString()} par ${currentUser?.numDome}`, 14, 22);
 
+        const sourceDate = activeSection === 'tct' ? tctUnifiedTable?.metadata?.schedule_date : undefined;
+        if (sourceDate) doc.text(`Horaire source : ${sourceDate}`, 14, 28);
         autoTable(doc, {
             head: [headers],
             body: rows,
-            startY: 25,
+            startY: sourceDate ? 32 : 25,
             styles: { fontSize: 7, cellPadding: 2 },
             headStyles: { fillColor: [2, 132, 199] },
         });

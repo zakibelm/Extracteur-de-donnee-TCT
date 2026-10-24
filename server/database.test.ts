@@ -27,6 +27,7 @@ beforeAll(async () => {
     await db.exec(`GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;`);
     await db.exec(readFileSync('supabase/fix-admin-escalation.sql', 'utf8'));
     await db.exec(readFileSync('supabase/migrations/20261023_tct_source_14_columns.sql', 'utf8'));
+    await db.exec(readFileSync('supabase/migrations/20261024200035_support_tct_dispatch_16.sql','utf8'));
     await db.query(`INSERT INTO auth.users (id,email,raw_user_meta_data) VALUES ($1, 'test@example.test', '{"role":"admin"}')`, [userId]);
     await db.exec(`SET ROLE authenticated;`);
     await db.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [userId]);
@@ -93,4 +94,18 @@ it('retains a trusted admin and demotes a forged profile on repeated repair', as
     await db.exec(readFileSync('supabase/fix-admin-escalation.sql', 'utf8'));
     result = await db.query('SELECT role,is_admin FROM public.users');
     expect(result.rows).toEqual([{ role: 'driver', is_admin: false }]);
+});
+
+it('stores the second employee separately from vehicle and derives October from the raw schedule code',async()=>{
+ await db.exec('RESET ROLE; SET ROLE authenticated');
+ await db.query(`SELECT set_config('request.jwt.claim.sub',$1,false)`,[userId]);
+ await db.query(`SELECT set_config('request.jwt.claims','{"app_metadata":{"role":"admin"}}',false)`);
+ const source={...row,employe:'0536',employe_affecte:'0536',vehicule:'430',cl_veh_aff:'TAXI',autoris:'',retour:'Non',statut_fdr:''};
+ const saved=await db.query<{result:{documentId:number}}>(`SELECT save_tct_extraction($1::uuid,'source16.jpg',now(),$2::jsonb,$3::jsonb) result`,
+ ['66666666-6666-4666-8666-666666666666',JSON.stringify([source]),JSON.stringify({source_layout:'dispatch_16',schedule_code:'20261018',schedule_date:'2026-01-18'})]);
+ const id=saved.rows[0].result.documentId;
+ const cells=await db.query('SELECT employe,employe_affecte,vehicule,cl_veh_aff,autoris,retour,statut_fdr FROM tct_tournees WHERE document_id=$1',[id]);
+ expect(cells.rows[0]).toEqual({employe:'0536',employe_affecte:'0536',vehicule:'430',cl_veh_aff:'TAXI',autoris:'',retour:'Non',statut_fdr:''});
+ const date=await db.query('SELECT schedule_date::text as day FROM tct_documents WHERE id=$1',[id]);
+ expect(date.rows[0]).toEqual({day:'2026-10-18'});
 });

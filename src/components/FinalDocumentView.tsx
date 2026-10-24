@@ -1,3 +1,4 @@
+import { matchesTctId } from '../utils/tctFilters';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { TableData } from '../types';
@@ -57,6 +58,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     useEffect(() => {
         if (displayData) {
             setRows(displayData.rows.map(row => [...row]));
+            setTourneeFilter(''); setVehiculeFilter('');
         }
     }, [displayData]);
 
@@ -99,52 +101,9 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     const filteredRows = useMemo(() => {
         if (!rows || rows.length === 0) return [];
 
-        let result = rows.filter(row => {
-            let tourneeMatch = true;
-            if (tourneeIndex !== -1 && tourneeFilter) {
-                const cellValue = (row[tourneeIndex] || '');
-                const searchTerms = tourneeFilter.split('+').map(s => s.trim()).filter(s => s.length > 0);
-                if (searchTerms.length > 0) {
-                    tourneeMatch = searchTerms.some(term => {
-                        // Pour les tournées (format TCT0034), on cherche une correspondance exacte ou sur les chiffres finaux
-                        const lowerCell = cellValue.toLowerCase();
-                        const lowerTerm = term.toLowerCase();
-
-                        // Correspondance exacte
-                        if (lowerCell === lowerTerm) return true;
-
-                        // Si le terme est numérique, chercher TCT + terme avec padding de zéros
-                        if (/^\d+$/.test(term)) {
-                            // Essayer différents formats: TCT0034, TCT034, TCT34
-                            const patterns = [
-                                `tct${term.padStart(4, '0')}`,  // TCT0034
-                                `tct${term.padStart(3, '0')}`,  // TCT034
-                                `tct${term}`                     // TCT34
-                            ];
-                            return patterns.some(pattern => lowerCell === pattern);
-                        }
-
-                        // Sinon, correspondance partielle
-                        return lowerCell.includes(lowerTerm);
-                    });
-                }
-            }
-
-            let vehiculeMatch = true;
-            if (vehiculeIndex !== -1 && vehiculeFilter) {
-                const cellValue = (row[vehiculeIndex] || '');
-                const searchTerms = vehiculeFilter.split('+').map(s => s.trim()).filter(s => s.length > 0);
-                if (searchTerms.length > 0) {
-                    vehiculeMatch = searchTerms.some(term => {
-                        const lowerCell = cellValue.toLowerCase();
-                        const lowerTerm = term.toLowerCase();
-                        // Pour les véhicules, correspondance partielle suffit
-                        return lowerCell.includes(lowerTerm);
-                    });
-                }
-            }
-            return tourneeMatch && vehiculeMatch;
-        });
+        let result = rows.filter(row =>
+            (tourneeIndex === -1 || matchesTctId(row[tourneeIndex] || '', tourneeFilter, true)) &&
+            (vehiculeIndex === -1 || matchesTctId(row[vehiculeIndex] || '', vehiculeFilter)));
 
         if (debutTourneeIndex !== -1) {
             result.sort((a, b) => {
@@ -273,7 +232,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                         <br />
                         <span className="text-sm text-amber-400 font-bold flex items-center mt-2">
                             <Icons.CheckCircle className="w-4 h-4 mr-1" />
-                            Le véhicule assigné sera automatiquement mis à jour.
+                            Le tableau sera modifié ; enregistrez ensuite une nouvelle version.
                         </span>
                     </p>
 
@@ -300,24 +259,29 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 </div>
             </Modal>
 
+            <div className="px-4 py-2 text-sm bg-slate-800 border-b border-slate-700">
+                Format source : {displayData.headers.length} colonnes · Horaire : {displayData.metadata?.schedule_date || 'non lu'} · {displayData.rows.length} lignes visibles extraites
+            </div>
             <div className="flex-shrink-0 p-4 bg-slate-800/50 border-b border-slate-700">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                     <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-semibold text-slate-400 block mb-1">Filtrer par Tournée (Multi: 12345+67890)</label>
+                            <label className="text-xs font-semibold text-slate-400 block mb-1">Tournée — identifiant exact</label>
                             <input
                                 type="text"
-                                placeholder="ex: 12345+67890"
+                                aria-label="Filtrer les tournées"
+                                placeholder="ex. 33 ou TCT0033, plusieurs : 33+19"
                                 value={tourneeFilter}
                                 onChange={(e) => setTourneeFilter(e.target.value)}
                                 className="w-full bg-slate-700 text-slate-200 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                             />
                         </div>
                         <div>
-                            <label className="text-xs font-semibold text-slate-400 block mb-1">Filtrer par Véhicule (Multi: 220+409)</label>
+                            <label className="text-xs font-semibold text-slate-400 block mb-1">Véhicule — numéro exact</label>
                             <input
                                 type="text"
-                                placeholder="ex: 220+409"
+                                aria-label="Filtrer les véhicules"
+                                placeholder="ex. 430, plusieurs : 430+128"
                                 value={vehiculeFilter}
                                 onChange={(e) => setVehiculeFilter(e.target.value)}
                                 className="w-full bg-slate-700 text-slate-200 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -372,7 +336,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                                                     onChange={(e) => handleInputChange(row, e.target.value)}
                                                                     onBlur={(e) => handleInputBlur(row, e.target.value)}
                                                                     onKeyDown={(e) => handleKeyDown(e, row, (e.target as HTMLInputElement).value)}
-                                                                    className={`w-full px-2 py-1 border rounded transition-all
+                                                                    className={`w-20 min-w-0 px-2 py-1 border rounded transition-all
                                                                         ${canEdit
                                                                             ? 'bg-slate-900 text-emerald-400 border-slate-600 focus:ring-2 focus:ring-emerald-500 focus:outline-none cursor-text'
                                                                             : 'bg-slate-800/50 text-slate-500 border-transparent cursor-not-allowed italic'
