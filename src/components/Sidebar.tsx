@@ -56,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
 
     return (
-        <aside className={`relative bg-slate-800 border-r border-slate-700 flex flex-col transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-72' : 'w-16'}`}>
+        <aside className={`relative shrink-0 max-h-[45dvh] lg:max-h-none bg-slate-800 border-r border-slate-700 flex flex-col transition-all duration-300 ease-in-out ${isSidebarOpen ? 'flex w-full lg:w-72' : 'hidden lg:flex lg:w-16'}`}>
             <div className="flex-grow p-3 overflow-y-auto flex flex-col scrollbar-thin scrollbar-thumb-slate-600">
                 <header className={`flex items-center gap-3 mb-4 ${isSidebarOpen ? 'justify-start' : 'justify-center'}`}>
                     <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg flex-shrink-0">

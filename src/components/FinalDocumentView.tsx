@@ -51,6 +51,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         tournee: string;
     } | null>(null);
     const [focusedValue, setFocusedValue] = useState<string>('');
+    const [vehicleDraft, setVehicleDraft] = useState<{ row: string[]; value: string } | null>(null);
 
     // Synchronisation initiale
     useEffect(() => {
@@ -162,14 +163,11 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
     };
 
     const handleInputChange = (rowRef: string[], newValue: string) => {
-        if (changementIndex !== -1) {
-            rowRef[changementIndex] = newValue;
-            setRows([...rows]); // Force re-render
-        }
+        setVehicleDraft({ row: rowRef, value: newValue });
     };
 
     const handleInputBlur = (rowRef: string[], newValue: string) => {
-        if (newValue === focusedValue) return;
+        if (newValue === focusedValue) { setVehicleDraft(null); return; }
 
         const tourneeVal = tourneeIndex !== -1 ? rowRef[tourneeIndex] : 'Inconnue';
 
@@ -216,7 +214,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 newRows[rowIndex] = newRow;
                 setRows(newRows);
 
-                // Persistance globale (Local Storage pour la journée)
+                // Signaler les modifications au parent ; leur sauvegarde est explicite.
                 const newTable = {
                     ...displayData,
                     rows: newRows
@@ -224,19 +222,14 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                 onTableUpdate(newTable);
             }
         }
+        setVehicleDraft(null);
         setIsModalOpen(false);
         setPendingChange(null);
         setFocusedValue('');
     };
 
     const cancelChange = () => {
-        if (pendingChange && changementIndex !== -1) {
-            pendingChange.row[changementIndex] = pendingChange.oldValue;
-            setRows([...rows]);
-        }
-        setIsModalOpen(false);
-        setPendingChange(null);
-        setFocusedValue('');
+        setVehicleDraft(null); setIsModalOpen(false); setPendingChange(null); setFocusedValue('');
     };
 
     const resetFilters = () => {
@@ -347,7 +340,8 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
 
             <div className="flex-grow overflow-x-auto p-4">
                 <div className="border border-slate-700 rounded-md">
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full min-w-[1400px] text-left text-sm">
+                        <thead className="sticky top-0 z-20 bg-slate-700"><tr>{displayData.headers.map((header, index) => <th key={header} scope="col" className={`p-3 font-semibold text-slate-100 whitespace-nowrap ${index === 0 ? 'sticky left-0 z-30 bg-slate-700' : ''}`}>{header}</th>)}</tr></thead>
 
                         <tbody>
                             {filteredRows.length > 0 ? (
@@ -360,20 +354,21 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                     const isMyTour = normUserDome.length > 0 && normRowId === normUserDome;
 
                                     // Les admins peuvent tout modifier, les autres seulement leurs propres tournées
-                                    const canEdit = user?.isAdmin || isMyTour;
+                                    const canEdit = user?.isAdmin;
 
                                     return (
                                         <tr key={rowIndex} className={`border-t border-slate-700 even:bg-slate-700/30 hover:bg-slate-700/50 ${isMyTour ? 'bg-emerald-900/10' : ''}`}>
                                             {row.map((cell, cellIndex) => {
-                                                if (cellIndex === changementIndex) {
+                                                if (cellIndex === vehiculeIndex) {
                                                     return (
                                                         <td key={cellIndex} className="p-1">
                                                             <div className="relative group">
                                                                 <input
                                                                     type="text"
-                                                                    value={cell}
+                                                                    value={vehicleDraft?.row === row ? vehicleDraft.value : cell}
+                                                                    aria-label={`Véhicule pour ${row[tourneeIndex] || 'cette tournée'}`}
                                                                     disabled={!canEdit}
-                                                                    onFocus={(e) => handleInputFocus(e.target.value)}
+                                                                    onFocus={(e) => { handleInputFocus(e.target.value); setVehicleDraft({ row, value: e.target.value }); }}
                                                                     onChange={(e) => handleInputChange(row, e.target.value)}
                                                                     onBlur={(e) => handleInputBlur(row, e.target.value)}
                                                                     onKeyDown={(e) => handleKeyDown(e, row, (e.target as HTMLInputElement).value)}
@@ -402,7 +397,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                                                     );
                                                 }
                                                 return (
-                                                    <td key={cellIndex} className="p-2 text-slate-300 whitespace-nowrap">{cell}</td>
+                                                    <td key={cellIndex} className={`p-3 text-slate-200 ${cellIndex === 0 ? 'sticky left-0 z-10 bg-slate-800 font-semibold whitespace-nowrap' : displayData.headers[cellIndex].startsWith('Adresse') ? 'min-w-48 max-w-72 whitespace-normal' : 'whitespace-nowrap'}`}>{cell}</td>
                                                 );
                                             })}
                                         </tr>
