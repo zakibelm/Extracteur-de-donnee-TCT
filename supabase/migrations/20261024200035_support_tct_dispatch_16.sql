@@ -84,7 +84,7 @@ BEGIN
     RETURN jsonb_build_object('success', true, 'documentId', v_document_id,
         'tourneesCount', v_count, 'executionTime', 0);
 END;
-$function$
+$function$;
 
 REVOKE ALL ON FUNCTION public.save_tct_extraction(UUID,TEXT,TIMESTAMPTZ,JSONB,JSONB) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.save_tct_extraction(UUID,TEXT,TIMESTAMPTZ,JSONB,JSONB) TO authenticated;
