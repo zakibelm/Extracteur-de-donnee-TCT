@@ -292,7 +292,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                 {/* Contenu selon section et vue active - Scrollable */}
                 <div className="flex-1 overflow-y-auto min-h-0">
                     {activeSection === 'settings' ? (
-                        <SettingsPage />
+                        <SettingsPage userId={user.id} />
                     ) : activeSection === 'tct' ? (
                         <>
                             <SavedDocuments key={user.id} userId={user.id} refreshKey={historyRefresh} onOpen={onOpenSavedDocument} />

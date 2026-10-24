@@ -85,8 +85,8 @@ l'utilisateur clique ensuite sur Lancer TCT/Olymel pour analyser.
 
 Le service utilise le webhook n8n lorsqu'il est configuré. À défaut, il peut appeler
 OpenRouter avec OPENROUTER_API_KEY côté serveur, ou avec la clé fournie dans Paramètres.
-La clé de l'interface reste uniquement en mémoire pour l'onglet et est effacée à la
-déconnexion ou au rechargement. Aucun moteur non configuré ne simule une extraction.
+La saisie de la clé active l’onglet courant. Une sauvegarde explicite mémorise la clé
+sur cet appareil pour le compte connecté ; elle est restaurée après rechargement. Aucun moteur non configuré ne simule une extraction.
 Les réponses et erreurs du moteur sont validées et affichées à l'utilisateur.
 
 
@@ -157,3 +157,17 @@ Validation : régressions sur la seconde colonne employé, le véhicule, la clas
 la date octobre, les filtres exacts et la remise à zéro au changement de document.
 Test SQL réel sous authenticated : écriture et relecture du format 16, puis annulation
 de la transaction synthétique sans données de test persistantes.
+
+## Mémorisation explicite des clés OpenRouter
+Le bouton Sauvegarder écrit une clé par UUID utilisateur dans localStorage.
+La saisie et le bouton Tester activent seulement la clé en mémoire.
+À la déconnexion, la mémoire active est vidée. La clé sauvegardée reste disponible
+pour une prochaine connexion du même compte sur le même profil de navigateur.
+Le bouton Supprimer la clé mémorisée efface le stockage de ce compte et la mémoire.
+Un échec ou un refus de stockage produit une erreur visible, sans confirmation trompeuse.
+
+La clé est conservée en clair dans le stockage local du navigateur. Le code de
+l’origine et les utilisateurs de ce profil de navigateur peuvent y accéder :
+utiliser un profil personnel. Cette mémorisation ne synchronise pas les appareils
+et reste soumise à l’effacement des données du navigateur et au mode privé.
+Aucune valeur de clé n’est inscrite dans le dépôt ni transmise à une nouvelle destination.
