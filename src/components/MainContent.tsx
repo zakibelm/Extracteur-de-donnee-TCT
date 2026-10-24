@@ -1,3 +1,4 @@
+import { ReportTab } from './ReportTab';
 import { SavedDocuments } from './SavedDocuments';
 
 import React from 'react';
@@ -229,14 +230,14 @@ export const MainContent: React.FC<MainContentProps> = ({
                                     <Icons.Eye className="inline-block mr-1.5 w-4 h-4" />
                                     Document Final
                                 </button>
-                                <button
-                                    onClick={() => setActiveTctView('report')}
+                                <ReportTab
+                                    key={user.id}
+                                    userId={user.id}
+                                    changes={tctUnifiedTable?.metadata?.vehicle_changes || []}
+                                    active={activeTctView === 'report'}
                                     disabled={!tctUnifiedTable}
-                                    className={`px-3 py-2 font-medium text-xs rounded-t-md disabled:cursor-not-allowed disabled:text-slate-600 ${activeTctView === 'report' ? 'border-b-2 border-amber-400 text-amber-400' : 'text-slate-400 hover:text-slate-200'}`}
-                                >
-                                    <Icons.ClipboardList className="inline-block mr-1.5 w-4 h-4" />
-                                    Rapport
-                                </button>
+                                    onOpen={() => setActiveTctView('report')}
+                                />
                             </>
                         ) : (
                             <>
