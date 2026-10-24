@@ -14,7 +14,7 @@ beforeAll(async () => {
     db = new PGlite();
     await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated;
         CREATE SCHEMA auth;
-        CREATE TABLE auth.users (id UUID PRIMARY KEY, email TEXT, raw_user_meta_data JSONB);
+        CREATE TABLE auth.users (id UUID PRIMARY KEY, email TEXT, raw_user_meta_data JSONB, raw_app_meta_data JSONB);
         CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql STABLE AS
         $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
         CREATE FUNCTION auth.jwt() RETURNS JSONB LANGUAGE sql STABLE AS
@@ -24,9 +24,10 @@ beforeAll(async () => {
     await db.exec(`GRANT USAGE ON SCHEMA auth, public TO anon, authenticated;
         GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
         GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;`);
-    await db.exec(readFileSync('supabase/security.sql', 'utf8'));
+    await db.exec(`GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;`);
+    await db.exec(readFileSync('supabase/fix-admin-escalation.sql', 'utf8'));
     await db.exec(readFileSync('supabase/migrations/20261023_tct_source_14_columns.sql', 'utf8'));
-    await db.query(`INSERT INTO auth.users VALUES ($1, 'test@example.test', '{"role":"admin"}')`, [userId]);
+    await db.query(`INSERT INTO auth.users (id,email,raw_user_meta_data) VALUES ($1, 'test@example.test', '{"role":"admin"}')`, [userId]);
     await db.exec(`SET ROLE authenticated;`);
     await db.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [userId]);
     await db.query(`SELECT set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ app_metadata: { role: 'admin' } })]);
@@ -68,4 +69,28 @@ it('refuses a driver save and hides another user documents under RLS', async () 
     await db.query(`SELECT set_config('request.jwt.claim.sub', '55555555-5555-4555-8555-555555555555', false)`);
     const result = await db.query('SELECT * FROM tct_documents');
     expect(result.rows).toEqual([]);
+});
+
+it('rejects TRUNCATE even for an authenticated administrator, preserving all documents', async () => {
+    await db.query(`SELECT set_config('request.jwt.claims', '{"app_metadata":{"role":"admin"}}', false)`);
+    await expect(db.exec('TRUNCATE public.users CASCADE')).rejects.toThrow(/permission denied/i);
+    await expect(db.exec('TRUNCATE public.tct_documents CASCADE')).rejects.toThrow(/permission denied/i);
+    await expect(db.exec('CREATE TRIGGER forged BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.protect_user_privileges()')).rejects.toThrow(/permission denied/i);
+});
+it('denies anonymous table access even when default grants originally allowed it', async () => {
+    await db.exec('RESET ROLE; SET ROLE anon');
+    await expect(db.exec('SELECT * FROM public.users')).rejects.toThrow(/permission denied/i);
+    await expect(db.exec('TRUNCATE public.tct_documents CASCADE')).rejects.toThrow(/permission denied/i);
+    await db.exec('RESET ROLE; SET ROLE authenticated');
+});
+it('retains a trusted admin and demotes a forged profile on repeated repair', async () => {
+    await db.exec('RESET ROLE');
+    await db.query(`UPDATE auth.users SET raw_app_meta_data='{"role":"admin"}' WHERE id=$1`, [userId]);
+    await db.exec(readFileSync('supabase/fix-admin-escalation.sql', 'utf8'));
+    let result = await db.query('SELECT role,is_admin FROM public.users');
+    expect(result.rows).toEqual([{ role: 'admin', is_admin: true }]);
+    await db.query(`UPDATE auth.users SET raw_app_meta_data='{}' WHERE id=$1`, [userId]);
+    await db.exec(readFileSync('supabase/fix-admin-escalation.sql', 'utf8'));
+    result = await db.query('SELECT role,is_admin FROM public.users');
+    expect(result.rows).toEqual([{ role: 'driver', is_admin: false }]);
 });

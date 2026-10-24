@@ -1,7 +1,8 @@
 
 import { neon } from '@neondatabase/serverless';
 
-const DATABASE_URL = "postgres://neondb_owner:npg_wXdMv3Sqj1kJ@ep-twilight-thunder-ahcp3cgt-pooler.c-3.us-east-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require";
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error('DATABASE_URL doit être définie dans l’environnement.');
 const sql = neon(DATABASE_URL);
 
 async function ensureSchema() {
