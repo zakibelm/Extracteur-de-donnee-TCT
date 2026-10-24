@@ -1,11 +1,11 @@
 import { DEFAULT_VISION_MODEL, type VisionModel } from '../utils/visionModels';
-import { getExtractionKey, setExtractionKey, getExtractionModel } from '../services/extractionSettings';
+import { getExtractionKey, setExtractionKey, getExtractionModel, bindExtractionOwner, persistExtractionKey, forgetExtractionKey, hasSavedExtractionKey } from '../services/extractionSettings';
 import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { Icons } from './Icons';
 import { Button } from './Button';
 
-export const SettingsPage: React.FC = () => {
+export const SettingsPage: React.FC<{ userId: string }> = ({ userId }) => {
     const [apiKey, setApiKey] = useState('');
     const [selectedModel, setSelectedModel] = useState<string>(() => getExtractionModel());
     const [models, setModels] = useState<VisionModel[]>([]);
@@ -16,9 +16,13 @@ export const SettingsPage: React.FC = () => {
     const [olymelPrompt, setOlymelPrompt] = useState('');
     const [enableRag, setEnableRag] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [saveError, setSaveError] = useState('');
+    const [keySaved, setKeySaved] = useState(false);
 
     useEffect(() => {
+        bindExtractionOwner(userId);
         const storedApiKey = getExtractionKey();
+        setKeySaved(hasSavedExtractionKey());
         localStorage.removeItem('adt_settings_apikey');
         const storedModel = getExtractionModel();
         const storedTctPrompt = localStorage.getItem('adt_settings_prompt_tct') || '';
@@ -30,7 +34,7 @@ export const SettingsPage: React.FC = () => {
         setTctPrompt(storedTctPrompt);
         setOlymelPrompt(storedOlymelPrompt);
         setEnableRag(storedRag);
-    }, []);
+    }, [userId]);
 
     const loadModels = async (signal?: AbortSignal) => {
         setModelsLoading(true);
@@ -105,15 +109,27 @@ export const SettingsPage: React.FC = () => {
     };
 
     const handleSave = () => {
-        if (!modelReady) return;
-        setExtractionKey(apiKey);
-        localStorage.setItem('adt_settings_model', selectedModel);
-        localStorage.setItem('adt_settings_prompt_tct', tctPrompt);
-        localStorage.setItem('adt_settings_prompt_olymel', olymelPrompt);
-        localStorage.setItem('adt_settings_rag', String(enableRag));
-
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 3000);
+        setShowSuccess(false); setSaveError('');
+        try {
+            setExtractionKey(apiKey);
+            persistExtractionKey();
+            setKeySaved(hasSavedExtractionKey());
+            if (modelReady) localStorage.setItem('adt_settings_model', selectedModel);
+            localStorage.setItem('adt_settings_prompt_tct', tctPrompt);
+            localStorage.setItem('adt_settings_prompt_olymel', olymelPrompt);
+            localStorage.setItem('adt_settings_rag', String(enableRag));
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (error) {
+            setSaveError(error instanceof Error ? error.message : 'Mémorisation impossible.');
+        }
+    };
+    const handleForgetKey = () => {
+        setSaveError(''); setShowSuccess(false);
+        try {
+            forgetExtractionKey(); setApiKey(''); setKeySaved(false);
+            setTestStatus('idle'); setTestMessage('Clé supprimée de cet appareil.');
+        } catch (error) { setSaveError(error instanceof Error ? error.message : 'Suppression impossible.'); }
     };
 
     return (
@@ -139,8 +155,9 @@ export const SettingsPage: React.FC = () => {
                             <div className="relative flex-1">
                                 <input
                                     type="password"
+                                    autoComplete="off"
                                     value={apiKey}
-                                    onChange={(e) => { setApiKey(e.target.value); setExtractionKey(e.target.value); setTestStatus('idle'); setTestMessage(''); }}
+                                    onChange={(e) => { setApiKey(e.target.value); setExtractionKey(e.target.value); setKeySaved(false); setShowSuccess(false); setTestStatus('idle'); setTestMessage(''); }}
                                     placeholder="sk-or-..."
                                     className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-sm"
                                 />
@@ -171,9 +188,15 @@ export const SettingsPage: React.FC = () => {
                             </p>
                         )}
                         <p className="text-xs text-slate-500 mt-1.5">
-                            La clé saisie est utilisée immédiatement pour le scan dans cet onglet. « Tester » permet de la vérifier. Elle est effacée à la déconnexion ou au rechargement.
+                            La saisie active la clé pour cet onglet. Cliquez sur « Sauvegarder » pour la mémoriser dans ce navigateur pour votre compte, y compris après rechargement.
                         </p>
                     </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                        <p role="status" className={keySaved ? 'text-emerald-300' : 'text-slate-400'}>{keySaved ? 'Clé mémorisée sur cet appareil pour votre compte.' : 'Clé non mémorisée sur cet appareil.'}</p>
+                        <Button onClick={handleForgetKey} className="bg-slate-700 hover:bg-red-700">Supprimer la clé mémorisée</Button>
+                    </div>
+                    {saveError && <p role="alert" className="text-red-300 text-sm">{saveError}</p>}
 
                     {/* Model Selection */}
                     <div>
@@ -255,12 +278,11 @@ export const SettingsPage: React.FC = () => {
                         {showSuccess && (
                             <span className="text-emerald-400 text-sm font-medium animate-fade-in flex items-center">
                                 <Icons.CheckCircle className="w-4 h-4 mr-1.5" />
-                                Paramètres sauvegardés !
+                                Sauvegarde effectuée sur cet appareil !
                             </span>
                         )}
                         <Button
                             onClick={handleSave}
-                            disabled={!modelReady}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white px-6"
                         >
                             Sauvegarder les modifications

@@ -1,6 +1,6 @@
 import { saveExtractionToSupabase, getSavedExtraction } from './services/supabaseService';
 import { prepareImage } from './utils/prepareImage';
-import { setExtractionKey } from './services/extractionSettings';
+import { bindExtractionOwner } from './services/extractionSettings';
 
 /**
  * <summary>
@@ -248,7 +248,7 @@ export const App: React.FC = () => {
         localStorage.removeItem('edt_olymel_unified_table');
         localStorage.removeItem('edt_user');
         localStorage.removeItem('adt_settings_apikey');
-        setExtractionKey('');
+        bindExtractionOwner(currentUser?.id || null);
         setTctUnifiedTable(null);
         setTctSaveStatus('idle');
         setTctSaveMessage('');
