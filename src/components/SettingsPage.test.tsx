@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import { getExtractionKey } from '../services/extractionSettings';
+import { getExtractionKey, setExtractionKey } from '../services/extractionSettings';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -9,7 +9,7 @@ let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
-    localStorage.clear(); host = document.createElement('div'); document.body.append(host); root = createRoot(host);
+    setExtractionKey(''); localStorage.clear(); host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
 it('replaces a retired saved model with a live vision model and saves it', async () => {
@@ -45,4 +45,18 @@ it('activates the tested key/model immediately without an additional save click'
     expect(getExtractionKey()).toBe('test-key');
     expect(localStorage.getItem('adt_settings_model')).toBe('openai/gpt-4.1-mini');
     expect(host.textContent).toContain('activés');
+});
+
+it('keeps a typed key active when leaving settings without clicking Save or Test', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini' }] }))));
+    await act(async () => { root.render(<SettingsPage />); });
+    const input = host.querySelector('input[type="password"]') as HTMLInputElement;
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'key-for-this-tab');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(getExtractionKey()).toBe('key-for-this-tab');
+    act(() => root.render(<div>Extraction</div>));
+    expect(getExtractionKey()).toBe('key-for-this-tab');
+    expect(localStorage.getItem('adt_settings_apikey')).toBeNull();
 });

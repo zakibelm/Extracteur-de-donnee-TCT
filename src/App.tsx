@@ -319,6 +319,8 @@ export const App: React.FC = () => {
 
         saveRequestId.current = crypto.randomUUID();
         const run = ++tctRun.current;
+        setActiveSection('tct');
+        setActiveTctView('extract');
         setIsSidebarOpen(false);
         setTctGlobalStatus(Status.Processing);
         setTctExtractedData([]);
@@ -528,6 +530,8 @@ export const App: React.FC = () => {
         if (!currentUser?.isAdmin || olymelFiles.length === 0) return;
 
         const run = ++olymelRun.current;
+        setActiveSection('olymel');
+        setActiveOlymelView('extract');
         setIsSidebarOpen(false);
         setOlymelGlobalStatus(Status.Processing);
         setOlymelExtractedData([]);

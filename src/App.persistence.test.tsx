@@ -14,7 +14,7 @@ vi.mock('./components/Sidebar', () => ({ Sidebar: (props: any) => <div>
     <button onClick={props.onTctExtractData}>Analyser QA</button>
 </div> }));
 vi.mock('./components/MainContent', () => ({ MainContent: (props: any) => <div>
-    <p>{props.tctError}</p><p>{props.tctSaveStatus}</p><p>{props.tctSaveMessage}</p><p>{props.tctUnifiedTable?.rows.length || 0} lignes affichées</p>
+    <p>Section : {props.activeSection}</p><p>{props.tctError}</p><p>{props.tctSaveStatus}</p><p>{props.tctSaveMessage}</p><p>{props.tctUnifiedTable?.rows.length || 0} lignes affichées</p>
     <button onClick={props.onTctGenerateResults}>Réessayer QA</button>
 </div> }));
 import { App } from './App';
@@ -71,4 +71,14 @@ it('closes the import drawer on launch and allows reopening it without losing th
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     await act(async () => { toggle.click(); });
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
+});
+
+it('switches back to TCT when launching a previously selected file from settings', async () => {
+    await act(async () => { root.render(<App />); });
+    await click('Importer QA');
+    await click('Paramètres');
+    expect(host.textContent).toContain('Section : settings');
+    await click('Analyser QA');
+    expect(host.textContent).toContain('Section : tct');
+    expect(saveExtractionToSupabase).toHaveBeenCalledTimes(1);
 });
