@@ -1,3 +1,4 @@
+import { recordVehicleChange } from '../utils/vehicleChanges';
 import { matchesTctId } from '../utils/tctFilters';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -29,6 +30,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
         if (validIndices.length === tableData.headers.length) return tableData;
 
         return {
+            ...tableData,
             headers: validIndices.map(i => tableData.headers[i]),
             rows: tableData.rows.map(row => validIndices.map(i => row[i] || ''))
         };
@@ -151,34 +153,9 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
             const rowIndex = rows.indexOf(pendingChange.row);
 
             if (rowIndex !== -1) {
-                const newRows = [...rows];
-                const newRow = [...newRows[rowIndex]];
-
-                // 1. Mettre à jour la colonne Changement
-                if (changementIndex !== -1) {
-                    newRow[changementIndex] = pendingChange.newValue;
-                }
-
-                // 2. Mettre à jour la colonne Véhicule (Assignation)
-                if (vehiculeIndex !== -1) {
-                    newRow[vehiculeIndex] = pendingChange.newValue;
-                }
-
-                // 3. Mettre à jour la colonne "Changement par" (Traçabilité 24h)
-                if (changementParIndex !== -1) {
-                    // Instruction spécifique : "va être num dôme de l utilisateur"
-                    newRow[changementParIndex] = user.numDome;
-                }
-
-                newRows[rowIndex] = newRow;
-                setRows(newRows);
-
-                // Signaler les modifications au parent ; leur sauvegarde est explicite.
-                const newTable = {
-                    ...displayData,
-                    rows: newRows
-                };
-                onTableUpdate(newTable);
+                const newTable = recordVehicleChange({ ...displayData, rows }, rowIndex, pendingChange.newValue, user);
+                setRows(newTable.rows);
+                if (newTable.metadata !== displayData.metadata) onTableUpdate(newTable);
             }
         }
         setVehicleDraft(null);
@@ -232,7 +209,7 @@ export const FinalDocumentView: React.FC<FinalDocumentViewProps> = ({ tableData,
                         <br />
                         <span className="text-sm text-amber-400 font-bold flex items-center mt-2">
                             <Icons.CheckCircle className="w-4 h-4 mr-1" />
-                            Le tableau sera modifié ; enregistrez ensuite une nouvelle version.
+                            La ligne sera copiée dans Rapport. Enregistrez une nouvelle version pour conserver le tableau et le rapport.
                         </span>
                     </p>
 

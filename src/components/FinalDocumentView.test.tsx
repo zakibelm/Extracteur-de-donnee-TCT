@@ -1,6 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
+import { ReportView } from './ReportView';
 import { FinalDocumentView } from './FinalDocumentView';
 import { TCT_HEADERS,TCT_DISPATCH_HEADERS } from '../utils/table';
 it('labels all 14 columns and preserves metadata when a vehicle correction is confirmed', async () => {
@@ -22,6 +23,13 @@ it('labels all 14 columns and preserves metadata when a vehicle correction is co
     await act(async () => { [...host.querySelectorAll('button')].find(button => button.textContent?.includes('Valider le changement'))!.click(); });
     expect(update.mock.calls[0][0].rows[0][7]).toBe('203');
     expect(update.mock.calls[0][0].metadata.schedule_date).toBe('2026-10-24');
+    const updated = update.mock.calls[0][0];
+    expect(updated.metadata.vehicle_changes[0]).toMatchObject({ old_vehicle: '212', new_vehicle: '203', user_id: 'owner', user_dome: 'QA', row: updated.rows[0] });
+    await act(async () => { root.render(<ReportView tableData={JSON.parse(JSON.stringify(updated))} onPrint={vi.fn()} onDownloadPdf={vi.fn()} />); });
+    expect(host.querySelector('tbody')?.textContent).toContain('TCT0004');
+    expect(host.querySelector('tbody')?.textContent).toContain('212');
+    expect(host.querySelector('tbody')?.textContent).toContain('203');
+    expect(host.querySelector('tbody')?.textContent).toContain('QA');
     act(() => root.unmount()); host.remove();
 });
 
