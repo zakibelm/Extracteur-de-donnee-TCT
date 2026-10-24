@@ -56,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
 
     return (
-        <aside className={`relative shrink-0 max-h-[45dvh] lg:max-h-none bg-slate-800 border-r border-slate-700 flex flex-col transition-all duration-300 ease-in-out ${isSidebarOpen ? 'flex w-full lg:w-72' : 'hidden lg:flex lg:w-16'}`}>
+        <aside id="import-panel" aria-label="Panneau d’import" className={`fixed top-14 bottom-0 left-0 z-40 w-full max-w-sm bg-slate-800 border-r border-slate-700 flex-col shadow-2xl ${isSidebarOpen ? 'flex' : 'hidden'}`}>
             <div className="flex-grow p-3 overflow-y-auto flex flex-col scrollbar-thin scrollbar-thumb-slate-600">
                 <header className={`flex items-center gap-3 mb-4 ${isSidebarOpen ? 'justify-start' : 'justify-center'}`}>
                     <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg flex-shrink-0">
@@ -270,13 +270,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             </div>
 
-            <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="absolute -right-3 top-1/2 -translate-y-1/2 bg-slate-700 hover:bg-emerald-600 text-slate-200 rounded-full p-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors z-10 shadow-md border border-slate-600"
-                aria-label={isSidebarOpen ? "Réduire la barre latérale" : "Agrandir la barre latérale"}
-            >
-                {isSidebarOpen ? <Icons.ChevronLeft className="w-5 h-5" /> : <Icons.ChevronRight className="w-5 h-5" />}
-            </button>
+
         </aside>
     );
 };

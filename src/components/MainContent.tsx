@@ -13,13 +13,14 @@ import { SettingsPage } from './SettingsPage';
 
 interface MainContentProps {
     activeSection: 'tct' | 'olymel' | 'settings';
-    setActiveSection: (section: 'tct' | 'olymel') => void;
+    setActiveSection: (section: 'tct' | 'olymel' | 'settings') => void;
 
     // TCT
     activeTctView: 'extract' | 'document' | 'report';
     setActiveTctView: (view: 'extract' | 'document' | 'report') => void;
     tctExtractedData: ExtractedData[];
     onTctGenerateResults: () => void;
+    onTctRetryExtraction: () => void;
     tctError: string | null;
     tctSaveStatus: 'idle' | 'saving' | 'saved' | 'dirty' | 'error';
     tctSaveMessage: string;
@@ -53,6 +54,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     setActiveTctView,
     tctExtractedData,
     onTctGenerateResults,
+    onTctRetryExtraction,
     tctError,
     tctSaveStatus, tctSaveMessage, historyRefresh, onOpenSavedDocument,
     tctUnifiedTable,
@@ -160,7 +162,7 @@ export const MainContent: React.FC<MainContentProps> = ({
 
     return (
         <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-            <div className="flex-1 flex flex-col p-3 md:p-4 overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col p-3 md:p-4 overflow-hidden">
                 {/* Header avec info utilisateur et déconnexion pour les non-admins */}
                 {!user?.isAdmin && (
                     <div className="flex-none flex justify-between items-center mb-3 p-3 bg-slate-800 rounded-lg border border-slate-700">
@@ -271,9 +273,13 @@ export const MainContent: React.FC<MainContentProps> = ({
                 )}
 
                 {(activeSection === 'tct' ? tctError : activeSection === 'olymel' ? olymelError : null) && (
-                    <p role="alert" className="text-red-400 mb-3 p-3 bg-red-900/20 border border-red-500/30 rounded-md">
-                        {activeSection === 'tct' ? tctError : olymelError}
-                    </p>
+                    <section className="shrink-0 max-h-40 overflow-y-auto text-red-300 mb-3 p-3 bg-red-900/20 border border-red-500/30 rounded-md">
+                        <p role="alert" className="break-words">{activeSection === 'tct' ? tctError : olymelError}</p>
+                        {activeSection === 'tct' && tctExtractedData.some(result => result.status === Status.Error) && <div className="mt-3 flex flex-wrap gap-2">
+                            <Button onClick={() => setActiveSection('settings')} className="bg-slate-700 hover:bg-slate-600">Vérifier la clé et le modèle</Button>
+                            <Button onClick={onTctRetryExtraction} disabled={!allTctProcessed} className="bg-emerald-700 hover:bg-emerald-600">Relancer l’analyse</Button>
+                        </div>}
+                    </section>
                 )}
 
                 {activeSection === 'tct' && tctSaveStatus !== 'idle' && <section aria-label="État de l’enregistrement" className={`shrink-0 mb-3 rounded-xl border p-3 ${tctSaveStatus === 'saved' ? 'border-emerald-600 bg-emerald-950/40' : 'border-amber-600 bg-amber-950/30'}`}>

@@ -14,7 +14,7 @@ vi.mock('./components/Sidebar', () => ({ Sidebar: (props: any) => <div>
     <button onClick={props.onTctExtractData}>Analyser QA</button>
 </div> }));
 vi.mock('./components/MainContent', () => ({ MainContent: (props: any) => <div>
-    <p>{props.tctSaveStatus}</p><p>{props.tctSaveMessage}</p><p>{props.tctUnifiedTable?.rows.length || 0} lignes affichées</p>
+    <p>{props.tctError}</p><p>{props.tctSaveStatus}</p><p>{props.tctSaveMessage}</p><p>{props.tctUnifiedTable?.rows.length || 0} lignes affichées</p>
     <button onClick={props.onTctGenerateResults}>Réessayer QA</button>
 </div> }));
 import { App } from './App';
@@ -56,5 +56,19 @@ it('does not archive an incomplete extraction as a successful document', async (
     await act(async () => { root.render(<App />); });
     await click('Importer QA'); await click('Analyser QA');
     expect(saveExtractionToSupabase).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('scan.png : model unavailable');
+    expect(host.textContent).not.toContain('Extraction incomplète');
     expect(host.textContent).toContain('0 lignes affichées');
+});
+
+it('closes the import drawer on launch and allows reopening it without losing the selected file', async () => {
+    await act(async () => { root.render(<App />); });
+    const toggle = host.querySelector('[aria-controls="import-panel"]') as HTMLButtonElement;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => { toggle.click(); });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    await click('Importer QA'); await click('Analyser QA');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => { toggle.click(); });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
 });
