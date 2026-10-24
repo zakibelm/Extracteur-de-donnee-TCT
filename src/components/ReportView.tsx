@@ -1,4 +1,5 @@
 
+import { buildVehicleReport } from '../utils/vehicleChanges';
 import React, { useMemo } from 'react';
 import { TableData } from '../types';
 import { Button } from './Button';
@@ -12,29 +13,9 @@ interface ReportViewProps {
 
 export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDownloadPdf }) => {
     
-    // Détermination des colonnes et filtrage
-    const { headers, filteredRows, changementParIndex } = useMemo(() => {
-        if (!tableData) return { headers: [], filteredRows: [], changementParIndex: -1 };
-
-        const changementParIdx = tableData.headers.indexOf('Changement par');
-        
-        // Si la colonne n'existe pas ou s'il n'y a pas de données
-        if (changementParIdx === -1) {
-            return { headers: tableData.headers, filteredRows: [], changementParIndex: -1 };
-        }
-
-        // Filtrer pour ne garder que les lignes où "Changement par" n'est pas vide
-        const rows = tableData.rows.filter(row => {
-            const val = row[changementParIdx];
-            return val && val.trim() !== '';
-        });
-
-        return { 
-            headers: tableData.headers, 
-            filteredRows: rows, 
-            changementParIndex: changementParIdx 
-        };
-    }, [tableData]);
+    const { headers, rows: filteredRows } = useMemo(() => tableData
+        ? buildVehicleReport(tableData) : { headers: [], rows: [] }, [tableData]);
+    const changementParIndex = headers.indexOf('Changement par');
 
     if (!tableData) {
         return <div className="p-8 text-center text-slate-400">Aucune donnée à afficher.</div>;
@@ -47,10 +28,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ tableData, onPrint, onDo
                     <div>
                         <h2 className="text-lg font-bold text-emerald-400 flex items-center">
                             <Icons.ClipboardList className="mr-2 h-5 w-5" />
-                            Rapport des Modifications (24h)
+                            Rapport des modifications
                         </h2>
                         <p className="text-sm text-slate-400">
-                            Affiche uniquement les tournées dont le véhicule a été modifié manuellement.
+                            Chaque changement confirmé conserve la ligne complète, les deux véhicules, l’auteur et l’heure UTC. Enregistrez une nouvelle version pour conserver ce rapport.
                         </p>
                     </div>
                     <div className="flex items-center gap-2">

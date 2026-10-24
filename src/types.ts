@@ -6,7 +6,18 @@ export enum Status {
   Error = 'error',
 }
 
+export interface VehicleChange {
+  headers: string[];
+  row: string[];
+  old_vehicle: string;
+  new_vehicle: string;
+  user_id: string;
+  user_dome: string;
+  changed_at: string;
+}
+
 export interface DocumentMetadata {
+  vehicle_changes?: VehicleChange[];
   schedule_date?: string;
   schedule_code?: string;
   source_layout?: 'dispatch_14' | 'dispatch_16';
