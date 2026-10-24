@@ -1,3 +1,4 @@
+import type { DocumentMetadata } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
 import { PROJECT_URL, PROJECT_PUBLISHABLE_KEY } from '../config/supabase';
@@ -15,6 +16,7 @@ export interface TctDocument {
     status: 'pending' | 'processing' | 'success' | 'error';
     user_id: string;
     extracted_count: number;
+    source_metadata?: DocumentMetadata;
     created_at?: string;
 }
 
@@ -28,6 +30,10 @@ export interface TctTournee {
     cl_veh: string;
     employe: string;
     nom_employe: string;
+    employe_affecte?: string;
+    autoris?: string;
+    retour?: string;
+    statut_fdr?: string;
     vehicule: string;
     cl_veh_aff: string;
     stationnement: string;

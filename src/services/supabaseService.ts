@@ -1,4 +1,4 @@
-import { TCT_FIELDS, TCT_HEADERS, validateTable } from '../utils/table';
+import { TCT_FIELDS, TCT_HEADERS, TCT_DISPATCH_FIELDS, TCT_DISPATCH_HEADERS, validateTable } from '../utils/table';
 import { DocumentMetadata, TableData } from '../types';
 import { supabase, TctDocument, TctTournee, TctHistory } from '../lib/supabaseClient';
 
@@ -18,6 +18,10 @@ export interface SaveExtractionPayload {
         cl_veh: string;
         employe: string;
         nom_employe: string;
+        employe_affecte?: string;
+        autoris?: string;
+        retour?: string;
+        statut_fdr?: string;
         vehicule: string;
         cl_veh_aff: string;
         stationnement: string;
@@ -32,6 +36,7 @@ export interface SaveExtractionPayload {
 }
 
 export async function saveExtractionToSupabase(payload: SaveExtractionPayload) {
+    if (payload.metadata?.review_required) throw new Error('Ce résultat provient de l’ancien mapping. Réanalysez la source avant de l’enregistrer.');
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error('Session expirée. Reconnectez-vous.');
     if (payload.user_id !== user.id || payload.document.user_id !== user.id) {
@@ -87,9 +92,12 @@ export async function getSavedExtraction(userId: string, documentId: number): Pr
     if (error || !document) throw new Error('Document inaccessible pour ce compte.');
     const tournees = await getDocumentTournees(documentId);
     if (!tournees.length || tournees.length !== document.extracted_count) throw new Error('Les lignes enregistrées sont incomplètes. Réessayez le chargement.');
-    const table = validateTable({ headers: [...TCT_HEADERS],
-        rows: tournees.map(row => TCT_FIELDS.map(field => String(row[field] ?? ''))),
+    const dispatch = document.source_metadata?.source_layout === 'dispatch_16';
+    const headers = dispatch ? TCT_DISPATCH_HEADERS : TCT_HEADERS;
+    const fields = dispatch ? TCT_DISPATCH_FIELDS : TCT_FIELDS;
+    const table = validateTable({ headers: [...headers],
+        rows: tournees.map(row => fields.map(field => String(row[field] ?? ''))),
         metadata: document.source_metadata || (document.schedule_date ? { schedule_date: document.schedule_date } : {}),
-    }, TCT_HEADERS);
+    }, headers);
     return { table, filename: document.filename };
 }

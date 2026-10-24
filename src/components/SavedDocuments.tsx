@@ -35,7 +35,7 @@ export function SavedDocuments({ userId, refreshKey, onOpen }: {
             <ul className="space-y-2 max-h-64 overflow-y-auto">
                 {documents.map(document => <li key={document.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg bg-slate-900 p-3">
                     <div className="min-w-0"><p className="font-medium break-words">{document.filename}</p>
-                        <p className="text-sm text-slate-400">{document.extracted_count} lignes · {new Date(document.created_at || document.upload_date).toLocaleString('fr-CA', { timeZone: 'America/Toronto' })}</p></div>
+                        <p className="text-sm text-amber-300">{document.source_metadata?.review_required ? 'À réanalyser — ancien mapping de colonnes' : ''}</p><p className="text-sm text-slate-400">{document.extracted_count} lignes · {new Date(document.created_at || document.upload_date).toLocaleString('fr-CA', { timeZone: 'America/Toronto' })}</p></div>
                     <Button onClick={() => void open(document.id!)} disabled={opening !== null} className="shrink-0 bg-emerald-700 hover:bg-emerald-600">
                         {opening === document.id ? 'Chargement…' : 'Ouvrir'}
                     </Button>

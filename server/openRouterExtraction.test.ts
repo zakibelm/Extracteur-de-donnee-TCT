@@ -11,7 +11,8 @@ it('only sends parameters supported by the selected model and respects output li
     await extractWithOpenRouter(input, 'private-key');
     const request = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(request.response_format.type).toBe('json_schema');
-    expect(request.response_format.json_schema.schema.properties.rows.items.minItems).toBe(14);
+    expect(request.response_format.json_schema.schema.properties.rows.items.type).toBe('object');
+    expect(request.response_format.json_schema.schema.properties.rows.items.required).toContain('employe_affecte');
     expect(request).not.toHaveProperty('temperature');
     expect(request.max_tokens).toBe(4096);
     expect(request.messages[1].content[1].type).toBe('image_url');

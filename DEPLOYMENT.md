@@ -141,3 +141,19 @@ L’échelle CSS 0,85 est supprimée. Le panneau d’import se replie sur petit 
 le tableau garde une zone de défilement horizontale et l’état de sauvegarde reste visible.
 Validation SQL réelle : écriture, relecture sous le rôle authenticated et nouvelle
  tentative idempotente sur données synthétiques dans une transaction annulée.
+
+## Formats TCT v2
+Appliquer 20261024200035_support_tct_dispatch_16.sql avant cette version.
+Elle ajoute employe_affecte, autoris, retour et statut_fdr sans retirer les données
+du format 14. Le RPC reste compatible avec les anciens clients.
+Les nouvelles extractions conservent source_layout et schema_version=2.
+Le moteur retourne des champs nommés ; le serveur reconstruit les colonnes.
+Le code horaire brut YYYYMMDD est converti dans le code et dans SQL.
+Voir TCT_SOURCE_SCHEMA.md pour les deux contrats et les règles des filtres.
+Les résultats historiques identifiés comme décalés restent conservés et sont signalés
+review_required ; ils doivent être réanalysés.
+
+Validation : régressions sur la seconde colonne employé, le véhicule, la classe,
+la date octobre, les filtres exacts et la remise à zéro au changement de document.
+Test SQL réel sous authenticated : écriture et relecture du format 16, puis annulation
+de la transaction synthétique sans données de test persistantes.

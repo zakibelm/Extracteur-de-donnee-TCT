@@ -1,7 +1,7 @@
 import { getExtractionKey, getExtractionModel } from './extractionSettings';
 import { supabase } from '../lib/supabaseClient';
 import { TableData } from '../types';
-import { validateTable, TCT_HEADERS } from '../utils/table';
+import { validateTable, validateTctTable, normalizeTctExtraction } from '../utils/table';
 
 export async function extractDocumentViaN8n(image: string, section: 'tct' | 'olymel', mimeType: string): Promise<TableData> {
     const { data: { session } } = await supabase.auth.getSession();
@@ -17,5 +17,5 @@ export async function extractDocumentViaN8n(image: string, section: 'tct' | 'oly
     try { result = JSON.parse(text); }
     catch { throw new Error(`Le serveur n'a pas pu analyser le document (HTTP ${response.status}). Réessayez avec une image plus petite.`); }
     if (!response.ok) throw new Error(result.error || 'Échec extraction.');
-    return validateTable(result, section === 'tct' ? TCT_HEADERS : undefined);
+    return section === 'tct' ? validateTctTable(result) : validateTable(result);
 }

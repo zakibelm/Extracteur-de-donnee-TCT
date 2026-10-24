@@ -69,3 +69,10 @@ La base dédiée est `extracteur-tct` en région Canada. La configuration publiq
 défaut se trouve dans `src/config/supabase.ts`; les variables d'environnement restent prioritaires.
 Le compte demandé accepte `203` ou son courriel. Le mot de passe est vérifié par
 Supabase Auth et n'est jamais inscrit dans le dépôt.
+
+## Formats TCT actuels
+Le format à 16 colonnes avec deux colonnes Employé, Autoris, Retour et Statut FDR
+est distinct du format à 14 colonnes avec Stationnement et Terr début.
+Appliquer les migrations successives, dont 20261024200035_support_tct_dispatch_16.sql.
+La définition actuelle fait foi dans [TCT_SOURCE_SCHEMA.md](TCT_SOURCE_SCHEMA.md).
+Les anciens résultats signalés « À réanalyser » doivent être repris depuis l'image originale.
