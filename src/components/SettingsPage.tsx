@@ -7,7 +7,7 @@ import { Button } from './Button';
 
 export const SettingsPage: React.FC = () => {
     const [apiKey, setApiKey] = useState('');
-    const [selectedModel, setSelectedModel] = useState('openai/gpt-4o-mini');
+    const [selectedModel, setSelectedModel] = useState<string>(() => getExtractionModel());
     const [models, setModels] = useState<VisionModel[]>([]);
     const [modelsLoading, setModelsLoading] = useState(true);
     const [modelsError, setModelsError] = useState('');
@@ -36,15 +36,14 @@ export const SettingsPage: React.FC = () => {
         setModelsLoading(true);
         setModelsError('');
         try {
-            const response = await fetch('/api/models', { signal });
+            const response = await fetch('/api/models', { signal, cache: 'no-store' });
             const data = await response.json();
             if (!response.ok || !Array.isArray(data.models) || !data.models.length) throw new Error(data.error || 'Catalogue vide.');
             setModels(data.models);
-            setSelectedModel(current => {
-                if (data.models.some((m: VisionModel) => m.id === current)) return current;
-                setModelNotice('L’ancien modèle est indisponible ou incompatible. Un modèle vision a été sélectionné ; sauvegardez les modifications.');
-                return data.models.some((m: VisionModel) => m.id === DEFAULT_VISION_MODEL) ? DEFAULT_VISION_MODEL : data.models[0].id;
-            });
+            if (!data.models.some((m: VisionModel) => m.id === selectedModel)) {
+                setModelNotice('L’ancien modèle est indisponible ou incompatible. Un modèle pris en charge a été sélectionné ; sauvegardez les modifications.');
+                setSelectedModel(data.models.some((m: VisionModel) => m.id === DEFAULT_VISION_MODEL) ? DEFAULT_VISION_MODEL : data.models[0].id);
+            } else setModelNotice('');
         } catch (error: any) {
             if (signal?.aborted) return;
             setModelsError(error.message || 'Chargement impossible.');
@@ -78,7 +77,7 @@ export const SettingsPage: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-API-Key': apiKey,
+                    'X-API-Key': apiKey.trim(),
                     Authorization: `Bearer ${session.access_token}`,
                     'X-Model': selectedModel
                 },
@@ -94,8 +93,10 @@ export const SettingsPage: React.FC = () => {
                 throw new Error(data.error || data.details || 'Erreur inconnue');
             }
 
+            setExtractionKey(apiKey);
+            localStorage.setItem('adt_settings_model', selectedModel);
             setTestStatus('success');
-            setTestMessage('Test réussi : ce modèle a répondu à une requête avec une image de test.');
+            setTestMessage('Test image réussi. Clé et modèle activés pour cet onglet ; vous pouvez lancer le document.');
         } catch (error: any) {
             console.error("Test Error:", error);
             setTestStatus('error');
@@ -139,7 +140,7 @@ export const SettingsPage: React.FC = () => {
                                 <input
                                     type="password"
                                     value={apiKey}
-                                    onChange={(e) => setApiKey(e.target.value)}
+                                    onChange={(e) => { setApiKey(e.target.value); setTestStatus('idle'); setTestMessage(''); }}
                                     placeholder="sk-or-..."
                                     className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-sm"
                                 />
@@ -191,7 +192,7 @@ export const SettingsPage: React.FC = () => {
                             {models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
                         </select>
                         <p className="text-xs text-slate-500 mt-1.5">
-                            Catalogue OpenRouter actualisé automatiquement. Seuls les modèles lisant les images sont proposés, du plus récent au plus ancien. Les tarifs varient selon le modèle.
+                            Deux modèles sélectionnés pour les tableaux TCT et Olymel. GPT-4.1 Mini est recommandé. Leur disponibilité et la sortie structurée sont vérifiées dans le catalogue OpenRouter.
                         </p>
                     </div>
 

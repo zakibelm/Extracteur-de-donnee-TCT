@@ -10,10 +10,10 @@ import handler from '../api/n8n';
 import { TCT_HEADERS } from '../src/utils/table';
 
 const body = { image: 'YWJj', section: 'tct', mimeType: 'image/png' };
-const run = async (requestBody = body) => {
+const run = async (requestBody = body, headers = {}) => {
     const res = { setHeader: vi.fn(), status: vi.fn(), json: vi.fn() };
     res.status.mockReturnValue(res);
-    await handler({ method: 'POST', headers: {}, body: requestBody } as unknown as VercelRequest,
+    await handler({ method: 'POST', headers, body: requestBody } as unknown as VercelRequest,
         res as unknown as VercelResponse);
     return res;
 };
@@ -75,4 +75,15 @@ it('reports insufficient credits without exposing provider details or keys', asy
     expect(res.status).toHaveBeenCalledWith(502);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringMatching(/crédits/i) }));
     expect(JSON.stringify(res.json.mock.calls)).not.toContain('test-key');
+});
+
+it('uses the same explicit key and model as the successful settings test, ahead of server configuration', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'stale-server-key');
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ headers: TCT_HEADERS, rows: [] }) } }] })));
+    const res = await run({ ...body, model: 'openai/gpt-4.1' } as typeof body, { 'x-api-key': 'tested-client-key' });
+    expect(res.status).toHaveBeenCalledWith(200);
+    const [url, options] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
+    expect(options?.headers).toMatchObject({ Authorization: 'Bearer tested-client-key' });
+    expect(JSON.parse(options?.body as string).model).toBe('openai/gpt-4.1');
 });

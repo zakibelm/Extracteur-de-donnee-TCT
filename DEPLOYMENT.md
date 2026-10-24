@@ -105,3 +105,18 @@ Supabase de production. Les anciens scripts de promotion par numéro sont désac
 Une ancienne clé publiée reste compromise même après retrait du code : la révoquer
 chez Neon. Ne pas remplacer les paramètres Supabase par cette connexion historique.
 Ne pas purger l’historique par force avant révocation et coordination des clones.
+
+
+## Modèles et préparation des scans
+
+La sélection applicative est limitée à GPT-4.1 Mini (défaut) et GPT-4.1.
+Le catalogue OpenRouter vérifie leur présence, l’entrée image et les sorties structurées.
+Les sélections historiques hors liste sont migrées vers le défaut ; aucun modèle
+preview, routeur gratuit ou générateur d’images n’est proposé.
+Les réponses utilisent un schéma JSON strict (14 cellules par ligne TCT, 5 Olymel).
+Les images dépassant le budget de requête sont converties côté navigateur en JPEG,
+avec un côté maximal de 3200 pixels et une limite base64 de 3,4 millions de caractères.
+Un test réussi active immédiatement la clé en mémoire et le modèle sélectionné.
+La clé explicitement testée a priorité sur les configurations serveur ou webhook.
+La disponibilité du catalogue ne prouve pas les crédits ou permissions d’une clé :
+le test vision dans Paramètres reste nécessaire pour vérifier le compte OpenRouter.

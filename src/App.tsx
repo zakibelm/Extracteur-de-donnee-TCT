@@ -1,4 +1,4 @@
-import { readFileAsBase64 } from './utils/uploads';
+import { prepareImage } from './utils/prepareImage';
 import { setExtractionKey } from './services/extractionSettings';
 
 /**
@@ -305,17 +305,16 @@ export const App: React.FC = () => {
                 if (file.type === 'application/pdf') {
                     const pageImages = await processPdf(file);
                     for (const page of pageImages) {
-                        const base64 = await readFileAsBase64(page.file);
-                        processableFiles.push({ ...page, base64, mimeType: 'image/jpeg' });
+                        const prepared = await prepareImage(page.file);
+                        processableFiles.push({ ...page, ...prepared });
                     }
                 } else {
-                    const base64 = await readFileAsBase64(file);
+                    const prepared = await prepareImage(file);
                     processableFiles.push({
                         id: `${file.name}-${Date.now()}`,
                         file,
                         originalFileName: file.name,
-                        base64,
-                        mimeType: file.type
+                        ...prepared
                     });
                 }
             }
@@ -500,17 +499,16 @@ export const App: React.FC = () => {
                 if (file.type === 'application/pdf') {
                     const pageImages = await processPdf(file);
                     for (const page of pageImages) {
-                        const base64 = await readFileAsBase64(page.file);
-                        processableFiles.push({ ...page, base64, mimeType: 'image/jpeg' });
+                        const prepared = await prepareImage(page.file);
+                        processableFiles.push({ ...page, ...prepared });
                     }
                 } else {
-                    const base64 = await readFileAsBase64(file);
+                    const prepared = await prepareImage(file);
                     processableFiles.push({
                         id: `${file.name}-${Date.now()}`,
                         file,
                         originalFileName: file.name,
-                        base64,
-                        mimeType: file.type
+                        ...prepared
                     });
                 }
             }
