@@ -158,7 +158,7 @@ export const App: React.FC = () => {
     // Auth State
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     // Section active (TCT ou Olymel ou Settings)
     const [activeSection, setActiveSection] = useState<'tct' | 'olymel' | 'settings'>('tct');
@@ -206,6 +206,13 @@ export const App: React.FC = () => {
             unsubscribe?.();
         };
     }, []);
+
+    useEffect(() => {
+        if (!isSidebarOpen) return;
+        const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsSidebarOpen(false); };
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [isSidebarOpen]);
 
     // Accordion State (Hoisted from Sidebar for persistence)
     const [isTctOpen, setIsTctOpen] = useState(true);
@@ -312,6 +319,7 @@ export const App: React.FC = () => {
 
         saveRequestId.current = crypto.randomUUID();
         const run = ++tctRun.current;
+        setIsSidebarOpen(false);
         setTctGlobalStatus(Status.Processing);
         setTctExtractedData([]);
         setTctError(null);
@@ -388,6 +396,8 @@ export const App: React.FC = () => {
 
                 return { status };
             } catch (e) {
+                const errorMessage = e instanceof Error ? e.message : 'Échec extraction';
+                completed[index] = { ...initialDataState[index], content: { headers: ['Erreur'], rows: [[errorMessage]] }, status: Status.Error };
                 setTctExtractedData(prev => {
                     if (run !== tctRun.current) return prev;
                     const newArr = [...prev];
@@ -412,7 +422,10 @@ export const App: React.FC = () => {
                     if (window.matchMedia('(max-width: 1023px)').matches) setIsSidebarOpen(false);
                     await persistTctTable(unified, run);
                 } else setTctError('Aucune ligne reconnue. Vérifiez la lisibilité du document.');
-            } else setTctError('Extraction incomplète : aucun document n’a été enregistré automatiquement. Relancez les fichiers en erreur.');
+            } else {
+                const failures = completed.filter(result => result.status === Status.Error);
+                setTctError(failures.map(result => `${result.fileName} : ${result.content?.rows[0]?.[0] || 'Analyse interrompue.'}`).join(' | ') || 'Analyse interrompue. Réessayez.');
+            }
         } catch (error) {
             if (run === tctRun.current) setTctError(error instanceof Error ? error.message : 'Enregistrement impossible.');
         } finally { if (run === tctRun.current) setTctGlobalStatus(Status.Idle); }
@@ -515,6 +528,7 @@ export const App: React.FC = () => {
         if (!currentUser?.isAdmin || olymelFiles.length === 0) return;
 
         const run = ++olymelRun.current;
+        setIsSidebarOpen(false);
         setOlymelGlobalStatus(Status.Processing);
         setOlymelExtractedData([]);
         setOlymelError(null);
@@ -715,11 +729,12 @@ export const App: React.FC = () => {
     console.log('✅ User logged in, showing main app');
     return (
         <GlobalErrorBoundary>
-            <div className="fixed inset-0 flex flex-col lg:flex-row bg-slate-900 text-slate-100 font-sans overflow-hidden">
-                {currentUser.isAdmin && <div className="lg:hidden shrink-0 flex items-center justify-between gap-2 border-b border-slate-700 bg-slate-800 p-3">
-                    <button className="rounded-lg bg-emerald-700 px-3 py-2 font-semibold" aria-expanded={isSidebarOpen} onClick={() => setIsSidebarOpen(!isSidebarOpen)}>{isSidebarOpen ? 'Masquer l’import' : 'Importer un document'}</button>
+            <div className="fixed inset-0 flex flex-col bg-slate-900 text-slate-100 font-sans overflow-hidden">
+                {currentUser.isAdmin && <div className="z-50 h-14 shrink-0 flex items-center justify-between gap-2 border-b border-slate-700 bg-slate-800 px-3 text-sm">
+                    <button className="rounded-lg bg-emerald-700 px-3 py-2 font-semibold" aria-controls="import-panel" aria-expanded={isSidebarOpen} onClick={() => setIsSidebarOpen(!isSidebarOpen)}>{isSidebarOpen ? 'Masquer l’import' : 'Importer un document'}</button>
                     <button className="rounded-lg bg-slate-700 px-3 py-2" onClick={() => { setActiveSection('settings'); setIsSidebarOpen(false); }}>Paramètres</button>
                 </div>}
+                {currentUser.isAdmin && isSidebarOpen && <button type="button" className="fixed inset-0 top-14 z-30 bg-black/50" aria-label="Fermer le panneau d’import" onClick={() => setIsSidebarOpen(false)} />}
                 {/* Sidebar visible uniquement pour les admins */}
                 {currentUser?.isAdmin && (
                     <Sidebar
@@ -755,6 +770,7 @@ export const App: React.FC = () => {
                     setActiveTctView={setActiveTctView}
                     tctExtractedData={tctExtractedData}
                     onTctGenerateResults={handleTctGenerateResults}
+                    onTctRetryExtraction={handleTctExtractData}
                     tctError={tctError}
                     tctSaveStatus={tctSaveStatus}
                     tctSaveMessage={tctSaveMessage}
