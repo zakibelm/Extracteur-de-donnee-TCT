@@ -1,3 +1,4 @@
+import { saveExtractionToSupabase, getSavedExtraction } from './services/supabaseService';
 import { prepareImage } from './utils/prepareImage';
 import { setExtractionKey } from './services/extractionSettings';
 
@@ -151,7 +152,7 @@ export const App: React.FC = () => {
     console.log('🚀 App component is rendering...');
 
     const saveRequestId = useRef(crypto.randomUUID());
-    const saving = useRef(false);
+
     const tctRun = useRef(0);
     const olymelRun = useRef(0);
     // Auth State
@@ -220,6 +221,10 @@ export const App: React.FC = () => {
     const [tctError, setTctError] = useState<string | null>(null);
     const [tctUnifiedTable, setTctUnifiedTable] = useState<TableData | null>(null);
     const [activeTctView, setActiveTctView] = useState<'extract' | 'document' | 'report'>('extract');
+    const [tctSaveStatus, setTctSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'dirty' | 'error'>('idle');
+    const [tctSaveMessage, setTctSaveMessage] = useState('');
+    const [historyRefresh, setHistoryRefresh] = useState(0);
+    const [tctDocumentName, setTctDocumentName] = useState('');
 
     // ========== ÉTATS OLYMEL ==========
     const [olymelFiles, setOlymelFiles] = useState<File[]>([]);
@@ -238,6 +243,8 @@ export const App: React.FC = () => {
         localStorage.removeItem('adt_settings_apikey');
         setExtractionKey('');
         setTctUnifiedTable(null);
+        setTctSaveStatus('idle');
+        setTctSaveMessage('');
         setOlymelUnifiedTable(null);
         setTctExtractedData([]);
         setOlymelExtractedData([]);
@@ -245,6 +252,13 @@ export const App: React.FC = () => {
         setOlymelFiles([]);
         saveRequestId.current = crypto.randomUUID();
     }, [currentUser?.id]);
+
+    useEffect(() => {
+        if (!['dirty', 'error', 'saving'].includes(tctSaveStatus)) return;
+        const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [tctSaveStatus]);
 
     // Effet pour basculer les non-admins vers la vue document
     useEffect(() => {
@@ -275,12 +289,17 @@ export const App: React.FC = () => {
 
     // ========== HANDLERS TCT ==========
     const handleTctFileChange = (selectedFiles: File[]) => {
+        if (tctSaveStatus === 'saving') { setTctError('Attendez la fin de l’enregistrement avant de changer de document.'); return; }
+        if (['dirty', 'error'].includes(tctSaveStatus) && !window.confirm('Le tableau actuel n’est pas enregistré. Abandonner ces modifications et importer un autre document ?')) return;
         tctRun.current++;
         saveRequestId.current = crypto.randomUUID();
         setTctFiles(selectedFiles);
+        setTctDocumentName(selectedFiles.map(file => file.name).join(', ').slice(0, 255));
         setTctExtractedData([]);
         setTctError(null);
         setTctUnifiedTable(null);
+        setTctSaveStatus('idle');
+        setTctSaveMessage('');
         setTctGlobalStatus(Status.Idle);
         setActiveTctView('extract');
         setActiveSection('tct');
@@ -288,7 +307,8 @@ export const App: React.FC = () => {
     };
 
     const handleTctExtractData = async () => {
-        if (!currentUser?.isAdmin || tctFiles.length === 0) return;
+        if (!currentUser?.isAdmin || tctFiles.length === 0 || tctSaveStatus === 'saving') return;
+        if (['dirty', 'error'].includes(tctSaveStatus) && !window.confirm('Relancer l’analyse abandonnera le tableau non enregistré. Continuer ?')) return;
 
         saveRequestId.current = crypto.randomUUID();
         const run = ++tctRun.current;
@@ -296,6 +316,8 @@ export const App: React.FC = () => {
         setTctExtractedData([]);
         setTctError(null);
         setTctUnifiedTable(null);
+        setTctSaveStatus('idle');
+        setTctSaveMessage('');
         localStorage.removeItem('edt_tct_unified_table');
 
         let processableFiles: ProcessableFile[] = [];
@@ -338,6 +360,7 @@ export const App: React.FC = () => {
         }));
         setTctExtractedData(initialDataState);
 
+        const completed: ExtractedData[] = [...initialDataState];
         const promises = mapConcurrent(processableFiles, 2, async (pFile, index) => {
             try {
                 if (run !== tctRun.current) return { status: Status.Error };
@@ -351,6 +374,7 @@ export const App: React.FC = () => {
                 // APPEL AU BACKEND N8N AU LIEU DE AISERVICE
                 const content = await extractDocumentViaN8n(pFile.base64, 'tct', pFile.mimeType);
                 const status = content.headers[0] === 'Erreur' ? Status.Error : Status.Success;
+                completed[index] = { ...initialDataState[index], content, status };
 
                 setTctExtractedData(prev => {
                     if (run !== tctRun.current) return prev;
@@ -378,72 +402,76 @@ export const App: React.FC = () => {
         });
 
         await promises;
-        if (run === tctRun.current) setTctGlobalStatus(Status.Idle);
+        if (run !== tctRun.current) return;
+        try {
+            if (completed.length && completed.every(result => result.status === Status.Success)) {
+                const unified = buildUnifiedTable(completed);
+                if (unified) {
+                    setTctUnifiedTable(unified);
+                    setActiveTctView('document');
+                    if (window.matchMedia('(max-width: 1023px)').matches) setIsSidebarOpen(false);
+                    await persistTctTable(unified, run);
+                } else setTctError('Aucune ligne reconnue. Vérifiez la lisibilité du document.');
+            } else setTctError('Extraction incomplète : aucun document n’a été enregistré automatiquement. Relancez les fichiers en erreur.');
+        } catch (error) {
+            if (run === tctRun.current) setTctError(error instanceof Error ? error.message : 'Enregistrement impossible.');
+        } finally { if (run === tctRun.current) setTctGlobalStatus(Status.Idle); }
+    };
+
+    const persistTctTable = async (table: TableData, run: number) => {
+        if (!currentUser) throw new Error('Session expirée. Reconnectez-vous.');
+        const requestId = saveRequestId.current;
+        const isCurrent = () => run === tctRun.current && saveRequestId.current === requestId;
+        setTctSaveStatus('saving'); setTctSaveMessage('Enregistrement en cours… Gardez cette page ouverte.');
+        try {
+            const result = await saveExtractionToSupabase({
+                document: { filename: tctDocumentName || 'Extraction TCT', upload_date: new Date().toISOString(),
+                    status: 'success', user_id: currentUser.id, extracted_count: table.rows.length },
+                tournees: toTctRecords(table), user_id: currentUser.id, request_id: requestId, metadata: table.metadata,
+            });
+            if (isCurrent()) {
+                setTctSaveStatus('saved');
+                setTctSaveMessage(`${result.tourneesCount} lignes enregistrées · Document nº ${result.documentId}. Vous pouvez le retrouver dans l’historique.`);
+                setHistoryRefresh(value => value + 1);
+            }
+        } catch (error) {
+            if (isCurrent()) { setTctSaveStatus('error'); setTctSaveMessage('Non enregistré : le tableau reste affiché. Cliquez sur Réessayer l’enregistrement.'); }
+            throw error;
+        }
     };
 
     const handleTctGenerateResults = async () => {
-        if (saving.current) return;
-        saving.current = true;
+        if (tctSaveStatus === 'saving') return;
         setTctError(null);
         try {
-            if (tctExtractedData.some(d => d.status !== Status.Success)) throw new Error('Extraction incomplète. Relancez les fichiers en erreur avant de sauvegarder.');
-            const unified = buildUnifiedTable(tctExtractedData);
-            if (unified) {
-                validateTable(unified, TCT_HEADERS);
-                setTctUnifiedTable(unified);
-
-
-                // Sauvegarder dans Supabase
-                if (currentUser) {
-                    try {
-                        console.log('[TCT] Sauvegarde dans Supabase...');
-
-                        // Importer le service Supabase
-                        const { saveExtractionToSupabase } = await import('./services/supabaseService');
-
-                        // Préparer les données du document
-                        const documentData = {
-                            filename: tctFiles.map(f => f.name).join(', '),
-                            upload_date: new Date().toISOString(),
-                            status: 'success' as const,
-                            user_id: currentUser.id,
-                            extracted_count: unified.rows.length
-                        };
-
-                        // Préparer les données des tournées
-                        const tourneesData = toTctRecords(unified);
-
-                        // Sauvegarder dans Supabase
-                        const result = await saveExtractionToSupabase({
-                            document: documentData,
-                            tournees: tourneesData,
-                            user_id: currentUser.id,
-                            request_id: saveRequestId.current,
-                            metadata: unified.metadata
-                        });
-
-                        console.log('[TCT] Sauvegarde Supabase réussie:', {
-                            documentId: result.documentId,
-                            tourneesCount: result.tourneesCount,
-                            executionTime: result.executionTime + 'ms'
-                        });
-                    } catch (error) {
-                        console.error('[TCT] Erreur sauvegarde Supabase:', error);
-                        throw new Error('Résultat non sauvegardé. Vérifiez la connexion puis réessayez.');
-                    }
-                }
-            } else {
-                setTctError("Aucune donnée valide à afficher.");
-            }
-            if (unified && currentUser) setActiveTctView('document');
-        } catch (error) {
-            setTctError(error instanceof Error ? error.message : 'Erreur de sauvegarde.');
-        } finally { saving.current = false; }
+            const table = tctUnifiedTable || buildUnifiedTable(tctExtractedData);
+            if (!table) throw new Error('Aucune donnée valide à enregistrer.');
+            if (!tctUnifiedTable && tctExtractedData.some(d => d.status !== Status.Success)) throw new Error('Extraction incomplète. Relancez les fichiers en erreur.');
+            setTctUnifiedTable(table); setActiveTctView('document');
+            if (tctSaveStatus !== 'saved') await persistTctTable(table, tctRun.current);
+        } catch (error) { setTctError(error instanceof Error ? error.message : 'Enregistrement impossible.'); }
     };
 
     const handleTctTableUpdate = (newTable: TableData) => {
         setTctUnifiedTable(newTable);
+        saveRequestId.current = crypto.randomUUID();
+        setTctSaveStatus('dirty');
+        setTctSaveMessage('Modifications non enregistrées. Enregistrez une nouvelle version pour les conserver.');
+    };
 
+    const handleOpenSavedDocument = async (id: number) => {
+        if (!currentUser) throw new Error('Session expirée.');
+        if (tctGlobalStatus === Status.Processing || tctGlobalStatus === Status.AiProcessing) throw new Error('Attendez la fin de l’analyse avant d’ouvrir un autre document.');
+        if (tctSaveStatus === 'saving' || tctSaveStatus === 'dirty' || tctSaveStatus === 'error') throw new Error('Enregistrez d’abord le tableau actuel pour ne pas perdre vos modifications.');
+        const run = tctRun.current;
+        const result = await getSavedExtraction(currentUser.id, id);
+        if (run !== tctRun.current) return;
+        setTctFiles([]); setTctExtractedData([]); setTctGlobalStatus(Status.Idle);
+        setTctUnifiedTable(result.table); setTctDocumentName(result.filename);
+        setTctSaveStatus('saved'); setTctSaveMessage(`Document nº ${id} rechargé depuis votre compte · ${result.table.rows.length} lignes.`);
+        saveRequestId.current = crypto.randomUUID();
+        setTctError(null); setActiveSection('tct'); setActiveTctView('document');
+        if (window.matchMedia('(max-width: 1023px)').matches) setIsSidebarOpen(false);
     };
 
     const handleTctDeleteResult = (id: string) => {
@@ -453,10 +481,11 @@ export const App: React.FC = () => {
         if (tctUnifiedTable || updatedData.length > 0) {
             const newTable = buildUnifiedTable(updatedData);
             if (newTable) {
-                setTctUnifiedTable(newTable);
+                handleTctTableUpdate(newTable);
 
             } else {
                 setTctUnifiedTable(null);
+                setTctSaveStatus('idle'); setTctSaveMessage('');
                 localStorage.removeItem('edt_tct_unified_table');
                 if (activeTctView === 'document' || activeTctView === 'report') {
                     setActiveTctView('extract');
@@ -686,7 +715,11 @@ export const App: React.FC = () => {
     console.log('✅ User logged in, showing main app');
     return (
         <GlobalErrorBoundary>
-            <div className="fixed inset-0 flex bg-slate-900 text-slate-100 font-sans overflow-hidden">
+            <div className="fixed inset-0 flex flex-col lg:flex-row bg-slate-900 text-slate-100 font-sans overflow-hidden">
+                {currentUser.isAdmin && <div className="lg:hidden shrink-0 flex items-center justify-between gap-2 border-b border-slate-700 bg-slate-800 p-3">
+                    <button className="rounded-lg bg-emerald-700 px-3 py-2 font-semibold" aria-expanded={isSidebarOpen} onClick={() => setIsSidebarOpen(!isSidebarOpen)}>{isSidebarOpen ? 'Masquer l’import' : 'Importer un document'}</button>
+                    <button className="rounded-lg bg-slate-700 px-3 py-2" onClick={() => { setActiveSection('settings'); setIsSidebarOpen(false); }}>Paramètres</button>
+                </div>}
                 {/* Sidebar visible uniquement pour les admins */}
                 {currentUser?.isAdmin && (
                     <Sidebar
@@ -723,6 +756,10 @@ export const App: React.FC = () => {
                     tctExtractedData={tctExtractedData}
                     onTctGenerateResults={handleTctGenerateResults}
                     tctError={tctError}
+                    tctSaveStatus={tctSaveStatus}
+                    tctSaveMessage={tctSaveMessage}
+                    historyRefresh={historyRefresh}
+                    onOpenSavedDocument={handleOpenSavedDocument}
                     tctUnifiedTable={tctUnifiedTable}
                     onTctTableUpdate={handleTctTableUpdate}
                     onTctDeleteResult={handleTctDeleteResult}

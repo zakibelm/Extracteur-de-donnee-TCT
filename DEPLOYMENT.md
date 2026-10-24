@@ -120,3 +120,24 @@ Un test réussi active immédiatement la clé en mémoire et le modèle sélecti
 La clé explicitement testée a priorité sur les configurations serveur ou webhook.
 La disponibilité du catalogue ne prouve pas les crédits ou permissions d’une clé :
 le test vision dans Paramètres reste nécessaire pour vérifier le compte OpenRouter.
+
+
+## Enregistrement et ergonomie des résultats TCT
+
+Une extraction TCT entièrement réussie est consolidée, puis enregistrée automatiquement
+par le RPC transactionnel existant. Le statut enregistré n’apparaît qu’après un accusé
+de réception valide (document et nombre de lignes). En cas d’échec, le tableau reste
+affiché et une nouvelle tentative réutilise le même request_id pour éviter les doublons.
+Les corrections manuelles sont signalées comme non enregistrées et peuvent être
+conservées dans une nouvelle version, sans écraser le document précédent.
+
+La section Documents enregistrés lit les 50 derniers documents du compte connecté.
+Le bouton Ouvrir recharge les lignes depuis Supabase, avec pagination au-delà de
+1000 lignes et contrôle du nombre total. Les règles RLS existantes restent actives.
+Les images originales ne sont pas archivées ; les tableaux et leurs métadonnées le sont.
+Les résultats Olymel restent distincts de cet archivage TCT.
+
+L’échelle CSS 0,85 est supprimée. Le panneau d’import se replie sur petit écran,
+le tableau garde une zone de défilement horizontale et l’état de sauvegarde reste visible.
+Validation SQL réelle : écriture, relecture sous le rôle authenticated et nouvelle
+ tentative idempotente sur données synthétiques dans une transaction annulée.
