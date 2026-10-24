@@ -140,7 +140,7 @@ export const SettingsPage: React.FC = () => {
                                 <input
                                     type="password"
                                     value={apiKey}
-                                    onChange={(e) => { setApiKey(e.target.value); setTestStatus('idle'); setTestMessage(''); }}
+                                    onChange={(e) => { setApiKey(e.target.value); setExtractionKey(e.target.value); setTestStatus('idle'); setTestMessage(''); }}
                                     placeholder="sk-or-..."
                                     className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-sm"
                                 />
@@ -171,7 +171,7 @@ export const SettingsPage: React.FC = () => {
                             </p>
                         )}
                         <p className="text-xs text-slate-500 mt-1.5">
-                            Cette clé active l’analyse pour cet onglet. Elle est effacée à la déconnexion ou au rechargement.
+                            La clé saisie est utilisée immédiatement pour le scan dans cet onglet. « Tester » permet de la vérifier. Elle est effacée à la déconnexion ou au rechargement.
                         </p>
                     </div>
 
@@ -184,7 +184,7 @@ export const SettingsPage: React.FC = () => {
                             value={selectedModel}
                             id="vision-model"
                             disabled={modelsLoading || !!modelsError}
-                            onChange={(e) => { setSelectedModel(e.target.value); setTestStatus('idle'); setTestMessage(''); }}
+                            onChange={(e) => { setSelectedModel(e.target.value); localStorage.setItem('adt_settings_model', e.target.value); setTestStatus('idle'); setTestMessage(''); }}
                             className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm appearance-none"
                         >
                             {modelsLoading && <option>Chargement des modèles…</option>}
