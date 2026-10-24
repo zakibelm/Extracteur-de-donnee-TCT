@@ -1,7 +1,8 @@
 
 import { neon } from '@neondatabase/serverless';
 
-const CONNECTION_STRING = "postgres://neondb_owner:npg_wXdMv3Sqj1kJ@ep-twilight-thunder-ahcp3cgt-pooler.c-3.us-east-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require";
+const CONNECTION_STRING = process.env.DATABASE_URL;
+if (!CONNECTION_STRING) throw new Error('DATABASE_URL doit être définie dans l’environnement.');
 const sql = neon(CONNECTION_STRING);
 
 async function runMigration() {

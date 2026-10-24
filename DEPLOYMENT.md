@@ -88,3 +88,20 @@ OpenRouter avec OPENROUTER_API_KEY côté serveur, ou avec la clé fournie dans 
 La clé de l'interface reste uniquement en mémoire pour l'onglet et est effacée à la
 déconnexion ou au rechargement. Aucun moteur non configuré ne simule une extraction.
 Les réponses et erreurs du moteur sont validées et affichées à l'utilisateur.
+
+
+## Durcissement des accès — 24 octobre 2026
+
+Sur une base TCT existante, appliquer `supabase/fix-admin-escalation.sql`.
+Le script conserve les admins dont `auth.users.raw_app_meta_data.role` vaut
+`admin`, aligne uniquement les profils incohérents et ignore les métadonnées
+modifiables pour les privilèges. Aucun document ni compte n’est supprimé.
+Les visiteurs n’ont aucun accès aux tables TCT ; les comptes connectés n’ont
+ni TRUNCATE, ni REFERENCES, ni TRIGGER. Les vues restent en lecture seule.
+
+Les scripts historiques Neon n’embarquent plus de connexion ni de mot de passe.
+Ils nécessitent une DATABASE_URL explicite et ne font pas partie du parcours
+Supabase de production. Les anciens scripts de promotion par numéro sont désactivés.
+Une ancienne clé publiée reste compromise même après retrait du code : la révoquer
+chez Neon. Ne pas remplacer les paramètres Supabase par cette connexion historique.
+Ne pas purger l’historique par force avant révocation et coordination des clones.

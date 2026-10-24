@@ -44,3 +44,23 @@ ON public.tct_documents (user_id, request_id);
 -- SECURITY INVOKER preserves the existing document/row RLS checks.
 
 REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+
+-- Remove default Supabase table grants that bypass row-level checks (TRUNCATE)
+-- or permit schema changes. Only the application's actual operations remain.
+REVOKE ALL ON public.users, public.tct_documents, public.tct_tournees,
+    public.tct_history, public.tct_documents_summary, public.tct_recent_extractions
+    FROM anon, authenticated;
+GRANT SELECT ON public.users TO authenticated;
+GRANT UPDATE (num_dome, id_employe, telephone) ON public.users TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tct_documents, public.tct_tournees,
+    public.tct_history TO authenticated;
+GRANT SELECT ON public.tct_documents_summary, public.tct_recent_extractions TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.protect_user_privileges() FROM PUBLIC, anon, authenticated;
+
+-- Explicit ownership checks on both the existing row and its new values.
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
+CREATE POLICY "Users can update their own profile" ON public.users
+    FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can update their own documents" ON public.tct_documents;
+CREATE POLICY "Users can update their own documents" ON public.tct_documents
+    FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
