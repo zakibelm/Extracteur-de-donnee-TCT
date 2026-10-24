@@ -18,8 +18,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         const webhook = process.env.N8N_EXTRACT_WEBHOOK;
         const secret = process.env.N8N_WEBHOOK_SECRET;
+        const clientKey = typeof req.headers['x-api-key'] === 'string' ? req.headers['x-api-key'].trim() : '';
         let raw;
-        if (webhook && secret && new URL(webhook).protocol === 'https:') {
+        if (!clientKey && webhook && secret && new URL(webhook).protocol === 'https:') {
             const response = await fetch(webhook, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': secret },
@@ -31,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (!response.ok) throw new HttpError(502, 'Service extraction indisponible. Réessayez.');
             raw = await response.json();
         } else {
-            const key = process.env.OPENROUTER_API_KEY || req.headers['x-api-key'];
+            const key = clientKey || process.env.OPENROUTER_API_KEY;
             if (typeof key !== 'string' || !key.trim()) {
                 throw new HttpError(503, 'Analyse non configurée. Ouvrez Paramètres, ajoutez votre clé OpenRouter puis cliquez sur Sauvegarder.');
             }

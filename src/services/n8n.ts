@@ -10,7 +10,7 @@ export async function extractDocumentViaN8n(image: string, section: 'tct' | 'oly
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, ...(getExtractionKey() ? { 'X-API-Key': getExtractionKey() } : {}) },
         body: JSON.stringify({ image, section, mimeType: mimeType === 'image/jpg' ? 'image/jpeg' : mimeType, model: getExtractionModel() }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(130_000),
     });
     const text = await response.text();
     let result;

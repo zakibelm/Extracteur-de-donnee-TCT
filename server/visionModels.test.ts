@@ -2,12 +2,12 @@ import { afterEach, expect, it, vi } from 'vitest';
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
 it('checks capabilities, caches public catalog and rejects retired models', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [
-        { id: 'test/vision', name: 'Vision', architecture: { input_modalities: ['image'], output_modalities: ['text'] } },
+        { id: 'openai/gpt-4.1-mini', name: 'Vision', supported_parameters: ['structured_outputs', 'response_format'], architecture: { input_modalities: ['image'], output_modalities: ['text'] } },
         { id: 'test/text', name: 'Text', architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
     ] })));
     vi.stubGlobal('fetch', fetchMock);
     const { requireVisionModel } = await import('./visionModels');
-    await expect(requireVisionModel('test/vision')).resolves.toMatchObject({ id: 'test/vision' });
+    await expect(requireVisionModel('openai/gpt-4.1-mini')).resolves.toMatchObject({ id: 'openai/gpt-4.1-mini' });
     await expect(requireVisionModel('test/text')).rejects.toMatchObject({ status: 400 });
     await expect(requireVisionModel('retired/model')).rejects.toMatchObject({ status: 400 });
     expect(fetchMock).toHaveBeenCalledTimes(1);

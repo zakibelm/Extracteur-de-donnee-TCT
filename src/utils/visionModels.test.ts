@@ -1,13 +1,14 @@
 import { expect, it } from 'vitest';
-import { parseVisionModels } from './visionModels';
-it('keeps image readers, excludes text-only and image generation, sorts newest first', () => {
-    const model = (id: string, input: string[], output: string[], created: number) => ({ id, name: id, created,
-        architecture: { input_modalities: input, output_modalities: output } });
-    expect(parseVisionModels({ data: [
-        model('text', ['text'], ['text'], 4), model('image-generator', ['image'], ['text', 'image'], 3),
-        model('older-vision', ['image', 'text'], ['text'], 1), model('newer-vision', ['image'], ['text'], 2),
-    ] }).map(m => m.id)).toEqual(['newer-vision', 'older-vision']);
+import { parseVisionModels, DEFAULT_VISION_MODEL } from './visionModels';
+const model = (id: string, parameters = ['response_format', 'structured_outputs']) => ({ id, name: id, created: 1,
+    supported_parameters: parameters, architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] } });
+it('offers only the two application models in recommended order', () => {
+    const result = parseVisionModels({ data: [model('openai/gpt-4.1'), model('openai/gpt-4o-mini'),
+        model('preview/vision'), model('openai/gpt-4.1-mini')] });
+    expect(result.map(m => m.id)).toEqual([DEFAULT_VISION_MODEL, 'openai/gpt-4.1']);
 });
-it('rejects a malformed catalog rather than offering an obsolete fallback', () => {
-    expect(() => parseVisionModels({})).toThrow();
+it('removes even a shortlisted model if vision or structured output disappears', () => {
+    expect(parseVisionModels({ data: [model(DEFAULT_VISION_MODEL, ['response_format']),
+        { ...model('openai/gpt-4.1'), architecture: { input_modalities: ['text'], output_modalities: ['text'] } }] })).toEqual([]);
 });
+it('rejects a malformed catalog', () => { expect(() => parseVisionModels({})).toThrow(); });
